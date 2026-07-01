@@ -14,15 +14,15 @@ These rules are never optional, never skipped, and must survive context compress
 
 2. **Never claim a test passed if you didn't run it.** "It should work" is not a passing test. Run `pytest` (or equivalent). Show the output. If you can't run it, say so — do not fabricate results.
 
-3. **All commands in docs use the package manager prefix.** For Python + uv projects: every `alembic`, `pytest`, `python` command in the README and docs must be prefixed with `uv run`. Bare commands (e.g. `alembic upgrade head`) fail unless the venv is manually activated — which users won't do.
+3. **All commands in docs use the project's real package-manager invocation** — the one recorded in `spec/architecture.md` → `## Commands` (package-manager run prefix). Bare commands (e.g. `alembic upgrade head`, `pytest`) fail unless the environment is manually activated — which users won't do. *Worked example — Python + uv:* every `alembic`/`pytest`/`python` command is prefixed with `uv run`.
 
 4. **Working directory must be explicit.** Any README or doc section with shell commands must state the exact working directory at the top of the code block. "Run from project root" is not enough — give the exact relative path from the repo root.
 
-5. **No SQLite substitute for PostgreSQL tests.** If the production database is PostgreSQL, tests run against PostgreSQL. Tests that only pass on SQLite do not count as passing.
+5. **No lighter DB substitute for the production database in tests.** Tests run against the same database engine as production — if production is PostgreSQL, tests run against PostgreSQL, not SQLite or any lighter stand-in. Tests that only pass on a substitute engine do not count as passing.
 
 6. **Golden-path UI smoke test is mandatory before Phase 2 passes.** If the project has any UI or HTTP surface, Phase 2 must include an automated test that walks the full primary user journey end-to-end against the **real LLM/API** (keys from `.env`) via `TestClient` (or equivalent) and asserts **response content**, not just status codes. A build that returns 200 but renders a broken-looking page is a failing build. Edge-case and end-to-end coverage of the journey are required, not optional.
 
-7. **Tests and evals run against the real LLM/API using keys loaded from `.env`.** There is no offline-passing requirement; real-key execution is the default and required path for every gate, against the production DB driver (never SQLite if production is PostgreSQL). A stub provider MAY exist as an optional local fallback when a key is genuinely absent, but it is never the gate. The quality bar is perfect, zero errors — edge-case, end-to-end, and UI tests are required, not optional. The gate must exercise the **hard, idiomatic inputs the capability promises** and push the **real LLM's hard outputs through every guard** on the user's path — not just one easy happy-path example (see `harness/patterns/test-driven.md` → "Gate Tests Must Cover the Capability's Hard Cases").
+7. **Tests and evals run against the real LLM/API using keys loaded from `.env`.** There is no offline-passing requirement; real-key execution is the default and required path for every gate, against the production database engine (never a lighter substitute if production is PostgreSQL). A stub provider MAY exist as an optional local fallback when a key is genuinely absent, but it is never the gate. The quality bar is perfect, zero errors — edge-case, end-to-end, and UI tests are required, not optional. The gate must exercise the **hard, idiomatic inputs the capability promises** and push the **real LLM's hard outputs through every guard** on the user's path — not just one easy happy-path example (see `harness/patterns/test-driven.md` → "Gate Tests Must Cover the Capability's Hard Cases").
 
 8. **Every commit must be pushed immediately.** `git commit -m "..." && git push origin <branch>` is one indivisible action — a commit that isn't pushed doesn't exist. See `harness/rules/git.md`.
 
@@ -49,12 +49,13 @@ None of this is gated — the Phase 2 gate runs against real keys.
 Complete all steps in order before writing any code:
 
 - [ ] Read `spec/roadmap.md` — know what you're building
+- [ ] **Detect greenfield vs brownfield (hint, then confirm).** Look for real source/build manifests that are NOT this template's own skeleton (`package.json`, `pom.xml`/`build.gradle`, `go.mod`, `Cargo.toml`, a non-skeleton `pyproject.toml`/`requirements.txt`, an established source tree). Their presence is a **hint** the project is brownfield (extending an existing repo); their absence points greenfield. Treat this only as a hint — the mode is **confirmed with the user at intake** (`/zero-shot-build`), never assumed silently. In brownfield mode the existing stack/layout is binding; see `harness/patterns/project-layout.md` → Brownfield Rules.
 - [ ] Check if the spec is complete (no `<!-- FILL IN -->` markers in product spec files)
-  - If incomplete: tell the user to run `/zero-shot-build`; do not write application code
-- [ ] If spec is complete: read the full spec manifest in `CLAUDE.md`
+  - If incomplete: tell the user to run `/zero-shot-build`; do not write application code. (Brownfield with an empty spec → the bootstrap path documents the existing code into the spec first; see `.claude/skills/zero-shot-sync`.)
+- [ ] If spec is complete: read the full spec manifest in `CLAUDE.md` — including `spec/architecture.md` → `## Commands` for this project's real toolchain
 - [ ] Run `git status` — working tree must be clean before starting
 - [ ] **Branch from the current HEAD**: `base=$(git rev-parse --abbrev-ref HEAD)` then `git checkout -b feature/<slug>-v0.1` — branch from wherever you are so the build dogfoods THIS harness version; never `git checkout main` first (see `harness/rules/git.md`)
-- [ ] **Create the project directory** `<agent-slug>/` if it doesn't exist — never write agent code into the boilerplate root
+- [ ] **Greenfield only: create the project source directory** if it doesn't exist — never write agent code into the boilerplate root. **Brownfield: do not create a new skeleton** — extend the existing source tree in place.
 - [ ] Confirm `.env` exists and contains the required API keys/secrets (requested at intake) — tests and the build run against the real LLM/API using these keys
 - [ ] Confirm which phase you are implementing (see `harness/patterns/phases.md`)
 

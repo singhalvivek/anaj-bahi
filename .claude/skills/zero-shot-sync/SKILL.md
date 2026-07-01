@@ -3,12 +3,22 @@ name: zero-shot-sync
 description: Reconcile spec and code so they match. Audits the whole tree for drift, brings code in line with the spec (spec wins), and verifies. Calls worker agents directly; runs autonomously to a CLEAN audit.
 argument-hint: [optional path or capability to scope to]
 disable-model-invocation: true
-allowed-tools: Bash(git*) Bash(uv run*)
+allowed-tools: Bash(git*) Bash(uv run*) Bash(pnpm*) Bash(npm*) Bash(npx*) Bash(mvn*) Bash(gradle*) Bash(go*) Bash(cargo*)
 ---
 
-You orchestrate a spec↔code sync by calling worker agents directly. **Spec is the source of truth — when spec and code disagree, fix the code** (harness/patterns/spec-driven.md). Optional scope in `$ARGUMENTS`; otherwise the whole project. Run autonomously to a CLEAN audit; pause only on a hard blocker or if a divergence reveals the *spec* is wrong (surface it — don't silently rewrite the spec to match code).
+You orchestrate a spec↔code sync by calling worker agents directly. **Spec is the source of truth — when spec and code disagree, fix the code** (harness/patterns/spec-driven.md). Optional scope in `$ARGUMENTS`; otherwise the whole project. The project's real commands live in `spec/architecture.md` → `## Commands` — use those, never assume a toolchain. Run autonomously to a CLEAN audit; pause only on a hard blocker or if a divergence reveals the *spec* is wrong (surface it — don't silently rewrite the spec to match code).
 
 **qa-auditor runs FIRST** — read-only, it finds and classifies every divergence and its direction; its verdict routes each fix to the responsible **code-generator** and/or **code-generator** by surface. You (the skill) own the commit + push.
+
+## Step 0 — Bootstrap branch (brownfield with no spec yet)
+
+Before the normal audit, check whether the spec is empty/placeholder (`<!-- FILL IN -->`) while real application code already exists — i.e. you've been pointed at an existing repo that this harness never built. If so, there is **nothing to sync yet**: you first need a spec that describes the existing code.
+
+- Invoke **qa-auditor** in drift mode; on a brownfield repo with no spec it returns **NO SPEC — BOOTSTRAP NEEDED** with the detected stack + a capability inventory.
+- Route to **spec-writer in Bootstrap mode** to reverse-engineer the descriptive spec: `spec/architecture.md` (system overview + `## Stack` + `## Commands` from detection, binding) and a light `spec/capabilities/*.md` inventory of what the code already does. It leaves `spec/roadmap.md`'s vision/phases as `<!-- FILL IN -->` (that's for a future `/zero-shot-build [idea]`), and records any structural concern as `> **Recommendation (not applied):** ...` — never restructuring.
+- Commit + push the bootstrapped spec (this is a spec/doc change — it may go on the current branch per `harness/rules/git.md`, since no application code changed). Report the detected stack + documented capabilities, then STOP: this run produced the baseline spec. A subsequent `/zero-shot-sync` (once code and spec can diverge) or `/zero-shot-build [idea]` (to add a capability) picks up from the accurate spec.
+
+If a spec already exists, skip Step 0 and go to Step 1.
 
 ## Step 1 — Audit (qa-auditor first, drift mode)
 

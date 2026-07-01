@@ -4,22 +4,25 @@ This is a spec-driven AI agent boilerplate. Read this file first, then follow th
 
 ## What This Repo Is
 
-A starting template for building AI agents. The spec in `spec/` is either:
+A starting template for building AI agents — **stack-agnostic** and usable either to build a **new** project from scratch (greenfield) or to add capabilities to an **existing** codebase (brownfield). The spec in `spec/` is either:
 - **Partially or fully filled in** — you are implementing an agent from a completed spec
 - **Empty / placeholder** — you are in the build phase; run `/zero-shot-build` to drive the spec and build
+
+Python/FastAPI/Next.js is the harness's **recommended default** for a greenfield build with no stated preference — a recommendation, not a requirement. The project's real stack and the exact commands to run it live in `spec/architecture.md` → `## Stack` and `## Commands`; every agent reads those rather than assuming a toolchain.
 
 ## Your First Action Every Session
 
 1. Read `harness/rules/ai-agents.md` — mandatory rules for all AI sessions
-2. Check whether `spec/roadmap.md` has been filled in:
-   - If it still contains `<!-- FILL IN -->` placeholders → the spec is not ready; do not write application code yet
+2. **Determine greenfield vs brownfield (hint, then confirm).** Look for real source/build manifests that are NOT this template's own skeleton (`package.json`, `pom.xml`/`build.gradle`, `go.mod`, `Cargo.toml`, a non-skeleton `pyproject.toml`, an established source tree). Present → likely **brownfield** (extend the existing repo, adopt its stack/layout, never restructure it). Absent → **greenfield**. This is only a hint — the mode is confirmed with the user at intake, never assumed silently.
+3. Check whether `spec/roadmap.md` has been filled in:
+   - If it still contains `<!-- FILL IN -->` placeholders → the spec is not ready; do not write application code yet. (Brownfield with an empty spec → the bootstrap path documents the existing code into the spec first — see `/zero-shot-sync`.)
    - If it is filled in → proceed to read the full spec manifest below before touching any code
 
 ## Spec Manifest (read in this order when spec is complete)
 
 ```
 spec/roadmap.md
-spec/architecture.md
+spec/architecture.md        ← incl. ## Stack (mode + chosen/detected stack) and ## Commands (the real toolchain — every agent reads this)
 spec/capabilities/          ← all files
 spec/data.md
 spec/api.md
@@ -32,7 +35,7 @@ harness/patterns/project-layout.md
 harness/patterns/engineering-practices.md
 harness/patterns/test-driven.md
 harness/patterns/ui-ux.md
-harness/patterns/tech-stack.md     ← generic stack rules (chosen stack is in spec/architecture.md)
+harness/patterns/tech-stack.md     ← generic stack principles + detection signals (chosen/detected stack + commands are in spec/architecture.md)
 harness/patterns/code.md           ← generic code conventions
 harness/patterns/agentic-ai.md     ← catalogue of agentic patterns (chosen graph is in spec/agent.md)
 harness/rules/git.md
@@ -64,7 +67,9 @@ These are the entry points. All are manual (`disable-model-invocation: true`). E
 - Tests and evals run against the real LLM/API using keys from `.env` — never gate the build on offline/stubbed runs
 - When in doubt, ask at intake — do not guess requirements; once intake completes, build a phase autonomously and stop for the human testing gate
 
-## The skeleton in `src/`
+## The skeleton in `src/` (greenfield default only)
+
+> This section applies **only to a greenfield build on the harness's default Python stack**. It does NOT apply when extending an existing repo (brownfield) or when a different stack was chosen — in those cases there is no `src/` skeleton to extend; follow the existing/chosen stack's real structure (`harness/patterns/project-layout.md` → Brownfield Rules).
 
 `src/` is the **opinionated baseline** — a working FastAPI + LangGraph + SQLite + Anthropic agent whose capability slot is `transform_text`. Tests pass out of the box. Generators extend this in place — they never copy or rename. The capability slot is:
 

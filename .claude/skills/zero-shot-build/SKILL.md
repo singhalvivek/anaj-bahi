@@ -10,6 +10,15 @@ You run the human channel — intake, then the testing gate at every phase bound
 
 **Autonomy model:** autonomous *within* a phase; a **human testing gate between phases**. Intake is the only interactive SETUP step; after it, agent-builder builds a phase end-to-end without pausing, then returns a test-handoff. You present the handoff, handhold the user through testing, and only proceed to the next phase on the user's go. agent-builder pauses mid-phase only on a hard blocker (e.g. a required key still missing from `.env`).
 
+## Stage 0 — Detect greenfield vs brownfield (before intake)
+
+Before any product question, determine whether this is a **new** project or an **existing** codebase — it changes both intake and the build:
+
+1. **Auto-detect a hint (read-only).** Scan the working directory for real source/build manifests that are NOT this template's own skeleton — `package.json`, `pom.xml`/`build.gradle`, `go.mod`, `Cargo.toml`, a non-skeleton `pyproject.toml`/`requirements.txt`, an established source tree. Present → hint **brownfield**; absent (only this boilerplate's files) → hint **greenfield**.
+2. **Always confirm — never assume.** Make this the very first `AskUserQuestion` (single-select, hint pre-filled as the recommended first option): *"Is this a brand-new project, or are we adding to an existing codebase?"* → **"Brand-new project"** / **"Existing codebase (extend it)"**.
+3. **If brownfield and the spec is still empty/placeholder → bootstrap first.** Before running product intake, tell agent-builder (or run the bootstrap path directly via `/zero-shot-sync`) to invoke **spec-writer in Bootstrap mode**: detect the existing stack + `## Commands`, and reverse-engineer a descriptive spec of what the code already does. This gives intake and design an accurate baseline to extend. (If a spec already exists, skip bootstrap.)
+4. **Carry the mode forward.** Every later stage — the technical round below, and the agent-builder invocation — is told explicitly whether this is greenfield or brownfield.
+
 ## Stage 1 — Intake (the only interactive setup step)
 
 Intake has **two fixed sections and a variable middle**:
@@ -112,20 +121,20 @@ Keep going until the brief you'll write in the synthesis step would let spec-wri
 
 Read all prior rounds. Now ask the **technical build questions** — only genuine blockers, 3–4 total:
 - **LLM provider** *(single-select)* — offer: **Anthropic (API key)**, **Gemini (API key)**, **OpenRouter (any model)**, **Other / self-hosted**. This drives which key the user sets.
-- **Stack preference** — language, database? ("No preference" → Python + SQLite defaults for local/prototype tools, PostgreSQL for production-grade, documented as assumptions.)
-- **How will they access it?** — Web UI in a browser, CLI in the terminal, REST API, scheduled/automated job. Drives whether to build a frontend.
+- **Stack preference** — language, database? **Greenfield only:** "No preference" → the harness's recommended default (Python + FastAPI + Next.js; SQLite for a local/prototype tool, PostgreSQL for production-grade), documented as assumptions. **Brownfield: SKIP this question** — the stack is the existing repo's detected stack (from Stage 0 bootstrap / `spec/architecture.md` → `## Stack` + `## Commands`), which is binding. Only ask a stack question here if the new capability genuinely needs a *new* component the repo doesn't have yet (e.g. adding a DB to an app that had none).
+- **How will they access it?** — Web UI in a browser, CLI in the terminal, REST API, scheduled/automated job. Drives whether to build a frontend. (Brownfield: default to how the existing app is already accessed unless the new capability adds a surface.)
 - **One follow-up** from prior rounds only if something would force a mid-build pause — skip if everything is clear.
 
 **API key** (the only manual user step). Read `.env` and check whether the key for the chosen provider is already set (non-empty): `AGENT_ANTHROPIC_API_KEY`, `AGENT_GEMINI_API_KEY`, or `AGENT_OPENROUTER_API_KEY` (for **Other**, ask which env var + base URL). If present and non-empty, skip silently. Only if missing or empty, tell the user to set it in `.env` (from `.env.example`) and wait for confirmation. Never echo, print, paste, or commit a secret value.
 
-**Synthesis brief**: write a **2–3 paragraph brief** covering: what the agent does and who uses it; the core interaction model (session shape, memory/state, multi-item handling); the key capabilities and features (analysis depth, output forms, proactive behaviours, edge-case handling, integrations, observability); the hard constraints (scale, privacy, reliability bar); and the technical stack and access model. Name the one core path for Phase 1 explicitly — the single most important thing a user does that proves the idea. ("Just build it" → narrow MVP, Python + SQLite defaults, documented as assumptions.)
+**Synthesis brief**: write a **2–3 paragraph brief** covering: the **mode (greenfield/brownfield)** and, if brownfield, the detected stack + the existing structure the new work extends; what the agent does and who uses it; the core interaction model (session shape, memory/state, multi-item handling); the key capabilities and features (analysis depth, output forms, proactive behaviours, edge-case handling, integrations, observability); the hard constraints (scale, privacy, reliability bar); and the technical stack and access model. Name the one core path for Phase 1 explicitly — the single most important thing a user does that proves the idea. ("Just build it" → narrow MVP; greenfield uses the recommended default stack, documented as assumptions; brownfield uses the existing stack.)
 
 ## Stage 2 — Design + scaffold + build Phase 1 (delegate)
 
-Invoke the **agent-builder** sub-agent once with the brief and the populated `.env`. Tell it to run, in order, and return the **Phase-1 test-handoff**:
+Invoke the **agent-builder** sub-agent once with the brief and the populated `.env`. **State the mode (greenfield / brownfield) explicitly in the brief.** Tell it to run, in order, and return the **Phase-1 test-handoff**:
 
-- **DESIGN** — spec-writer writes the full spec: vision/capabilities, `spec/architecture.md` (incl. the `## Stack` section), `spec/agent.md` (if a framework is chosen), and the phased plan in `spec/roadmap.md` under "## Phases of Development" (per phase: Goal · independent slices · key surfaces/files · the exact runnable Gate command · how the user tests it).
-- **SCAFFOLD** — branch `feature/<slug>-v0.1`, project dirs, `.env.example`, first commit + push, open the PR.
+- **DESIGN** — spec-writer writes the full spec: vision/capabilities, `spec/architecture.md` (incl. the `## Stack` **and** `## Commands` sections), `spec/agent.md` (if a framework is chosen), and the phased plan in `spec/roadmap.md` under "## Phases of Development" (per phase: Goal · independent slices · key surfaces/files · the exact runnable Gate command · how the user tests it). **Brownfield:** design runs *after* the Stage-0 bootstrap spec so it extends the accurate, detected baseline.
+- **SCAFFOLD** — branch `feature/<slug>-v0.1`; **greenfield:** project dirs, `.env.example`, first commit + push, open the PR. **Brownfield:** adopt the existing structure as-is (no new skeleton), append to the existing `.env.example`/README, first commit + push, open the PR.
 - **BUILD PHASE 1** — fan out generators per independent slice in parallel, gate each slice with qa-auditor, then return the Phase-1 test-handoff and STOP.
 
 Relay only the hard blockers it escalates (e.g. a required key still missing from `.env`).
@@ -134,11 +143,11 @@ Relay only the hard blockers it escalates (e.g. a required key still missing fro
 
 Phase 1 is the smallest working win: real on the one core path, with clearly-labelled non-functional stubs for everything coming later. **Spoon-feed the user: the ONLY things they should ever do by hand are (a) put secrets in `.env` and (b) interact with the running app (click / chat). They must never run a terminal command to test.** You own the gate, the server lifecycle, and re-invocation:
 
-1. **Launch the server** (you own this — agent-builder does NOT start it; sub-agent background processes are cleaned up on return). The handoff includes the project root path + run command. In order from the project root:
-   a. If the phase has a frontend slice: `cd frontend && pnpm build && cd ..`
-   b. If the phase has migrations: `uv run alembic upgrade head`
-   c. `uv run python -m src` with `run_in_background: true`
-   d. Health-check with retry: `for i in {1..10}; do curl -sf http://localhost:8001/health && break || sleep 2; done` — wait for the server before presenting the gate. If it never responds → route immediately to qa-auditor (boot failure), do not present the URL.
+1. **Launch the server** (you own this — agent-builder does NOT start it; sub-agent background processes are cleaned up on return). The handoff includes the project root path + the exact commands from `spec/architecture.md` → `## Commands`. In order from the project root (use the project's real commands — the Python + Next.js commands below are the worked example):
+   a. If the phase has a frontend slice: the frontend build command (e.g. `cd frontend && pnpm build && cd ..`)
+   b. If the phase has migrations: the migration command (e.g. `uv run alembic upgrade head`)
+   c. The dev run command (e.g. `uv run python -m src`) with `run_in_background: true`
+   d. Health-check with retry against the real dev port + health path (e.g. `for i in {1..10}; do curl -sf http://localhost:8001/health && break || sleep 2; done`) — wait for the server before presenting the gate. If it never responds → route immediately to qa-auditor (boot failure), do not present the URL.
 2. Load the question tool: `ToolSearch` with query `select:AskUserQuestion` (before asking).
 3. Present the handoff as **phase release notes**: the live URL, what was built this phase, what to click / type / look at, the expected result, which parts are clearly-labelled stubs vs real (a stub must never read as a bug), and what the next phase adds. No run commands in the handoff — the app is already serving.
 4. Ask via `AskUserQuestion` (two questions in one call):

@@ -54,15 +54,21 @@ SHIP (after the final phase passes its gate)
   qa-auditor final whole-tree drift audit (CLEAN) → you ensure pushed + PR body current
 ```
 
+## Mode: greenfield vs brownfield
+
+Your invocation brief states whether this is a **greenfield** build (from this harness's skeleton) or a **brownfield** build (extending an existing repo). It changes Stage 1 (design vs bootstrap-then-design) and Stage 2 (scaffold a skeleton vs adopt the existing structure). The build stage (fan-out generators + qa-auditor) is the same either way — only what the generators extend differs. Every command you or a generator runs comes from `spec/architecture.md` → `## Commands`, never assumed.
+
 ## Stage 1 — Design (first invocation only)
 
-**spec-writer** — give it the brief. As the single design authority it writes the full spec and self-reviews before returning: `spec/` capabilities (ruthless 2–4, rest deferred), `spec/architecture.md` (system design + the `## Stack` section), `spec/agent.md` if a framework is chosen, and `spec/roadmap.md` (`## Phases of Development`) — each phase carved into **independent slices** (the parallel units) with explicit dependencies, key surfaces/files, the exact runnable gate command (real LLM/API via `.env`, production DB driver), and "how the user tests it". It makes every technical decision itself from intake constraints + sensible defaults — it does not defer questions to the user. Surface any `Assumed:` flags it raises.
+**Greenfield:** invoke **spec-writer** in design mode — give it the brief. As the single design authority it writes the full spec and self-reviews before returning: `spec/` capabilities (ruthless 2–4, rest deferred), `spec/architecture.md` (system design + the `## Stack` **and** `## Commands` sections), `spec/agent.md` if a framework is chosen, and `spec/roadmap.md` (`## Phases of Development`) — each phase carved into **independent slices** (the parallel units) with explicit dependencies, key surfaces/files, the exact runnable gate command (real LLM/API via `.env`, production database engine, drawn from `## Commands`), and "how the user tests it". It makes every technical decision itself from intake constraints + sensible defaults — it does not defer questions to the user. Surface any `Assumed:` flags it raises.
+
+**Brownfield:** if the existing repo has no spec yet (empty/placeholder), first invoke **spec-writer in Bootstrap mode** to reverse-engineer the descriptive spec from the existing code — detected stack + `## Commands`, plus an inventory of existing capabilities — *before* designing the new capability. Then invoke **spec-writer in design mode** for the new capability, adding to the now-accurate spec. Detected stack/toolchain is BINDING; the new work extends the existing structure (never a parallel skeleton).
 
 ## Stage 2 — Scaffold (first invocation only — you own git)
 
 1. `base=$(git rev-parse --abbrev-ref HEAD)` to capture the current branch as `<base>` (this is the harness version you dogfood — do NOT switch to main first), then `git checkout -b feature/<slug>-v0.1` from it. Never build on `main`. Remember `<base>` — the PR targets it, not `main`.
-2. Create the project directories per `harness/patterns/project-layout.md`. Never write app code at the repo root.
-3. Create `.env.example` documenting every env var; the real values live in the user's `.env` (filled at intake) and tests/evals read from there. Never stage `.env`.
+2. **Greenfield:** create the project directories per `harness/patterns/project-layout.md` (greenfield layout). Never write app code at the repo root. **Brownfield:** do NOT create a skeleton — branch off the existing structure as-is and let generators extend it in place (`project-layout.md` → Brownfield Rules: never restructure, rename, or move existing files).
+3. Create/update `.env.example` documenting every env var; the real values live in the user's `.env` (filled at intake) and tests/evals read from there. Never stage `.env`. **Brownfield:** append to the existing `.env.example` if one exists, don't overwrite it.
 4. First commit (scaffold) + push, then open the PR immediately — a PR must exist before the first feature commit (`harness/rules/git.md`). **Base it on `<base>`, not `main`**, so the PR shows only the generated app: `gh pr create --base "$base" --head feature/<slug>-v0.1`.
 
 ## Stage 3 — Build one phase (max parallelism)
@@ -80,8 +86,8 @@ For the phase named in your invocation (Phase 1 on the first invocation; the nex
 After the phase gate is VERIFIED and committed, **return a PHASE TEST-HANDOFF to the skill and STOP** — do NOT launch the server, do not start the next phase, do not ask the user. **A sub-agent's background processes are cleaned up when it returns** — any server launched here will be dead by the time the user clicks the URL. The skill (root session) owns the server lifecycle and launches it after receiving the handoff. The user must never run a terminal command to test. The handoff is the build record's user-facing artefact and is **phase release notes**, structured for the skill to act on:
 
 - the **absolute project root path** (e.g. `/path/to/exp1/my-agent/`) — the skill uses this to launch the server;
-- the **server run command** — always `uv run python -m src` (from the project root), plus `cd frontend && pnpm build` first if the phase has a frontend slice, plus `uv run alembic upgrade head` if the phase has migrations;
-- the **live URL** the user opens (e.g. `http://localhost:8001/app/`) — frame as "open this";
+- the **server run command** — the "Dev run command" from `spec/architecture.md` → `## Commands` (from the project root), preceded by the frontend build command if the phase has a frontend slice and the migration command if the phase has migrations. *(Worked example — Python + Next.js: `cd frontend && pnpm build` → `uv run alembic upgrade head` → `uv run python -m src`.)*
+- the **live URL** the user opens (e.g. `http://localhost:8001/app/` — use the project's real dev port from `## Commands`) — frame as "open this";
 - **what was built this phase** — one line per capability delivered;
 - what to click / type / look at, and the expected result;
 - which parts are **clearly-labelled stubs** vs **real** (a stub must never read as a bug);

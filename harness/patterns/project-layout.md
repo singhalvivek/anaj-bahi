@@ -1,37 +1,39 @@
-# Project Layout — Canonical Structure
+# Project Layout
 
-All agents built from this boilerplate must follow this layout exactly. The sales-agent repo (`smallTechOrg/sales-agent`) is the canonical reference.
-
----
-
-## README Requirements (Mandatory)
-
-Every generated project **must** have a README that:
-
-1. **States "all commands run from the repo root"** — the repo root IS the project (no subdirectory to cd into). Put this as a blockquote or bold warning at the very top, before any other content.
-2. **Prefixes all commands with `uv run`** — never bare `alembic`, `pytest`, or `python`. Bare commands fail unless the venv is manually activated.
-3. **Includes `uv run alembic current` after `upgrade head`** — so the user can verify tables were actually created (blank output = silent failure).
-4. **Stays accurate** — every README command must be tested before a phase is marked complete. If a command fails, fix the README before claiming the phase is done.
-
-The README is the first thing a user touches. A wrong README fails the entire build regardless of whether the code works.
+This file has three parts: **Universal rules** (every project, every stack), the **Greenfield layout** (the harness's default Python tree, generated for a from-scratch build), and the **Brownfield rules** (extending an existing repo — never restructuring it). The concrete tree below is the greenfield reference for the default Python stack; for any other chosen stack, spec-writer writes the idiomatic layout for *that* stack while honoring the Universal rules.
 
 ---
 
-## Source Code Rule (Non-Negotiable)
+## Universal Rules (any stack, any mode)
 
-**All application source code must live inside `src/`.** Never place HTML, CSS, JavaScript, Python packages, templates, or data files at the repo root.
+These hold whatever the language or whether the project is greenfield or brownfield:
 
-The repo root is for project-level config only: `pyproject.toml`, `alembic.ini`, `README.md`, `.env.example`, and boilerplate infrastructure (`spec/`, `harness/`, `CLAUDE.md`). If you are about to create an application file at the root, stop and put it in `src/` instead.
-
-This applies to all project types — Python packages, static web apps, TypeScript projects, and any other stack.
+1. **README stays accurate.** Every command in the README must work exactly as written, from the directory stated, prefixed with the project's real package-manager invocation (see `spec/architecture.md` → `## Commands`). Every README command must be run and confirmed before a phase is marked complete. A wrong README fails the build regardless of whether the code works. It is the first thing a user touches.
+2. **App code lives in a real source directory, never loose at the repo root.** Application files (source, templates, styles, assets) go under the project's source tree — `src/`, `app/`, `lib/`, `main/java/...`, whatever the ecosystem uses — never scattered at the repo root. The root is for project-level config and this boilerplate's infrastructure (`spec/`, `harness/`, `CLAUDE.md`).
+3. **One canonical module/package — never a duplicate parallel one.** Extend the existing (or renamed) package in place. A second package sitting beside the real one duplicates the wired-up baseline, leaving dead code and two sources of truth. This applies to greenfield (rename the skeleton package, don't clone it) and brownfield (extend the existing package, don't add a competing one).
+4. **Tests follow the ecosystem's own convention.** Put tests where that stack expects them (Python `tests/` at repo root, Java `src/test/java`, Node `__tests__`/`*.test.ts`, Go `*_test.go` beside the source). Don't impose the Python layout on a non-Python project.
 
 ---
 
-## Directory Tree
+## Greenfield Layout (default Python stack)
+
+Everything from here down is the **greenfield reference for the harness's default Python + FastAPI + SQLAlchemy stack** — what gets generated for a from-scratch build with no other stated stack. For a different chosen stack, apply the Universal rules above and this stack's idiomatic layout instead. For an existing repo, see **Brownfield rules** at the bottom — do **not** graft this tree onto it.
+
+The sales-agent repo (`smallTechOrg/sales-agent`) is the canonical reference for this default tree.
+
+### README Requirements (default Python stack)
+
+The generated README must additionally:
+
+1. **State "all commands run from the repo root"** — the repo root IS the project (no subdirectory to cd into). Put this as a blockquote or bold warning at the very top.
+2. **Prefix all commands with `uv run`** — never bare `alembic`, `pytest`, or `python`. Bare commands fail unless the venv is manually activated. (General rule: use the package-manager prefix from `## Commands` — `uv run` for this stack.)
+3. **Include `uv run alembic current` after `upgrade head`** — so the user can verify tables were actually created (blank output = silent failure).
+
+### Directory Tree
 
 The repo root **is** the agent project. There is no `<agent-slug>/` subdirectory — boilerplate files (`spec/`, `harness/`, `CLAUDE.md`) coexist with project files at the root.
 
-**One package only.** The skeleton ships `src/agent/`. If the spec needs a different package name (e.g. `xyz_agent`), **rename `src/agent/` in place** — never create a second package beside it. `src/xyz/` sitting next to `src/agent/` is always wrong: it duplicates the wired-up baseline instead of extending it, leaving dead code and two sources of truth.
+**One package only.** The skeleton ships `src/agent/`. If the spec needs a different package name (e.g. `xyz_agent`), **rename `src/agent/` in place** — never create a second package beside it (Universal rule 3).
 
 ```
 <repo root>                           ← repo root IS the agent project
@@ -457,7 +459,7 @@ def test_pipeline_runs_end_to_end(_isolated_db, _real_env):
 
 ---
 
-## Rules
+## Rules (default Python stack)
 
 1. **Agent code goes in `src/<package>/`** — never in the boilerplate root
 2. **No repository pattern** — direct SQLAlchemy queries in graph nodes and API handlers
@@ -469,3 +471,19 @@ def test_pipeline_runs_end_to_end(_isolated_db, _real_env):
 8. **FastAPI response envelope** — every route returns `ok(data)` or raises `api_error()`
 9. **Settings singleton** must be resettable via `monkeypatch.setattr(m, "_settings", None)`
 10. **Phase 2 gate runs against real services** — tests and the golden-path smoke hit the real LLM/API using keys loaded from `.env` (requested at intake), against the production DB driver (never SQLite if production is PostgreSQL). A stub provider remains only as an optional fallback when a key is genuinely absent; offline-passing is no longer required, and real-key execution is the default and required path for the gate.
+
+---
+
+## Brownfield Rules (extending an existing repo)
+
+When the project is an **existing codebase** (Mode: Brownfield in `spec/architecture.md`), none of the greenfield tree above applies. The existing repo already has a layout, a package manager, a test location, and conventions — **you adopt them; you do not replace them.**
+
+**Non-negotiable: never restructure, rename, or move existing files to fit this harness's canonical layout.** Do not introduce a parallel `src/<package>/` skeleton beside the repo's real source tree, do not swap its package manager, do not relocate its tests, do not rewrite its README from scratch. A build that reorganizes a working repo to match this boilerplate is a failed build — it creates a mess and risks breaking things that already work.
+
+What brownfield mode does instead:
+
+1. **Document, then extend.** The stack-detection pass (spec-writer Bootstrap mode) reads the existing structure, stack, and conventions and records them in `spec/architecture.md` (`## Stack` + `## Commands`) — reverse-engineering the spec from the code. Generators then add the new capability *into* that existing structure, following how similar features are already built there (same directories, same patterns, same test location, same naming).
+2. **New files match existing neighbors.** A new module goes where the repo already puts modules of that kind, named the way the repo names them, wired the way the repo wires them. Read two or three existing sibling files first and mirror their shape.
+3. **Extend the README, don't replace it.** Append a section describing what the new capability added (new commands, env vars, endpoints) below the existing content. The existing README keeps its structure.
+4. **Precautions against breakage.** Change the smallest surface that delivers the capability. Don't touch unrelated files, don't upgrade dependencies opportunistically, don't reformat existing code. Add tests alongside the repo's existing tests using its existing runner (from `## Commands`). Run the existing suite before and after to confirm nothing that passed now fails.
+5. **Recommend, never auto-apply, structural change.** If the existing structure genuinely makes the new capability hard or risky to add, spec-writer records a `> **Recommendation (not applied):** ...` note in `spec/architecture.md` describing the suggested refactor. It is a suggestion for the user to act on separately — the build never performs it unprompted.

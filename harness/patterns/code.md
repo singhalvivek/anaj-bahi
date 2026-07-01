@@ -55,11 +55,13 @@ These apply to all projects. No exceptions.
 
 5. **DB URL and API keys in `.env.example`** — the `.env.example` file must include the test DB URL and every required LLM/API key with clear placeholders (e.g. `APPNAME_ANTHROPIC_API_KEY=`) so the user knows what to fill in. Filling `.env` with real keys is the only manual user step, requested at intake; tests and evals load these keys programmatically and confirm them by presence only.
 
-6. **`alembic upgrade head` in CI / README** — the README must include `alembic upgrade head` as an explicit step before running the app or tests. Never rely on auto-create from SQLAlchemy metadata alone in production.
+6. **Migration step in CI / README** — the README must include the project's real migration command (from `spec/architecture.md` → `## Commands`, e.g. `alembic upgrade head`, `flyway migrate`) as an explicit step before running the app or tests. Never rely on auto-create from an ORM's metadata alone in production.
 
 ---
 
-## Framework Gotchas (keep up to date — known footguns)
+## Framework Gotchas — Worked example: Python / FastAPI (keep up to date — known footguns)
+
+> These are footguns of the harness's **default** Python/FastAPI/SQLAlchemy stack — illustrations, not universal rules. On another stack, watch for that stack's equivalent footguns instead. The universal rule is only: know your framework's version-specific call-signature and config traps, and encode them once.
 
 ### Starlette ≥ 1.0 `TemplateResponse` signature
 
@@ -100,7 +102,9 @@ Any project with an LLM dependency must follow these patterns:
 
 ## Integration Test Patterns
 
-Integration and e2e tests call the **real** LLM provider with keys loaded from `.env` — the call is NOT stubbed. The suite is overly tested: edge cases, error paths, end-to-end journeys, and (for any UI/HTTP surface) UI states are all required. Because real responses are non-deterministic, integration/e2e assertions check stable structural properties (status, shape, key fields) rather than exact prose; unit tests stay fully deterministic (inject the clock, seed randomness). Run against the production DB driver, never SQLite if production is PostgreSQL.
+> The principle here is universal; the code snippets below are a **worked example for Python + SQLAlchemy** (`monkeypatch`, `create_async_engine`). On another stack apply the same principle with that stack's test tooling.
+
+Integration and e2e tests call the **real** LLM provider with keys loaded from `.env` — the call is NOT stubbed. The suite is overly tested: edge cases, error paths, end-to-end journeys, and (for any UI/HTTP surface) UI states are all required. Because real responses are non-deterministic, integration/e2e assertions check stable structural properties (status, shape, key fields) rather than exact prose; unit tests stay fully deterministic (inject the clock, seed randomness). Run against the production database engine, never a lighter substitute if production is PostgreSQL.
 
 ### Replacing an async init function in tests
 
