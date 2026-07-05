@@ -1,38 +1,46 @@
-# Capabilities Index
+# Capabilities Index — Anaj Bahi
 
-> **Boilerplate status:** The spec-writer sub-agent creates one file per capability in this directory. Each file describes exactly one discrete thing the agent can do.
+One file per capability. Phase 1 delivers the full local purchase-capture journey; later phases are modelled now and built per the [roadmap](../roadmap.md).
 
----
+## Phase 1 — Local purchase capture (built)
 
-## What Is a Capability?
+| Capability | File | Slice |
+|-----------|------|-------|
+| Create Bill | [create-bill.md](create-bill.md) | b + a |
+| Sack-by-Sack Weight Entry | [sack-by-sack-entry.md](sack-by-sack-entry.md) | b |
+| Deductions & Totals Calculation | [deductions-and-totals-calc.md](deductions-and-totals-calc.md) | a |
+| Farmer Autocomplete | [farmer-autocomplete.md](farmer-autocomplete.md) | b + a |
+| Bill List & Reopen | [bill-list-and-reopen.md](bill-list-and-reopen.md) | c + a |
+| Bilingual Hindi/English Toggle | [i18n-toggle.md](i18n-toggle.md) | a + c |
+| Installable PWA Shell | [pwa-shell.md](pwa-shell.md) | c |
 
-A capability is a single, discrete action or behavior the agent performs. Examples:
-- "Search the web for companies matching criteria X"
-- "Draft a personalized email given a lead profile"
-- "Send a Slack notification when a threshold is crossed"
-
-## Capabilities in This Project
-
-<!-- FILL IN: List capabilities here as they are defined. Each entry links to its spec file (no number prefix). -->
+## Phase 2 — Security, payments & finding bills (deferred)
 
 | Capability | File |
 |-----------|------|
-| <!-- name --> | [name.md](name.md) |
+| PIN Lock | [pin-lock.md](pin-lock.md) |
+| Payments & Outstanding Balance | [payments.md](payments.md) |
+| Due-Soon / Overdue List | [due-list.md](due-list.md) |
+| Bill Edit-Lock Rule | [bill-edit-lock.md](bill-edit-lock.md) |
+| Search & Filter Bills | [search-filters.md](search-filters.md) |
 
-## How to Add a New Capability
+## Phase 3 — Shareable image receipt (deferred)
 
-Run `/zero-shot-build [description]` on the existing spec. The spec-writer sub-agent will:
-1. Create a new file in this directory (`<name>.md`, no number prefix)
-2. Update this index
-3. Flag any dependencies on existing capabilities
-4. Self-review that it fits the architecture and data model before returning
+| Capability | File |
+|-----------|------|
+| Business Profile | [business-profile.md](business-profile.md) |
+| Receipt Render | [receipt-render.md](receipt-render.md) |
+| Share Receipt as Image | [share-as-image.md](share-as-image.md) |
 
-## Capability File Template
+## Phase 4 — Cloud sync & backup (deferred)
 
-Each capability file should answer:
-- **What it does** (one sentence)
-- **Inputs** (what data it receives)
-- **Outputs** (what it produces)
-- **External calls** (APIs, LLMs, databases it touches)
-- **Error cases** (what can go wrong and how it's handled)
-- **Success criteria** (how we test it)
+| Capability | File |
+|-----------|------|
+| Cloud Sync | [cloud-sync.md](cloud-sync.md) |
+| Offline Queue | [offline-queue.md](offline-queue.md) |
+| Backup & Restore | [backup-restore.md](backup-restore.md) |
+
+## Notes
+
+- This project uses **no agent framework / no LLM** — see [../agent.md](../agent.md).
+- Adding a new capability: create `<name>.md` here, update this index, and touch architecture/data/roadmap only if affected.
