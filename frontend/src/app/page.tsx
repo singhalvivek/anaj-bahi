@@ -1,77 +1,103 @@
 'use client'
 
-import { useState } from 'react'
+import Link from 'next/link'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { useI18n } from '@/lib/i18n/context'
+import * as repo from '@/lib/db/repo'
+import { computeBillTotal } from '@/lib/calc'
+import { ComingSoon } from '@/components/ComingSoon'
+import { formatRupees, formatDate } from '@/components/format'
 
-export default function Home() {
-  const [input, setInput] = useState('')
-  const [result, setResult] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+export default function HomePage() {
+  const { t, lang } = useI18n()
+  // Reactive reads — a newly saved bill appears at the top with no manual refresh.
+  const bills = useLiveQuery(() => repo.listBills(), [])
+  const grainTypes = useLiveQuery(() => repo.listGrainTypes(), [])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!input.trim()) return
-    setLoading(true)
-    setError(null)
-    setResult(null)
-    try {
-      const res = await fetch('/runs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input_text: input }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.detail?.message ?? `Request failed (${res.status})`)
-      } else if (data.data?.error) {
-        setError(data.data.error)
-      } else {
-        setResult(data.data.output_text)
-      }
-    } catch {
-      setError('Network error — is the server running?')
-    } finally {
-      setLoading(false)
-    }
+  const grainName = (id: string): string => {
+    const g = grainTypes?.find((gt) => gt.id === id)
+    if (!g) return id
+    return lang === 'hi' ? g.nameHi : g.nameEn
   }
 
+  const loading = bills === undefined
+
   return (
-    <main className="mx-auto max-w-2xl px-4 py-16">
-      <h1 className="mb-8 text-3xl font-bold tracking-tight">Agent</h1>
+    <div className="flex flex-col gap-4 px-4 py-4">
+      {/* Search / Filter — labelled coming-soon stub */}
+      <ComingSoon feature={t('stub.search')} testid="stub-search" />
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <textarea
-          className="w-full rounded-lg border border-gray-300 p-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          rows={4}
-          placeholder="Enter text to transform…"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          disabled={loading}
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-stone-700">{t('bills.title')}</h2>
+      </div>
+
+      {loading ? (
+        <ul className="flex flex-col gap-3" aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="h-24 animate-pulse rounded-xl bg-stone-200" />
+          ))}
+        </ul>
+      ) : bills.length === 0 ? (
+        <div
+          data-testid="bill-list"
+          className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center"
         >
-          {loading ? 'Running…' : 'Run'}
-        </button>
-      </form>
-
-      {error && (
-        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
+          <span className="text-4xl" aria-hidden>
+            📒
+          </span>
+          <p className="text-stone-500">{t('bills.empty')}</p>
         </div>
+      ) : (
+        <ul data-testid="bill-list" className="flex flex-col gap-3">
+          {bills.map((bill) => (
+            <li key={bill.id}>
+              <Link
+                href={`/bill?id=${encodeURIComponent(bill.id)}`}
+                data-testid="bill-card"
+                className="block rounded-xl border border-stone-200 bg-white p-4 shadow-sm active:bg-stone-50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-stone-900">
+                      {bill.farmerName}
+                      {bill.farmerPlace ? (
+                        <span className="font-normal text-stone-500"> · {bill.farmerPlace}</span>
+                      ) : null}
+                    </p>
+                    <p className="mt-0.5 text-xs text-stone-400">
+                      {bill.id} · {formatDate(bill.purchaseDate)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-lg font-bold text-green-700">
+                    {formatRupees(computeBillTotal(bill.lines))}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {bill.grainTypeIds.map((gid) => (
+                    <span
+                      key={gid}
+                      className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700"
+                    >
+                      {grainName(gid)}
+                    </span>
+                  ))}
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
 
-      {result && (
-        <div className="mt-6 rounded-lg border border-gray-200 bg-white p-4 text-sm whitespace-pre-wrap shadow-sm">
-          {result}
-        </div>
-      )}
-
-      {!result && !error && !loading && (
-        <p className="mt-10 text-center text-sm text-gray-400">Results will appear here.</p>
-      )}
-    </main>
+      {/* Primary action — large, thumb-reachable above the bottom nav. */}
+      <Link
+        href="/bills/new"
+        data-testid="new-bill-btn"
+        className="fixed inset-x-0 bottom-16 z-10 mx-auto flex w-full max-w-md justify-center px-4"
+      >
+        <span className="flex h-14 w-full items-center justify-center rounded-full bg-green-700 text-base font-semibold text-white shadow-lg active:bg-green-800">
+          {t('bills.new')}
+        </span>
+      </Link>
+    </div>
   )
 }

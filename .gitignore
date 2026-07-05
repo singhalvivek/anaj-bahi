@@ -17,3 +17,6 @@ build/
 *.db-wal
 data/
 frontend/out/
+*.tsbuildinfo
+frontend/test-results/
+playwright-report/
