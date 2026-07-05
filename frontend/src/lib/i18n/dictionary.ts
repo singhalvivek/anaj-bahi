@@ -151,6 +151,49 @@ export const EN = {
   'search.all': 'All',
   'search.clear': 'Clear',
   'search.noResults': 'No bills match your search',
+
+  // ---- Phase 3 ----
+
+  // settings — business profile
+  'settings.title': 'Settings',
+  'settings.business': 'Business profile',
+  'settings.businessHint': 'This appears as the header on shared receipts.',
+  'settings.shopName': 'Shop name',
+  'settings.traderName': 'Trader name',
+  'settings.phone': 'Phone',
+  'settings.address': 'Address (optional)',
+  'settings.save': 'Save',
+  'settings.saved': 'Saved',
+
+  // receipt
+  'receipt.title': 'Receipt',
+  'receipt.billNo': 'Bill No.',
+  'receipt.date': 'Date',
+  'receipt.farmer': 'Farmer',
+  'receipt.place': 'Place',
+  'receipt.phone': 'Phone',
+  'receipt.grain': 'Grain',
+  'receipt.price': 'Price',
+  'receipt.perQuintal': 'per quintal',
+  'receipt.sacks': 'Sacks',
+  'receipt.sack': 'Sack',
+  'receipt.gross': 'Gross',
+  'receipt.deduction': 'Deduction',
+  'receipt.net': 'Net',
+  'receipt.amount': 'Amount',
+  'receipt.lineTotal': 'Line total',
+  'receipt.total': 'Total',
+  'receipt.kg': 'kg',
+  'receipt.thanks': 'Thank you',
+
+  // share as image
+  'share.button': 'Share',
+  'share.preview': 'Preview',
+  'share.generating': 'Generating image…',
+  'share.download': 'Download',
+  'share.unsupported': 'Sharing not supported — use Download',
+  'share.error': 'Could not create the image',
+  'share.close': 'Close',
 } as const
 
 export type TKey = keyof typeof EN
@@ -300,6 +343,49 @@ export const HI: Record<TKey, string> = {
   'search.all': 'सभी',
   'search.clear': 'साफ़ करें',
   'search.noResults': 'आपकी खोज से कोई बही मेल नहीं खाती',
+
+  // ---- Phase 3 ----
+
+  // settings — business profile
+  'settings.title': 'सेटिंग',
+  'settings.business': 'व्यापार की जानकारी',
+  'settings.businessHint': 'यह साझा की गई रसीद के शीर्ष पर दिखेगी।',
+  'settings.shopName': 'दुकान का नाम',
+  'settings.traderName': 'व्यापारी का नाम',
+  'settings.phone': 'फ़ोन',
+  'settings.address': 'पता (वैकल्पिक)',
+  'settings.save': 'सहेजें',
+  'settings.saved': 'सहेजा गया',
+
+  // receipt
+  'receipt.title': 'रसीद',
+  'receipt.billNo': 'बही नंबर',
+  'receipt.date': 'तारीख',
+  'receipt.farmer': 'किसान',
+  'receipt.place': 'जगह',
+  'receipt.phone': 'फ़ोन',
+  'receipt.grain': 'अनाज',
+  'receipt.price': 'भाव',
+  'receipt.perQuintal': 'प्रति क्विंटल',
+  'receipt.sacks': 'बोरे',
+  'receipt.sack': 'बोरा',
+  'receipt.gross': 'कुल वज़न',
+  'receipt.deduction': 'कटौती',
+  'receipt.net': 'शुद्ध वज़न',
+  'receipt.amount': 'राशि',
+  'receipt.lineTotal': 'राशि',
+  'receipt.total': 'कुल राशि',
+  'receipt.kg': 'कि.ग्रा.',
+  'receipt.thanks': 'धन्यवाद',
+
+  // share as image
+  'share.button': 'साझा करें',
+  'share.preview': 'पूर्वावलोकन',
+  'share.generating': 'तस्वीर बन रही है…',
+  'share.download': 'डाउनलोड',
+  'share.unsupported': 'साझा करना उपलब्ध नहीं — डाउनलोड करें',
+  'share.error': 'तस्वीर नहीं बन सकी',
+  'share.close': 'बंद करें',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

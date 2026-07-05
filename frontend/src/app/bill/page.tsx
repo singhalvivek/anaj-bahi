@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -9,8 +9,10 @@ import * as repo from '@/lib/db/repo'
 import type { Bill } from '@/lib/db/repo'
 import { computeGrainLine, computeBillTotal, billBalance, todayIso } from '@/lib/calc'
 import type { StoredGrainLine } from '@/lib/db/schema'
-import { ComingSoon } from '@/components/ComingSoon'
 import { formatRupees, formatDate } from '@/components/format'
+import Receipt from '@/components/receipt/Receipt'
+import { shareReceiptImage, type ShareResult } from '@/lib/share/shareImage'
+import { getProfile } from '@/lib/settings/profile'
 
 /** Keep digits and at most one decimal point; strip everything else. */
 function sanitizeDecimal(raw: string): string {
@@ -173,6 +175,167 @@ function PaymentsPanel({ bill }: { bill: Bill }) {
         </button>
       </div>
     </section>
+  )
+}
+
+/**
+ * Share-as-image panel. A real Share button opens a receipt preview (a bottom
+ * sheet, positioned BELOW the sticky top bar so the language toggle stays
+ * reachable — language of the rasterised image follows the live toggle). The
+ * preview renders <Receipt> and shares it as a PNG via shareReceiptImage:
+ *   - phone with native file share  → native share sheet ('shared')
+ *   - otherwise (desktop/headless)  → PNG download + a clear fallback note
+ * Never a dead button.
+ */
+function SharePanel({
+  bill,
+  farmerPhone,
+  grainName,
+}: {
+  bill: Bill
+  farmerPhone?: string
+  grainName: (id: string) => string
+}) {
+  const { t } = useI18n()
+  const receiptRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [result, setResult] = useState<ShareResult | null>(null)
+  const [error, setError] = useState(false)
+
+  // Business profile drives the receipt header; useLiveQuery keeps it in sync if
+  // the trader edits Settings. Undefined while loading; never a blank shopName.
+  const profile = useLiveQuery(() => getProfile(), [])
+
+  function openPreview() {
+    setResult(null)
+    setError(false)
+    setOpen(true)
+  }
+
+  function closePreview() {
+    setOpen(false)
+    setResult(null)
+    setError(false)
+  }
+
+  async function onShare() {
+    const node = receiptRef.current
+    if (!node || generating) return
+    setGenerating(true)
+    setError(false)
+    setResult(null)
+    try {
+      const filename = `receipt-${bill.id.replace(/\//g, '-')}.png`
+      const r = await shareReceiptImage(node, filename)
+      setResult(r)
+    } catch {
+      setError(true)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        data-testid="share-receipt"
+        onClick={openPreview}
+        className="flex h-14 items-center justify-center gap-2 rounded-xl bg-green-700 text-lg font-semibold text-white shadow active:bg-green-800"
+      >
+        <span aria-hidden>📤</span>
+        {t('share.button')}
+      </button>
+
+      {open ? (
+        <div
+          className="fixed inset-x-0 bottom-0 top-[72px] z-30 mx-auto flex w-full max-w-md flex-col bg-stone-900/50"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('share.preview')}
+        >
+          {/* Tap the backdrop above the sheet to dismiss */}
+          <button
+            type="button"
+            aria-label={t('share.close')}
+            onClick={closePreview}
+            className="h-6 w-full flex-shrink-0 cursor-default"
+            tabIndex={-1}
+          />
+
+          <div
+            data-testid="receipt-preview"
+            className="flex min-h-0 flex-1 flex-col rounded-t-2xl bg-white shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
+              <h3 className="text-base font-semibold text-stone-800">{t('share.preview')}</h3>
+              <button
+                type="button"
+                data-testid="share-close"
+                onClick={closePreview}
+                className="rounded-full px-3 py-1 text-sm font-medium text-stone-500 active:bg-stone-100"
+              >
+                ✕ {t('share.close')}
+              </button>
+            </div>
+
+            {/* Scrollable receipt preview */}
+            <div className="min-h-0 flex-1 overflow-y-auto bg-stone-100 p-4">
+              <div className="mx-auto w-fit rounded-lg shadow-sm">
+                {profile ? (
+                  <Receipt
+                    ref={receiptRef}
+                    bill={bill}
+                    profile={profile}
+                    farmerPhone={farmerPhone}
+                    grainName={grainName}
+                  />
+                ) : (
+                  <div
+                    className="h-64 w-[380px] animate-pulse rounded bg-stone-200"
+                    aria-hidden
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Actions + fallback / error messaging */}
+            <div className="flex flex-col gap-2 border-t border-stone-200 px-4 py-3">
+              {error ? (
+                <p
+                  data-testid="share-error"
+                  role="alert"
+                  className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm font-medium text-red-700"
+                >
+                  {t('share.error')}
+                </p>
+              ) : null}
+
+              {result === 'downloaded' ? (
+                <p
+                  data-testid="share-fallback"
+                  role="status"
+                  className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-sm font-medium text-amber-800"
+                >
+                  {t('share.unsupported')}
+                </p>
+              ) : null}
+
+              <button
+                type="button"
+                data-testid="share-image"
+                onClick={onShare}
+                disabled={generating || !profile}
+                className="flex h-14 items-center justify-center gap-2 rounded-xl bg-green-700 text-lg font-semibold text-white shadow active:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {generating ? t('share.generating') : t('share.button')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }
 
@@ -361,8 +524,8 @@ function DetailBody() {
         </Link>
       )}
 
-      {/* Deferred feature — labelled stub (Phase 3) */}
-      <ComingSoon feature={t('stub.share')} testid="stub-share" />
+      {/* Share the bill as a bilingual receipt image (Phase 3) */}
+      <SharePanel bill={bill} farmerPhone={farmer?.phone} grainName={grainName} />
     </div>
   )
 }
