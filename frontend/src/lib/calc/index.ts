@@ -100,3 +100,100 @@ export function computeBillTotal(lines: GrainLineInput[]): number {
   const total = lines.reduce((sum, line) => sum + computeGrainLine(line).amount, 0)
   return roundRupees(total)
 }
+
+// ---------------------------------------------------------------------------
+// Payments, balance & due status (Phase 2). Still pure — no I/O, no Dexie.
+// These take structural shapes so the module stays decoupled from the db layer;
+// a stored `Bill`/`Payment` is assignable to them.
+// ---------------------------------------------------------------------------
+
+/** Minimal payment shape needed for balance math (a stored Payment satisfies it). */
+export interface PaymentLike {
+  amount: number
+}
+
+/** Minimal bill shape needed for balance math (a stored Bill satisfies it). */
+export interface BillLike {
+  lines: GrainLineInput[]
+  payments: PaymentLike[]
+}
+
+/** Total paid to date = rounded sum of all payment amounts, 2 dp. */
+export function computePaid(payments: PaymentLike[]): number {
+  return roundRupees(payments.reduce((sum, p) => sum + p.amount, 0))
+}
+
+/**
+ * Outstanding = billTotal − paid, 2 dp. May be ≤ 0 when the bill is fully paid
+ * or overpaid (callers treat ≤ 0 as "settled", never as a negative debt).
+ */
+export function computeOutstanding(billTotal: number, payments: PaymentLike[]): number {
+  return roundRupees(billTotal - computePaid(payments))
+}
+
+/** A bill is fully paid once outstanding reaches or passes zero. */
+export function isFullyPaid(billTotal: number, payments: PaymentLike[]): boolean {
+  return computeOutstanding(billTotal, payments) <= 0
+}
+
+export interface BillBalance {
+  total: number
+  paid: number
+  outstanding: number
+  fullyPaid: boolean
+}
+
+/** Convenience: full balance snapshot for a bill (total, paid, outstanding, fullyPaid). */
+export function billBalance(bill: BillLike): BillBalance {
+  const total = computeBillTotal(bill.lines)
+  const paid = computePaid(bill.payments)
+  const outstanding = roundRupees(total - paid)
+  return { total, paid, outstanding, fullyPaid: outstanding <= 0 }
+}
+
+// ---------------------------------------------------------------------------
+// Due status (Phase 2). ISO `yyyy-mm-dd` dates compare correctly as strings.
+// ---------------------------------------------------------------------------
+
+export type DueStatus = 'overdue' | 'due_soon' | 'upcoming' | 'none'
+
+/** Today's local calendar date as ISO `yyyy-mm-dd` (device clock). */
+export function todayIso(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Add `days` calendar days to an ISO `yyyy-mm-dd` date (UTC math, no DST drift). */
+export function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + days)
+  const yy = dt.getUTCFullYear()
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+/**
+ * Classify a bill's due state.
+ *   none      → no due date, or nothing outstanding (settled bills never chase)
+ *   overdue   → dueDate is before today and money is still owed
+ *   due_soon  → today ≤ dueDate ≤ today + soonDays
+ *   upcoming  → dueDate is beyond the soon window
+ * ISO `yyyy-mm-dd` strings order lexicographically, so string compares are exact.
+ */
+export function dueStatus(
+  dueDate: string | undefined,
+  outstanding: number,
+  today: string,
+  soonDays = 7,
+): DueStatus {
+  if (!dueDate || outstanding <= 0) return 'none'
+  if (dueDate < today) return 'overdue'
+  const soonLimit = addDaysIso(today, soonDays)
+  if (dueDate <= soonLimit) return 'due_soon'
+  return 'upcoming'
+}

@@ -1,10 +1,30 @@
 // Repository — the only public API over Dexie/IndexedDB.
 // Signatures are frozen in architecture.md § Phase-1 module contract.
 
-import { db, type Farmer, type GrainType, type Bill } from './schema'
+import { db, type Farmer, type GrainType, type Bill, type Payment } from './schema'
 import { buildSeedGrainTypes, GRAIN_SEEDS } from './seed'
 
 export type { Farmer, GrainType, Bill, StoredGrainLine, StoredDeduction, Payment } from './schema'
+
+/**
+ * Thrown when purchase data is edited on a bill that already has a payment.
+ * The edit-lock is derived from data (`payments.length > 0`), not a stored flag,
+ * so it can never drift. Payments are still addable via `addPayment`.
+ */
+export class BillLockedError extends Error {
+  constructor(billId: string) {
+    super(`Bill ${billId} is locked: a payment was recorded, purchase details cannot be changed.`)
+    this.name = 'BillLockedError'
+  }
+}
+
+/** Thrown when a payment is added to a bill id that does not exist. */
+export class BillNotFoundError extends Error {
+  constructor(billId: string) {
+    super(`Bill ${billId} not found.`)
+    this.name = 'BillNotFoundError'
+  }
+}
 
 function now(): number {
   return Date.now()
@@ -105,8 +125,49 @@ export function listBills(): Promise<Bill[]> {
   return db.bills.orderBy('createdAt').reverse().toArray()
 }
 
+/**
+ * Persist edits to a bill's purchase data (farmer, lines, dueDate, …).
+ *
+ * Edit-lock invariant (Phase 2): if the STORED bill already has any payment,
+ * its purchase data is frozen — this throws `BillLockedError`. The check reads
+ * the stored bill (not the caller-supplied one) so a caller cannot bypass the
+ * lock by sending `payments: []`. Payments are added only via `addPayment`,
+ * which keeps this invariant clean. Editable (no-payment) bills persist as before,
+ * including an optional `dueDate`.
+ */
 export async function updateBill(bill: Bill): Promise<Bill> {
+  const existing = await db.bills.get(bill.id)
+  if (existing && existing.payments.length > 0) {
+    throw new BillLockedError(bill.id)
+  }
   const updated: Bill = { ...bill, updatedAt: now() }
+  await db.bills.put(updated)
+  return updated
+}
+
+/**
+ * Append a payment to a bill's embedded `payments[]` and bump `updatedAt`.
+ * ALWAYS allowed — even once the bill is locked for purchase edits. Recompute
+ * balance by reading the returned bill through `billBalance` in lib/calc.
+ */
+export async function addPayment(
+  billId: string,
+  payment: Omit<Payment, 'id' | 'createdAt'> & { id?: string },
+): Promise<Bill> {
+  const bill = await db.bills.get(billId)
+  if (!bill) throw new BillNotFoundError(billId)
+  const record: Payment = {
+    id: payment.id ?? newId(),
+    amount: payment.amount,
+    date: payment.date,
+    ...(payment.note !== undefined ? { note: payment.note } : {}),
+    createdAt: now(),
+  }
+  const updated: Bill = {
+    ...bill,
+    payments: [...bill.payments, record],
+    updatedAt: now(),
+  }
   await db.bills.put(updated)
   return updated
 }

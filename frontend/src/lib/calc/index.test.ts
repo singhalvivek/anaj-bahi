@@ -4,8 +4,16 @@ import {
   computeGrainLine,
   computeBillTotal,
   roundRupees,
+  computePaid,
+  computeOutstanding,
+  isFullyPaid,
+  billBalance,
+  dueStatus,
+  todayIso,
+  addDaysIso,
   type Deduction,
   type GrainLineInput,
+  type PaymentLike,
 } from './index'
 
 describe('roundRupees — half-up to 2 dp', () => {
@@ -240,5 +248,151 @@ describe('computeBillTotal', () => {
     const each = computeGrainLine(l).amount
     expect(each).toBe(111.06)
     expect(computeBillTotal([l, l])).toBe(222.12) // 111.06 + 111.06
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 2 — payments, balance & due status
+// ---------------------------------------------------------------------------
+
+const pay = (amount: number): PaymentLike => ({ amount })
+
+describe('computePaid / computeOutstanding / isFullyPaid', () => {
+  it('no payments → paid 0, outstanding equals bill total, not fully paid', () => {
+    expect(computePaid([])).toBe(0)
+    expect(computeOutstanding(3741.72, [])).toBe(3741.72)
+    expect(isFullyPaid(3741.72, [])).toBe(false)
+  })
+
+  it('single partial payment on a ₹3741.72 bill: pay 1741.72 → paid 1741.72, outstanding 2000.00', () => {
+    const payments = [pay(1741.72)]
+    expect(computePaid(payments)).toBe(1741.72)
+    expect(computeOutstanding(3741.72, payments)).toBe(2000.0)
+    expect(isFullyPaid(3741.72, payments)).toBe(false)
+  })
+
+  it('second payment settles it exactly: +2000.00 → paid 3741.72, outstanding 0.00, fully paid', () => {
+    const payments = [pay(1741.72), pay(2000.0)]
+    expect(computePaid(payments)).toBe(3741.72)
+    expect(computeOutstanding(3741.72, payments)).toBe(0.0)
+    expect(isFullyPaid(3741.72, payments)).toBe(true)
+  })
+
+  it('overpayment: pay 4000 on a ₹3741.72 bill → outstanding ≤ 0, fully paid (no negative-looking bug)', () => {
+    const payments = [pay(4000)]
+    const outstanding = computeOutstanding(3741.72, payments)
+    expect(outstanding).toBeLessThanOrEqual(0)
+    expect(outstanding).toBe(-258.28)
+    expect(isFullyPaid(3741.72, payments)).toBe(true)
+  })
+
+  it('multiple partial payments sum correctly with rounding (no penny drift)', () => {
+    // 111.06 + 111.06 + 111.06 = 333.18 against a 333.18 bill → settled.
+    const payments = [pay(111.06), pay(111.06), pay(111.06)]
+    expect(computePaid(payments)).toBe(333.18)
+    expect(computeOutstanding(333.18, payments)).toBe(0)
+    expect(isFullyPaid(333.18, payments)).toBe(true)
+  })
+
+  it('many float-y partials round to a clean paise sum', () => {
+    const payments = [pay(0.1), pay(0.2)] // 0.1 + 0.2 = 0.30000000000000004 in float
+    expect(computePaid(payments)).toBe(0.3)
+    expect(computeOutstanding(1, payments)).toBe(0.7)
+  })
+})
+
+describe('billBalance', () => {
+  const lineA: GrainLineInput = {
+    pricePerQuintal: 2400,
+    sackWeights: [40, 40, 40.5, 39],
+    deductions: [
+      { basis: 'per_sack_kg', value: 0.5 },
+      { basis: 'percent_gross', value: 1 },
+    ],
+  }
+  const lineB: GrainLineInput = {
+    pricePerQuintal: 5600,
+    sackWeights: [30, 30],
+    deductions: [],
+  }
+
+  it('snapshots total/paid/outstanding/fullyPaid for a partly-paid multi-line bill', () => {
+    // total = 3741.72 + 3360.00 = 7101.72
+    const balance = billBalance({ lines: [lineA, lineB], payments: [pay(1000), pay(500)] })
+    expect(balance.total).toBe(7101.72)
+    expect(balance.paid).toBe(1500)
+    expect(balance.outstanding).toBe(5601.72)
+    expect(balance.fullyPaid).toBe(false)
+  })
+
+  it('fully-paid bill reports outstanding 0 and fullyPaid true', () => {
+    const balance = billBalance({ lines: [lineA], payments: [pay(3741.72)] })
+    expect(balance.total).toBe(3741.72)
+    expect(balance.paid).toBe(3741.72)
+    expect(balance.outstanding).toBe(0)
+    expect(balance.fullyPaid).toBe(true)
+  })
+
+  it('no payments → outstanding equals total, not fully paid', () => {
+    const balance = billBalance({ lines: [lineA], payments: [] })
+    expect(balance.outstanding).toBe(3741.72)
+    expect(balance.fullyPaid).toBe(false)
+  })
+})
+
+describe('addDaysIso', () => {
+  it('adds days across a month boundary', () => {
+    expect(addDaysIso('2026-07-06', 3)).toBe('2026-07-09')
+    expect(addDaysIso('2026-07-30', 7)).toBe('2026-08-06')
+    expect(addDaysIso('2026-12-31', 1)).toBe('2027-01-01')
+  })
+
+  it('adds zero days → same date', () => {
+    expect(addDaysIso('2026-07-06', 0)).toBe('2026-07-06')
+  })
+})
+
+describe('todayIso', () => {
+  it('returns a well-formed ISO yyyy-mm-dd string', () => {
+    expect(todayIso()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+})
+
+describe('dueStatus', () => {
+  const today = '2026-07-06'
+
+  it('past due date with outstanding > 0 → overdue', () => {
+    expect(dueStatus('2026-07-01', 2000, today)).toBe('overdue')
+  })
+
+  it('due date today+3 with outstanding > 0 → due_soon', () => {
+    expect(dueStatus(addDaysIso(today, 3), 2000, today)).toBe('due_soon')
+  })
+
+  it('due date exactly today → due_soon (inclusive lower bound)', () => {
+    expect(dueStatus(today, 2000, today)).toBe('due_soon')
+  })
+
+  it('due date exactly today+7 (soon window edge) → due_soon; today+8 → upcoming', () => {
+    expect(dueStatus(addDaysIso(today, 7), 2000, today)).toBe('due_soon')
+    expect(dueStatus(addDaysIso(today, 8), 2000, today)).toBe('upcoming')
+  })
+
+  it('due date today+30 → upcoming', () => {
+    expect(dueStatus(addDaysIso(today, 30), 2000, today)).toBe('upcoming')
+  })
+
+  it('fully-paid bill (outstanding ≤ 0) → none even if overdue by date', () => {
+    expect(dueStatus('2026-07-01', 0, today)).toBe('none')
+    expect(dueStatus('2026-07-01', -50, today)).toBe('none')
+  })
+
+  it('no due date → none regardless of outstanding', () => {
+    expect(dueStatus(undefined, 5000, today)).toBe('none')
+  })
+
+  it('honours a custom soonDays window', () => {
+    expect(dueStatus(addDaysIso(today, 10), 2000, today, 14)).toBe('due_soon')
+    expect(dueStatus(addDaysIso(today, 10), 2000, today, 7)).toBe('upcoming')
   })
 })

@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useI18n } from '@/lib/i18n/context'
 import {
@@ -10,9 +10,13 @@ import {
   addCustomGrainType,
   upsertFarmer,
   createBill,
+  updateBill,
   getBill,
+  getFarmer,
+  BillLockedError,
   type GrainType,
   type StoredGrainLine,
+  type Bill,
 } from '@/lib/db/repo'
 import { generateBillId } from '@/lib/db/id'
 import {
@@ -34,6 +38,7 @@ export interface DeductionDraft {
 
 export interface GrainLineDraft {
   key: string
+  id?: string // stored line id — preserved across an edit (undefined → new line)
   grainTypeId: string
   price: string // controlled numeric input; parsed for calc
   sackWeights: number[]
@@ -83,24 +88,42 @@ function newLineDraft(grainTypeId: string): GrainLineDraft {
   }
 }
 
+/** Stored grain line → editor draft, preserving line id, sack order and deduction order. */
+function storedLineToDraft(line: StoredGrainLine): GrainLineDraft {
+  return {
+    key: crypto.randomUUID(),
+    id: line.id,
+    grainTypeId: line.grainTypeId,
+    price: String(line.pricePerQuintal),
+    sackWeights: [...line.sackWeights], // preserve entry order exactly
+    deductions: line.deductions.map((d) => ({ basis: d.basis, value: String(d.value) })),
+  }
+}
+
 // ---- screen ----
 
-export default function NewBillPage() {
+function NewBillForm() {
   const { t } = useI18n()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get('edit') ?? '' // Next already decodes query params.
+  const isEdit = editId !== ''
 
   const [loading, setLoading] = useState(true)
   const [storageError, setStorageError] = useState(false)
   const [saveError, setSaveError] = useState(false)
+  const [lockError, setLockError] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const [grainTypes, setGrainTypes] = useState<GrainType[]>([])
+  const [original, setOriginal] = useState<Bill | null>(null) // loaded bill in edit mode
   const [farmer, setFarmer] = useState<FarmerValue | null>(null)
   const [purchaseDate, setPurchaseDate] = useState<string>(todayIso())
+  const [dueDate, setDueDate] = useState<string>('')
   const [billId, setBillId] = useState<string>('')
   const [lines, setLines] = useState<GrainLineDraft[]>([newLineDraft('')])
 
-  // Seed + load grain types on mount.
+  // Seed + load grain types on mount; in edit mode also load and pre-fill the bill.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -109,12 +132,31 @@ export default function NewBillPage() {
         const types = await listGrainTypes()
         if (cancelled) return
         setGrainTypes(types)
-        // Default any empty grain line to the first available type.
-        setLines((prev) =>
-          prev.map((l) =>
-            l.grainTypeId ? l : { ...l, grainTypeId: types[0]?.id ?? '' },
-          ),
-        )
+
+        if (isEdit) {
+          const bill = await getBill(editId)
+          if (cancelled) return
+          if (bill) {
+            setOriginal(bill)
+            const f = await getFarmer(bill.farmerId)
+            if (cancelled) return
+            setFarmer({
+              id: bill.farmerId,
+              name: bill.farmerName,
+              place: bill.farmerPlace,
+              phone: f?.phone,
+            })
+            setPurchaseDate(bill.purchaseDate)
+            setDueDate(bill.dueDate ?? '')
+            setBillId(bill.id)
+            setLines(bill.lines.map(storedLineToDraft))
+          }
+        } else {
+          // Default any empty grain line to the first available type.
+          setLines((prev) =>
+            prev.map((l) => (l.grainTypeId ? l : { ...l, grainTypeId: types[0]?.id ?? '' })),
+          )
+        }
       } catch {
         if (!cancelled) setStorageError(true)
       } finally {
@@ -124,10 +166,14 @@ export default function NewBillPage() {
     return () => {
       cancelled = true
     }
+    // editId/isEdit are route-derived and stable for the life of the screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Preview a bill id for the chosen date (finalised/re-verified on save).
+  // In edit mode the id is immutable — keep the loaded id, never regenerate.
   useEffect(() => {
+    if (isEdit) return
     let cancelled = false
     ;(async () => {
       try {
@@ -143,7 +189,7 @@ export default function NewBillPage() {
     return () => {
       cancelled = true
     }
-  }, [purchaseDate])
+  }, [purchaseDate, isEdit])
 
   // Live math — recomputed on every change via the pure calc module only.
   const lineTotals = useMemo(
@@ -193,6 +239,7 @@ export default function NewBillPage() {
     if (!valid || saving || !farmer) return
     setSaving(true)
     setSaveError(false)
+    setLockError(false)
     try {
       // Resolve the farmer (create if new).
       let farmerId: string
@@ -213,17 +260,9 @@ export default function NewBillPage() {
         farmerPlace = created.place
       }
 
-      // Finalise the bill id — reuse the preview unless it now collides.
-      let id = billId
-      if (!id || (await getBill(id))) {
-        id = await generateBillId(
-          isoToLocalDate(purchaseDate),
-          async (candidate) => !!(await getBill(candidate)),
-        )
-      }
-
+      // Preserve line id / sack order / deduction order across an edit; new lines get a fresh id.
       const storedLines: StoredGrainLine[] = lines.map((l) => ({
-        id: crypto.randomUUID(),
+        id: l.id ?? crypto.randomUUID(),
         grainTypeId: l.grainTypeId,
         pricePerQuintal: Number(l.price) || 0,
         sackWeights: l.sackWeights, // preserve entry order exactly
@@ -237,20 +276,52 @@ export default function NewBillPage() {
         new Set(storedLines.map((l) => l.grainTypeId).filter(Boolean)),
       )
 
+      if (isEdit && original) {
+        // Edit an existing bill — keep the same id, createdAt and payments;
+        // updateBill throws BillLockedError if a payment slipped in meanwhile.
+        const updated: Bill = {
+          ...original,
+          farmerId,
+          farmerName,
+          farmerPlace,
+          purchaseDate,
+          dueDate: dueDate || undefined,
+          grainTypeIds,
+          lines: storedLines,
+        }
+        await updateBill(updated)
+        router.push(`/bill?id=${encodeURIComponent(original.id)}`)
+        return
+      }
+
+      // Create — finalise the bill id (reuse the preview unless it now collides).
+      let id = billId
+      if (!id || (await getBill(id))) {
+        id = await generateBillId(
+          isoToLocalDate(purchaseDate),
+          async (candidate) => !!(await getBill(candidate)),
+        )
+      }
+
       await createBill({
         id,
         farmerId,
         farmerName,
         farmerPlace,
         purchaseDate,
+        dueDate: dueDate || undefined,
         grainTypeIds,
         lines: storedLines,
         payments: [],
       })
 
       router.push('/')
-    } catch {
-      setSaveError(true)
+    } catch (err) {
+      if (err instanceof BillLockedError) {
+        setLockError(true)
+      } else {
+        setSaveError(true)
+      }
       setSaving(false)
     }
   }
@@ -277,7 +348,9 @@ export default function NewBillPage() {
         >
           ← {t('action.back')}
         </Link>
-        <h2 className="text-lg font-bold text-stone-900">{t('newbill.title')}</h2>
+        <h2 className="text-lg font-bold text-stone-900">
+          {isEdit ? t('action.edit') : t('newbill.title')}
+        </h2>
       </div>
 
       <div className="space-y-4 p-4">
@@ -293,7 +366,7 @@ export default function NewBillPage() {
               <FarmerPicker value={farmer} onChange={setFarmer} />
             </section>
 
-            {/* Purchase date + bill id preview */}
+            {/* Purchase date + due date + bill id preview */}
             <section className="space-y-2 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <label className="text-sm font-medium text-gray-700">
                 {t('purchaseDate.label')}
@@ -305,6 +378,16 @@ export default function NewBillPage() {
                 onChange={(e) => setPurchaseDate(e.target.value)}
                 className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none"
               />
+
+              <label className="text-sm font-medium text-gray-700">{t('dueDate.label')}</label>
+              <input
+                data-testid="due-date-input"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none"
+              />
+
               {billId && (
                 <p className="text-sm text-gray-500">
                   {t('billId.label')}: <span className="font-mono">{billId}</span>
@@ -340,6 +423,14 @@ export default function NewBillPage() {
                 {t('error.generic')}
               </p>
             )}
+            {lockError && (
+              <p
+                data-testid="edit-locked"
+                className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+              >
+                🔒 {t('lock.locked')}
+              </p>
+            )}
           </>
         )}
       </div>
@@ -363,5 +454,20 @@ export default function NewBillPage() {
         </footer>
       )}
     </div>
+  )
+}
+
+export default function NewBillPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-3 p-4">
+          <div className="h-14 animate-pulse rounded-lg bg-gray-200" />
+          <div className="h-40 animate-pulse rounded-lg bg-gray-200" />
+        </div>
+      }
+    >
+      <NewBillForm />
+    </Suspense>
   )
 }

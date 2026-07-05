@@ -1,17 +1,24 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '@/lib/i18n/context'
 import * as repo from '@/lib/db/repo'
+import { searchBills, type BillFilter } from '@/lib/db/queries'
 import { computeBillTotal } from '@/lib/calc'
-import { ComingSoon } from '@/components/ComingSoon'
+import { SearchBar } from '@/components/SearchBar'
 import { formatRupees, formatDate } from '@/components/format'
 
 export default function HomePage() {
   const { t, lang } = useI18n()
-  // Reactive reads — a newly saved bill appears at the top with no manual refresh.
-  const bills = useLiveQuery(() => repo.listBills(), [])
+
+  const [filter, setFilter] = useState<BillFilter>({})
+  const hasFilter = Object.keys(filter).length > 0
+
+  // Reactive reads — a newly saved bill appears at the top with no manual refresh;
+  // the list re-runs whenever the search/filter changes.
+  const bills = useLiveQuery(() => searchBills(filter), [filter])
   const grainTypes = useLiveQuery(() => repo.listGrainTypes(), [])
 
   const grainName = (id: string): string => {
@@ -24,8 +31,8 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4">
-      {/* Search / Filter — labelled coming-soon stub */}
-      <ComingSoon feature={t('stub.search')} testid="stub-search" />
+      {/* Search / Filter — real Phase-2 feature (replaces the Phase-1 stub) */}
+      <SearchBar onChange={setFilter} />
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-stone-700">{t('bills.title')}</h2>
@@ -38,15 +45,27 @@ export default function HomePage() {
           ))}
         </ul>
       ) : bills.length === 0 ? (
-        <div
-          data-testid="bill-list"
-          className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center"
-        >
-          <span className="text-4xl" aria-hidden>
-            📒
-          </span>
-          <p className="text-stone-500">{t('bills.empty')}</p>
-        </div>
+        hasFilter ? (
+          <div
+            data-testid="search-no-results"
+            className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center"
+          >
+            <span className="text-4xl" aria-hidden>
+              🔍
+            </span>
+            <p className="text-stone-500">{t('search.noResults')}</p>
+          </div>
+        ) : (
+          <div
+            data-testid="bill-list"
+            className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center"
+          >
+            <span className="text-4xl" aria-hidden>
+              📒
+            </span>
+            <p className="text-stone-500">{t('bills.empty')}</p>
+          </div>
+        )
       ) : (
         <ul data-testid="bill-list" className="flex flex-col gap-3">
           {bills.map((bill) => (

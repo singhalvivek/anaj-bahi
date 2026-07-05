@@ -1,15 +1,180 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '@/lib/i18n/context'
 import * as repo from '@/lib/db/repo'
-import { computeGrainLine, computeBillTotal } from '@/lib/calc'
+import type { Bill } from '@/lib/db/repo'
+import { computeGrainLine, computeBillTotal, billBalance, todayIso } from '@/lib/calc'
 import type { StoredGrainLine } from '@/lib/db/schema'
 import { ComingSoon } from '@/components/ComingSoon'
 import { formatRupees, formatDate } from '@/components/format'
+
+/** Keep digits and at most one decimal point; strip everything else. */
+function sanitizeDecimal(raw: string): string {
+  let s = raw.replace(/[^0-9.]/g, '')
+  const firstDot = s.indexOf('.')
+  if (firstDot !== -1) {
+    s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
+  }
+  return s
+}
+
+/**
+ * Payments panel: paid / outstanding / fully-paid badge, the payment history
+ * (newest first) and an add-payment form. Balance math comes only from
+ * `billBalance` in lib/calc. Payments are always addable, even once the bill
+ * is edit-locked. Live reactivity comes from the parent's useLiveQuery on the
+ * bill (addPayment writes db.bills → the query re-runs and re-renders here).
+ */
+function PaymentsPanel({ bill }: { bill: Bill }) {
+  const { t } = useI18n()
+  const { paid, outstanding, fullyPaid } = billBalance(bill)
+
+  const [amount, setAmount] = useState('')
+  const [date, setDate] = useState(todayIso())
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(false)
+
+  const parsedAmount = parseFloat(amount)
+  const canAdd = amount.trim() !== '' && Number.isFinite(parsedAmount) && parsedAmount > 0 && !saving
+
+  // Newest first without mutating the stored array.
+  const history = [...bill.payments].sort((a, b) => b.createdAt - a.createdAt)
+
+  async function addPayment() {
+    if (!canAdd) return
+    setSaving(true)
+    setError(false)
+    try {
+      await repo.addPayment(bill.id, {
+        amount: parsedAmount,
+        date,
+        note: note.trim() || undefined,
+      })
+      setAmount('')
+      setNote('')
+    } catch {
+      setError(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="space-y-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-stone-800">{t('payment.title')}</h3>
+        {fullyPaid && (
+          <span
+            data-testid="fully-paid"
+            className="rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800"
+          >
+            ✓ {t('payment.fullyPaid')}
+          </span>
+        )}
+      </div>
+
+      {/* Balance summary */}
+      <dl className="grid grid-cols-2 gap-y-1 text-sm">
+        <dt className="text-stone-500">{t('payment.paid')}</dt>
+        <dd data-testid="paid-total" className="text-right font-semibold text-stone-800">
+          {formatRupees(paid)}
+        </dd>
+        <dt className="font-medium text-stone-600">{t('payment.outstanding')}</dt>
+        <dd
+          data-testid="outstanding-balance"
+          className={`text-right text-lg font-bold ${
+            outstanding > 0 ? 'text-amber-700' : 'text-green-700'
+          }`}
+        >
+          {formatRupees(Math.max(0, outstanding))}
+        </dd>
+        {outstanding < 0 && (
+          <>
+            <dt className="text-stone-500">{t('payment.advance')}</dt>
+            <dd data-testid="advance-credit" className="text-right font-semibold text-green-700">
+              {formatRupees(Math.abs(outstanding))}
+            </dd>
+          </>
+        )}
+      </dl>
+
+      {/* Payment history — newest first */}
+      {history.length > 0 ? (
+        <ul className="flex flex-col divide-y divide-stone-100 rounded-lg border border-stone-100">
+          {history.map((p) => (
+            <li
+              key={p.id}
+              data-testid="payment-row"
+              className="flex items-center justify-between px-3 py-2 text-sm"
+            >
+              <span className="font-medium text-stone-800">{formatRupees(p.amount)}</span>
+              <div className="flex flex-col items-end">
+                <span className="text-stone-500">{formatDate(p.date)}</span>
+                {p.note ? <span className="text-xs text-stone-400">{p.note}</span> : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-stone-400">{t('payment.none')}</p>
+      )}
+
+      {/* Add-payment form — always enabled, even when the bill is locked */}
+      <div className="space-y-2 rounded-lg bg-stone-50 p-3">
+        <label className="text-sm font-medium text-stone-700">{t('payment.amount')}</label>
+        <input
+          data-testid="payment-amount"
+          type="text"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(sanitizeDecimal(e.target.value))}
+          placeholder={t('payment.amount')}
+          className="h-14 w-full rounded-lg border border-stone-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        />
+
+        <label className="text-sm font-medium text-stone-700">{t('payment.date')}</label>
+        <input
+          data-testid="payment-date"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="h-12 w-full rounded-lg border border-stone-300 px-4 text-base focus:border-emerald-500 focus:outline-none"
+        />
+
+        <label className="text-sm font-medium text-stone-700">{t('payment.note')}</label>
+        <input
+          data-testid="payment-note"
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={t('payment.note')}
+          className="h-12 w-full rounded-lg border border-stone-300 px-4 text-base focus:border-emerald-500 focus:outline-none"
+        />
+
+        {error && (
+          <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+            {t('error.generic')}
+          </p>
+        )}
+
+        <button
+          type="button"
+          data-testid="payment-add"
+          onClick={addPayment}
+          disabled={!canAdd}
+          className="h-14 w-full rounded-xl bg-emerald-600 text-lg font-semibold text-white shadow hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? t('action.saving') : t('payment.add')}
+        </button>
+      </div>
+    </section>
+  )
+}
 
 function DetailBody() {
   const { t, lang } = useI18n()
@@ -59,6 +224,10 @@ function DetailBody() {
     )
   }
 
+  // Edit-lock is derived from data (never a stored flag): once a payment exists,
+  // purchase details are frozen and only payments may be added.
+  const locked = bill.payments.length > 0
+
   return (
     <div className="flex flex-col gap-4 px-4 py-4">
       {/* Farmer + bill meta */}
@@ -75,6 +244,11 @@ function DetailBody() {
           <span>
             {t('bills.card.date')}: {formatDate(bill.purchaseDate)}
           </span>
+          {bill.dueDate ? (
+            <span>
+              {t('dueDate.label')}: {formatDate(bill.dueDate)}
+            </span>
+          ) : null}
         </div>
       </section>
 
@@ -152,17 +326,42 @@ function DetailBody() {
         </span>
       </section>
 
-      {/* Edit action (Phase 1: links to the form). */}
-      <Link
-        href="/bills/new"
-        data-testid="detail-edit"
-        className="flex h-12 items-center justify-center rounded-full border border-green-700 text-sm font-semibold text-green-700 active:bg-green-50"
-      >
-        {t('action.edit')}
-      </Link>
+      {/* Payments + outstanding balance (Phase 2) */}
+      <PaymentsPanel bill={bill} />
 
-      {/* Deferred features — labelled stubs */}
-      <ComingSoon feature={t('stub.payments')} testid="stub-payments" />
+      {/* Edit action / edit-lock notice.
+          Editable (no payments) → Edit re-opens the form pre-filled.
+          Locked (≥1 payment)    → Edit is disabled and a clear lock notice shows;
+          add-payment above stays enabled. */}
+      {locked ? (
+        <>
+          <p
+            data-testid="edit-locked"
+            className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800"
+          >
+            🔒 {t('lock.locked')}
+          </p>
+          <button
+            type="button"
+            data-testid="detail-edit"
+            disabled
+            aria-disabled="true"
+            className="flex h-12 items-center justify-center rounded-full border border-stone-300 text-sm font-semibold text-stone-400"
+          >
+            {t('action.edit')}
+          </button>
+        </>
+      ) : (
+        <Link
+          href={`/bills/new?edit=${encodeURIComponent(bill.id)}`}
+          data-testid="detail-edit"
+          className="flex h-12 items-center justify-center rounded-full border border-green-700 text-sm font-semibold text-green-700 active:bg-green-50"
+        >
+          {t('action.edit')}
+        </Link>
+      )}
+
+      {/* Deferred feature — labelled stub (Phase 3) */}
       <ComingSoon feature={t('stub.share')} testid="stub-share" />
     </div>
   )

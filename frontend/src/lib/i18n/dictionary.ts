@@ -100,6 +100,57 @@ export const EN = {
   // errors / storage
   'error.storage': 'Storage unavailable — enable site data',
   'error.generic': 'Something went wrong',
+
+  // ---- Phase 2 ----
+
+  // PIN lock
+  'pin.setTitle': 'Set a 4-digit PIN',
+  'pin.confirmTitle': 'Confirm your PIN',
+  'pin.enterTitle': 'Enter your PIN',
+  'pin.input': 'PIN',
+  'pin.wrong': 'Wrong PIN — try again',
+  'pin.mismatch': 'PINs do not match',
+  'pin.set': 'Set PIN',
+  'pin.confirm': 'Confirm',
+  'pin.unlock': 'Unlock',
+  'pin.forgot': 'Forgot PIN?',
+  'pin.reset': 'Reset PIN',
+  'pin.resetWarn': 'Resetting the PIN keeps your data but removes the lock. Continue?',
+  'pin.hint': 'Enter 4 digits',
+
+  // payments
+  'payment.title': 'Payments',
+  'payment.add': '+ Add payment',
+  'payment.amount': 'Amount (₹)',
+  'payment.date': 'Payment date',
+  'payment.note': 'Note (optional)',
+  'payment.paid': 'Paid',
+  'payment.outstanding': 'Outstanding',
+  'payment.fullyPaid': 'Fully paid',
+  'payment.advance': 'Advance',
+  'payment.none': 'No payments yet',
+  'payment.save': 'Save payment',
+
+  // due date + list
+  'dueDate.label': 'Due date',
+  'due.title': 'Due',
+  'due.overdue': 'Overdue',
+  'due.soon': 'Due soon',
+  'due.none': 'Nothing due',
+  'due.due': 'Due',
+  'due.outstanding': 'Outstanding',
+
+  // edit-lock
+  'lock.locked': "Locked — a payment was recorded; purchase details can't be changed",
+  'lock.badge': 'Locked',
+
+  // search
+  'search.placeholder': 'Search by name or place',
+  'search.grain': 'Grain',
+  'search.date': 'Date',
+  'search.all': 'All',
+  'search.clear': 'Clear',
+  'search.noResults': 'No bills match your search',
 } as const
 
 export type TKey = keyof typeof EN
@@ -198,6 +249,57 @@ export const HI: Record<TKey, string> = {
   // errors / storage
   'error.storage': 'स्टोरेज उपलब्ध नहीं — साइट डेटा चालू करें',
   'error.generic': 'कुछ गड़बड़ हो गई',
+
+  // ---- Phase 2 ----
+
+  // PIN lock
+  'pin.setTitle': '4 अंकों का पिन बनाएँ',
+  'pin.confirmTitle': 'पिन दोबारा भरें',
+  'pin.enterTitle': 'अपना पिन भरें',
+  'pin.input': 'पिन',
+  'pin.wrong': 'ग़लत पिन — दोबारा कोशिश करें',
+  'pin.mismatch': 'पिन मेल नहीं खाते',
+  'pin.set': 'पिन सेट करें',
+  'pin.confirm': 'पुष्टि करें',
+  'pin.unlock': 'खोलें',
+  'pin.forgot': 'पिन भूल गए?',
+  'pin.reset': 'पिन रीसेट करें',
+  'pin.resetWarn': 'पिन रीसेट करने पर आपका डेटा सुरक्षित रहेगा, केवल ताला हटेगा। जारी रखें?',
+  'pin.hint': '4 अंक भरें',
+
+  // payments
+  'payment.title': 'भुगतान',
+  'payment.add': '+ भुगतान जोड़ें',
+  'payment.amount': 'राशि (₹)',
+  'payment.date': 'भुगतान की तारीख',
+  'payment.note': 'टिप्पणी (वैकल्पिक)',
+  'payment.paid': 'चुकाया',
+  'payment.outstanding': 'बकाया',
+  'payment.fullyPaid': 'पूरा चुकता',
+  'payment.advance': 'अग्रिम',
+  'payment.none': 'अभी कोई भुगतान नहीं',
+  'payment.save': 'भुगतान सहेजें',
+
+  // due date + list
+  'dueDate.label': 'देय तारीख',
+  'due.title': 'बकाया',
+  'due.overdue': 'समय बीता',
+  'due.soon': 'जल्द देय',
+  'due.none': 'कोई बकाया नहीं',
+  'due.due': 'देय',
+  'due.outstanding': 'बकाया',
+
+  // edit-lock
+  'lock.locked': 'बंद — भुगतान दर्ज हो चुका है; खरीद का विवरण नहीं बदला जा सकता',
+  'lock.badge': 'बंद',
+
+  // search
+  'search.placeholder': 'नाम या जगह से खोजें',
+  'search.grain': 'अनाज',
+  'search.date': 'तारीख',
+  'search.all': 'सभी',
+  'search.clear': 'साफ़ करें',
+  'search.noResults': 'आपकी खोज से कोई बही मेल नहीं खाती',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

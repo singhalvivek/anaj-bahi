@@ -22,9 +22,20 @@ async function addSack(page: Page, value: string) {
   await page.getByTestId('sack-add').click()
 }
 
+/** First-run PIN setup — the app is gated behind a 4-digit PIN (Phase 2). */
+async function setupPin(page: Page, pin = '1234') {
+  await expect(page.getByTestId('lock-screen')).toBeVisible()
+  await page.getByTestId('pin-input').fill(pin)
+  await page.getByTestId('pin-confirm').fill(pin)
+  await page.getByTestId('pin-submit').click()
+}
+
 test('trader creates a bill, reopens it, and toggles language', async ({ page }) => {
-  // --- Home: switch to English so slice-b's grain/label text is deterministic ---
+  // --- PIN gate: first-run setup unlocks the app (fresh IndexedDB each run) ---
   await page.goto('./')
+  await setupPin(page)
+
+  // --- Home: switch to English so slice-b's grain/label text is deterministic ---
   await expect(page.getByTestId('new-bill-btn')).toBeVisible()
   await page.getByTestId('lang-toggle-en').click()
   await expect(page.getByTestId('new-bill-btn')).toContainText('New Bill')
@@ -87,6 +98,11 @@ test('trader creates a bill, reopens it, and toggles language', async ({ page })
   await expect(page.getByTestId('new-bill-btn')).toContainText('New Bill')
   await page.getByTestId('lang-toggle-hi').click()
   await expect(page.getByTestId('new-bill-btn')).toContainText('नई बही')
+
+  // --- Step 10: reload re-locks (in-memory unlocked flag); unlock with the PIN ---
   await page.reload()
+  await expect(page.getByTestId('lock-screen')).toBeVisible()
+  await page.getByTestId('pin-unlock').fill('1234')
+  await page.getByTestId('pin-unlock-submit').click()
   await expect(page.getByTestId('new-bill-btn')).toContainText('नई बही')
 })

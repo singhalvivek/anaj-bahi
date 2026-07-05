@@ -4,6 +4,7 @@ import { I18nProvider } from '@/lib/i18n/context'
 import { TopBar } from '@/components/TopBar'
 import { BottomNav } from '@/components/BottomNav'
 import { SwRegister } from '@/components/SwRegister'
+import { PinGate } from '@/components/PinGate'
 
 export const metadata: Metadata = {
   title: 'Anaj Bahi / अनाज बही',
@@ -30,7 +31,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SwRegister />
           <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-stone-50 shadow-sm">
             <TopBar />
-            <main className="flex-1 pb-24">{children}</main>
+            <main className="flex flex-1 flex-col pb-24">
+              <PinGate>{children}</PinGate>
+            </main>
             <BottomNav />
           </div>
         </I18nProvider>

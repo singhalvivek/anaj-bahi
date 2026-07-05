@@ -12,8 +12,12 @@ import {
   getBill,
   listBills,
   updateBill,
+  addPayment,
+  BillLockedError,
+  BillNotFoundError,
   type Bill,
 } from './repo'
+import { billBalance } from '@/lib/calc'
 
 // fake-indexeddb/auto is loaded in vitest.setup.ts.
 
@@ -183,5 +187,88 @@ describe('bills — round-trip', () => {
     await createBill(sampleBillInput())
     const byGrain = await db.bills.where('grainTypeIds').equals('mustard').toArray()
     expect(byGrain.map((b) => b.id)).toEqual(['060726/abc12'])
+  })
+})
+
+describe('payments — addPayment & balance round-trip', () => {
+  // sampleBillInput total = 3741.72 (wheat) + 3360.00 (mustard) = ₹7101.72
+  it('appends a payment, bumps updatedAt, and the round-tripped balance is exact', async () => {
+    const created = await createBill(sampleBillInput())
+    expect(billBalance(created).outstanding).toBe(7101.72)
+
+    await new Promise((r) => setTimeout(r, 2))
+    const afterFirst = await addPayment(created.id, { amount: 1741.72, date: '2026-07-10' })
+    expect(afterFirst.payments.length).toBe(1)
+    expect(afterFirst.updatedAt).toBeGreaterThan(created.updatedAt)
+    expect(afterFirst.payments[0].id).toBeTruthy()
+    expect(afterFirst.payments[0].createdAt).toBeGreaterThan(0)
+
+    // Persisted to IndexedDB, not just returned.
+    const fetched = await getBill(created.id)
+    const balance = billBalance(fetched!)
+    expect(balance.paid).toBe(1741.72)
+    expect(balance.outstanding).toBe(5360.0)
+    expect(balance.fullyPaid).toBe(false)
+  })
+
+  it('multiple partial payments settle the bill exactly to outstanding 0 / fullyPaid', async () => {
+    const created = await createBill(sampleBillInput())
+    await addPayment(created.id, { amount: 3741.72, date: '2026-07-10' })
+    const settled = await addPayment(created.id, { amount: 3360.0, date: '2026-07-12', note: 'final' })
+    expect(settled.payments.length).toBe(2)
+    expect(settled.payments[1].note).toBe('final')
+
+    const balance = billBalance((await getBill(created.id))!)
+    expect(balance.paid).toBe(7101.72)
+    expect(balance.outstanding).toBe(0)
+    expect(balance.fullyPaid).toBe(true)
+  })
+
+  it('addPayment on an unknown bill throws BillNotFoundError', async () => {
+    await expect(addPayment('000000/zzzzz', { amount: 100, date: '2026-07-10' })).rejects.toBeInstanceOf(
+      BillNotFoundError,
+    )
+  })
+})
+
+describe('edit-lock invariant at the data layer', () => {
+  it('updateBill on a bill WITH a payment throws BillLockedError (purchase data frozen)', async () => {
+    const created = await createBill(sampleBillInput())
+    await addPayment(created.id, { amount: 100, date: '2026-07-10' })
+
+    const locked = await getBill(created.id)
+    const edited = { ...locked!, farmerName: 'Someone Else' }
+    await expect(updateBill(edited)).rejects.toBeInstanceOf(BillLockedError)
+
+    // The attempted edit did not persist.
+    const fetched = await getBill(created.id)
+    expect(fetched!.farmerName).toBe('Ramesh')
+  })
+
+  it('the lock cannot be bypassed by sending payments: [] — stored payments are authoritative', async () => {
+    const created = await createBill(sampleBillInput())
+    await addPayment(created.id, { amount: 100, date: '2026-07-10' })
+    const sneaky = { ...created, payments: [], farmerName: 'Bypass' }
+    await expect(updateBill(sneaky)).rejects.toBeInstanceOf(BillLockedError)
+  })
+
+  it('updateBill on a no-payment bill still persists edits (editable) incl. a due date', async () => {
+    const created = await createBill(sampleBillInput())
+    const edited = { ...created, farmerName: 'Ramesh Kumar', dueDate: '2026-08-01' }
+    const updated = await updateBill(edited)
+    expect(updated.farmerName).toBe('Ramesh Kumar')
+    expect(updated.dueDate).toBe('2026-08-01')
+
+    const fetched = await getBill(created.id)
+    expect(fetched!.farmerName).toBe('Ramesh Kumar')
+    expect(fetched!.dueDate).toBe('2026-08-01')
+  })
+
+  it('dueDate persists and can be cleared while the bill is still editable', async () => {
+    const created = await createBill(sampleBillInput({ dueDate: '2026-08-01' }))
+    expect((await getBill(created.id))!.dueDate).toBe('2026-08-01')
+    const cleared = await updateBill({ ...created, dueDate: undefined })
+    expect(cleared.dueDate).toBeUndefined()
+    expect((await getBill(created.id))!.dueDate).toBeUndefined()
   })
 })
