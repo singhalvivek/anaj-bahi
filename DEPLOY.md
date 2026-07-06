@@ -79,12 +79,53 @@ From the `backend/` directory:
    The container runs `python -m app.init_db` (creates the SQLite tables on the volume, idempotent) and then serves `uvicorn app.main:app` on port **8080**. Fly exposes it as HTTPS.
 5. **Verify:** `https://<your-app>.fly.dev/health` returns `{"status":"ok"}`.
 
+## Backend → PythonAnywhere (free, no card — alternative to Fly)
+
+PythonAnywhere's free "Beginner" plan needs **no credit card**, gives a **persistent home disk** (so the SQLite file survives), and serves **HTTPS**. Its web apps are **WSGI**, so the FastAPI (ASGI) app runs through the `a2wsgi` wrapper in `backend/wsgi.py`.
+
+Replace `<user>` with your PythonAnywhere username and `<token>` with a long random string (the same one you enter in the app).
+
+1. **Sign up** at pythonanywhere.com (Beginner plan — free, no card).
+2. Open **Consoles → Bash**, then clone the app repo and install deps in a virtualenv:
+   ```sh
+   git clone https://github.com/singhalvivek/anaj-bahi.git
+   cd anaj-bahi/backend
+   mkvirtualenv --python=/usr/bin/python3.11 anaj
+   pip install fastapi sqlalchemy pydantic-settings a2wsgi
+   ```
+   (Any Python ≥ 3.11 that PythonAnywhere offers is fine; `uvicorn` is not needed under WSGI.)
+3. **Create the SQLite tables** on the persistent disk (run once):
+   ```sh
+   export DATABASE_URL="sqlite:////home/<user>/anaj-bahi/backend/data/anaj.db"
+   export DEVICE_TOKEN="<token>"
+   python -m app.init_db
+   ```
+4. **Web → Add a new web app → Manual configuration** (NOT "Flask") → pick the **same Python version** as the virtualenv (3.11).
+5. On the web-app config page set:
+   - **Source code:** `/home/<user>/anaj-bahi/backend`
+   - **Working directory:** `/home/<user>/anaj-bahi/backend`
+   - **Virtualenv:** `/home/<user>/.virtualenvs/anaj`
+6. Click the **WSGI configuration file** link, delete everything in it, and paste:
+   ```python
+   import os, sys
+   path = "/home/<user>/anaj-bahi/backend"
+   if path not in sys.path:
+       sys.path.insert(0, path)
+   os.environ["DATABASE_URL"] = "sqlite:////home/<user>/anaj-bahi/backend/data/anaj.db"
+   os.environ["DEVICE_TOKEN"] = "<token>"
+   from wsgi import application  # noqa: E402
+   ```
+7. Click the green **Reload** button.
+8. **Verify:** open `https://<user>.pythonanywhere.com/health` → `{"status":"ok"}`.
+
+**Updating later:** in a Bash console, `cd ~/anaj-bahi && git pull`, then **Reload** the web app. **Renewal:** free web apps must be renewed every ~3 months (PythonAnywhere emails a one-click link).
+
 ### Point the app at the backend
 
 In the PWA: **Settings → Cloud backup**:
 
-- **Backend URL:** the Fly **HTTPS** URL, e.g. `https://anaj-bahi-sync.fly.dev` (HTTPS only — an HTTP URL will be blocked by the browser as mixed content).
-- **Device token:** the **same** value you set via `fly secrets set DEVICE_TOKEN=...`.
+- **Backend URL:** the backend's **HTTPS** URL — `https://<your-app>.fly.dev` (Fly) or `https://<user>.pythonanywhere.com` (PythonAnywhere). HTTPS only — an HTTP URL is blocked by the browser as mixed content.
+- **Device token:** the **same** `DEVICE_TOKEN` you configured on the backend (Fly secret / PythonAnywhere WSGI file).
 
 These are stored locally on the device (Dexie `meta`), not baked into the build, so no rebuild is needed to point at a backend. The app keeps working fully offline; sync flushes opportunistically when online.
 

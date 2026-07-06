@@ -8,6 +8,9 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "sqlalchemy>=2",
     "pydantic-settings>=2",
+    # WSGI adapter so the FastAPI (ASGI) app can run on WSGI-only hosts
+    # (e.g. PythonAnywhere free tier). Unused by uvicorn/Fly deploys.
+    "a2wsgi>=1.10",
 ]
 
 [dependency-groups]
