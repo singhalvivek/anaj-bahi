@@ -6,7 +6,7 @@
 
 ## System Overview
 
-Anaj Bahi is a single-user, installable **Next.js PWA** that runs entirely on the trader's phone. In Phase 1 there is **no backend and no network dependency**: the browser is the whole runtime. The UI (React 19 client components) reads and writes an **IndexedDB** database via **Dexie**; a pure TypeScript **calc module** computes all weights and money; a **service worker** caches the app shell so it launches offline; a lightweight **i18n context** swaps Hindi/English. Later phases add an optional Python/FastAPI + Postgres **sync backend** that the same client talks to only when online — the local IndexedDB store always remains the source of truth on the device.
+Anaj Bahi is a single-user, installable **Next.js PWA** that runs entirely on the trader's phone. In Phase 1 there is **no backend and no network dependency**: the browser is the whole runtime. The UI (React 19 client components) reads and writes an **IndexedDB** database via **Dexie**; a pure TypeScript **calc module** computes all weights and money; a **service worker** caches the app shell so it launches offline; a lightweight **i18n context** swaps Hindi/English. Later phases add an optional Python/FastAPI + **SQLite** **sync backend** that the same client talks to only when online — the local IndexedDB store always remains the source of truth on the device.
 
 ## Component Map
 
@@ -29,7 +29,7 @@ Anaj Bahi is a single-user, installable **Next.js PWA** that runs entirely on th
                  └───────────────────────┬──────────────────────┘
                                          │ (Phase 4 only, when online)
                                          ▼
-                        FastAPI sync service ──► Postgres   (backup)
+                        FastAPI sync service ──► SQLite (data/*.db)  (backup)
 ```
 
 ## Layers
@@ -41,7 +41,7 @@ Anaj Bahi is a single-user, installable **Next.js PWA** that runs entirely on th
 | **Calc (`lib/calc`)** | Pure, side-effect-free functions: deduction resolution, net weight, line amount, bill total, rounding. Fully unit-tested. |
 | **Data (`lib/db`)** | Dexie schema, repository functions (farmers/grain-types/bills), grain-type seed, bill-id generator. Only layer that touches IndexedDB. |
 | **PWA shell (`public/sw.js`, `manifest.webmanifest`)** | Cache-first app shell for offline launch + home-screen install. |
-| **Sync (Phase 4)** | Outbox + sync engine (frontend) and FastAPI/Postgres service (backend). |
+| **Sync (Phase 4)** | Outbox + sync engine (frontend) and FastAPI/SQLite service (backend). |
 
 ## Data Flow (Phase 1 — create a bill)
 
@@ -72,7 +72,7 @@ No network, no server, no keys anywhere in this flow.
 - **LLM provider + model:** **None** — not an AI app.
 - **Frontend:** Next.js 15.3 (App Router) + React 19, **static export** (`output: 'export'`, `basePath: '/app'`, `trailingSlash: true`), Tailwind CSS 4. Installable PWA (manifest + hand-written service worker).
 - **Local store:** **IndexedDB via Dexie 4** (Phase 1 onward). No server DB on device.
-- **Backend (Phase 4 only):** FastAPI + Postgres 16 + SQLAlchemy 2.0, managed with `uv`, migrations via Alembic. Lives under a new `backend/` tree; not present in Phases 1–3.
+- **Backend (Phase 4 only):** FastAPI + **SQLite** + SQLAlchemy 2.0, managed with `uv`. Lives under a new `backend/` tree; not present in Phases 1–3. **Rationale for SQLite (user stack decision):** this is a single-user, low-concurrency personal-backup app — SQLite needs **no DB server, no Docker, no hosted database**; it runs directly from a local `data/*.db` file, is fully testable on this machine now, and deploys to a cheap single-VM host with a persistent disk. No Alembic: for this schema-light JSON-row model, tables are created via SQLAlchemy `Base.metadata.create_all(...)` driven by an explicit `uv run python -m app.init_db` step (Alembic would be overkill).
 - **Dependency management:** **pnpm** (frontend); `uv` (Phase-4 backend).
 - **Observability:** N/A in the AI sense. Client errors surface as visible UI messages; dev uses browser devtools. (There is no LLM tracing because there is no LLM.)
 
@@ -95,10 +95,25 @@ No network, no server, no keys anywhere in this flow.
 | Lint command | `pnpm lint` (cwd `frontend/`) |
 | Unit test command | `pnpm test` → `vitest run` (cwd `frontend/`) |
 | E2E / UI test command | `pnpm test:e2e` → `playwright test` (cwd `frontend/`); Playwright `webServer` runs `pnpm dev`, `baseURL` `http://localhost:3000/app/` |
-| Migration command | **N/A in Phases 1–3** (Dexie handles IndexedDB schema versioning in-app). Phase 4 backend only: `uv run alembic upgrade head` (cwd `backend/`) |
+| Migration command | **N/A in Phases 1–3** (Dexie handles IndexedDB schema versioning in-app). **Phase 4 backend:** no Alembic — create/init the SQLite tables with `uv run python -m app.init_db` (cwd `backend/`), which calls SQLAlchemy `Base.metadata.create_all(...)`. Idempotent (safe to re-run). |
 | Phase-1 gate | `pnpm install && pnpm test && pnpm build && pnpm test:e2e` (cwd `frontend/`) |
 
 **`package.json` scripts to add (owned by slice-a):** `"test": "vitest run"`, `"test:e2e": "playwright test"`.
+
+### Phase-4 backend commands (cwd `backend/`)
+
+> **Phase 4 is the FIRST phase to require `.env`** — backend only. The frontend never gets build-time secrets (see the sync-config note below). All commands below run with working directory **`backend/`**.
+
+| Command | Value |
+|---------|-------|
+| Package/dependency manager | `uv` (cwd `backend/`) |
+| Install | `uv sync` (cwd `backend/`) |
+| Create / init the SQLite DB | `uv run python -m app.init_db` — runs `Base.metadata.create_all(engine)`, creating the file at `DATABASE_URL` (default `data/anaj.db`). Idempotent. |
+| Run the API | `uv run uvicorn app.main:app --port 8000` (cwd `backend/`) |
+| Backend port | `8000` |
+| Health path | `GET /health` → `{ "status": "ok" }` (no auth) |
+| Backend test command | `uv run pytest` (cwd `backend/`) — runs against a **real on-disk temp SQLite file** per test (e.g. a `tmp_path`-based `data/*.db`), **not** an in-memory `:memory:` DB, so file-DB behaviour (persistence, connection handling) is exercised. |
+| Env | `backend/.env` (gitignored) supplies `DATABASE_URL` + `DEVICE_TOKEN`; `backend/.env.example` documents them. |
 
 | Key library | Version | Purpose |
 |-------------|---------|---------|
@@ -117,7 +132,7 @@ No network, no server, no keys anywhere in this flow.
 
 ## Deployment Model
 
-Static export (`frontend/out/`) served as plain files under `/app` — installable to the Android home screen and fully functional offline. The Phase-4 backend deploys separately as a small FastAPI service with Postgres.
+Static export (`frontend/out/`) served as plain files under `/app` — installable to the Android home screen and fully functional offline. The Phase-4 backend deploys separately as a small FastAPI service backed by a single **SQLite** file on a persistent disk (a cheap single-VM host; no DB server, no Docker, no hosted database).
 
 ---
 
@@ -210,3 +225,92 @@ export function I18nProvider(props: { children: React.ReactNode }): JSX.Element
 export function useI18n(): { lang: Lang; setLang: (l: Lang) => void; t: (key: string) => string }
 // `lang` persisted to localStorage key "anajbahi.lang"; default 'hi'.
 ```
+
+---
+
+## Phase-4 sync contract
+
+> **Frozen.** Backend (slice-a) and frontend (slices b/c) build against this in parallel — the wire shapes, auth, storage model, and the frontend `lib/sync` API below do not change during the Phase-4 build. Backend is **FastAPI + SQLite**; the local IndexedDB store always remains the device source of truth.
+
+### Auth
+
+- Every `/sync/*` endpoint **requires** header `Authorization: Bearer <DEVICE_TOKEN>`. Missing or wrong token → **HTTP 401**.
+- `GET /health` requires **no auth**.
+- The authoritative token lives in `backend/.env` as `DEVICE_TOKEN`. The user types the **same** token into the PWA Settings screen (see Frontend sync config).
+
+### Endpoints
+
+| Method | Path | Auth | Request body | Response |
+|--------|------|------|--------------|----------|
+| GET | `/health` | none | — | `{ "status": "ok" }` |
+| POST | `/sync/push` | Bearer | `{ bills: Bill[], farmers: Farmer[], grainTypes: GrainType[], profile: BusinessProfile \| null }` | `{ "ok": true, "counts": { "bills": n, "farmers": n, "grainTypes": n, "profile": 0\|1 } }` |
+| GET | `/sync/pull` | Bearer | — | `{ bills: Bill[], farmers: Farmer[], grainTypes: GrainType[], profile: BusinessProfile \| null }` |
+
+- **Payments** are embedded inside each `Bill` (`Bill.payments[]`, see [data.md](data.md)/[Phase-1 module contract](#phase-1-module-contract-slice-a)); pushing bills therefore carries their payments — there is no separate payments endpoint.
+- `/sync/pull` returns **all data for the device** and is what **restore** uses.
+
+### CORS (required — cross-origin)
+
+- The static-export PWA (`http://localhost:3000`) and the FastAPI backend (`http://localhost:8000`) are **deliberately different origins**, so the backend **MUST enable CORS** (`Access-Control-Allow-Origin`) or the browser blocks every `/sync/*` fetch and its preflight.
+- The backend enables **permissive CORS** — `allow_origins=["*"]`, all methods, all headers. This is safe because auth is a Bearer **device token** (no cookies / no credentialed requests), so a wildcard origin exposes nothing.
+
+### Upsert / merge semantics (idempotent)
+
+- **Bills:** upsert keyed by client `id` with **last-write-wins by `updatedAt`** — an incoming bill replaces the stored row only if its `updatedAt` is **≥** the stored `updated_at`; older incoming bills are ignored.
+- **Farmers & grain types:** no `updatedAt` field → upsert-by-`id`, **last push wins** (incoming replaces stored).
+- **Profile:** singleton — store the latest pushed `profile` (a `null` profile is a no-op, never deletes an existing one).
+- **Idempotent:** re-pushing the identical payload is a safe no-op (same ids, `updatedAt` not newer → no change). `counts` reflects rows received, not rows changed.
+
+### Backend storage model (chosen)
+
+Schema-light, one row per record keyed by the client `id`, storing `updated_at` + the record verbatim as JSON, so the server round-trips the exact frontend shapes without re-modelling them:
+
+| Table | Columns |
+|-------|---------|
+| `bills` | `id` TEXT PK, `updated_at` INTEGER, `data` JSON (the full `Bill`, payments embedded) |
+| `farmers` | `id` TEXT PK, `data` JSON (the full `Farmer`) |
+| `grain_types` | `id` TEXT PK, `data` JSON (the full `GrainType`) |
+| `profile` | `id` TEXT PK (constant, e.g. `"singleton"`), `data` JSON (the `BusinessProfile`) |
+
+`/sync/pull` returns each table's `data` JSON as the respective array (and the singleton `profile` row's `data`, or `null` if none).
+
+### Frontend sync config (user-entered, not build-time env)
+
+Because the PWA is a **static export**, the backend **base URL** and **device token** are **entered by the user in the Settings screen** and stored locally in the Dexie **`meta`** table — **not** a build-time env var — so no rebuild is needed to point at a backend. (This mirrors the profile store already in `meta` from Phase 3.)
+
+### Frozen frontend sync API — `frontend/src/lib/sync`
+
+> slice-c builds against these signatures while slice-b implements them.
+
+```ts
+export interface SyncConfig { baseUrl: string; token: string }
+export interface SyncState { lastSyncedAt: number | null; pendingCount: number; lastError: string | null }
+
+export type SyncErrorKind = 'auth' | 'network' | 'config' | 'unknown'
+export interface SyncResult { ok: boolean; counts?: Record<string, number>; error?: SyncErrorKind }
+
+export function getSyncConfig(): Promise<SyncConfig | null>           // from Dexie `meta`
+export function saveSyncConfig(cfg: SyncConfig): Promise<void>        // to Dexie `meta`
+
+// NEVER throws — returns { ok:false, error } on failure so the UI never crashes and offline is graceful.
+export function syncNow(): Promise<SyncResult>    // push local snapshot to /sync/push; idempotent; { ok:true, counts } on success
+export function getSyncState(): Promise<{ lastSyncedAt: number | null; pendingCount: number; lastError: string | null }>
+
+// restore throws TYPED errors (SyncAuthError / SyncNetworkError; plain Error if unconfigured) — callers handle them.
+export function restoreFromCloud(): Promise<void> // GET /sync/pull → write all records into local Dexie
+
+// Auto-flush: an `online`-event listener calls syncNow() when connectivity returns.
+export function startAutoSync(): () => void       // registers the `online` listener → syncNow(); returns an unsubscribe fn; safe when unconfigured
+```
+
+- **`syncNow` never throws** — on failure it resolves to `{ ok:false, error }` with `error` one of `'auth' | 'network' | 'config' | 'unknown'`, so the UI never crashes and offline is graceful; on success it resolves to `{ ok:true, counts }` (the push response `counts`). `restoreFromCloud` **does** throw typed errors (`SyncAuthError` / `SyncNetworkError`; plain `Error` if unconfigured). `startAutoSync` is a no-op-safe listener even when sync is unconfigured.
+- **Pending** = local records changed since `lastSyncedAt`, **deduped by `id`** (a record edited twice counts once). Offline-safe: sync **never blocks the UI, never loses a record, never duplicates** (idempotent push + `updatedAt` last-write-wins).
+
+### `backend/.env` (gitignored) — documented by `backend/.env.example`
+
+```dotenv
+DATABASE_URL=sqlite:///./data/anaj.db
+DEVICE_TOKEN=change-me-to-a-long-random-string
+```
+
+`backend/.env` is **gitignored**; only `backend/.env.example` (with these keys) is committed. `DATABASE_URL` points at the local SQLite file (created by `app.init_db`); `DEVICE_TOKEN` is the bearer token the user also enters in Settings.

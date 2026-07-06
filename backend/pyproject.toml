@@ -1,0 +1,27 @@
+[project]
+name = "anaj-bahi-backend"
+version = "0.1.0"
+description = "Anaj Bahi cloud sync/backup backend (FastAPI + SQLite)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2",
+    "pydantic-settings>=2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

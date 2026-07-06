@@ -6,7 +6,7 @@
 
 ## Storage Technology
 
-**IndexedDB via Dexie 4**, on the phone. No server database on the device. A single-user app on one device — no auth/tenant scoping. Reactive reads use `dexie-react-hooks` `useLiveQuery`. Phase 4 adds an optional FastAPI + Postgres backend as backup/restore; the local IndexedDB store always remains the device source of truth.
+**IndexedDB via Dexie 4**, on the phone. No server database on the device. A single-user app on one device — no auth/tenant scoping. Reactive reads use `dexie-react-hooks` `useLiveQuery`. Phase 4 adds an optional **FastAPI + SQLite** backend as backup/restore (schema-light JSON-row storage — see [architecture.md § Phase-4 sync contract](architecture.md#phase-4-sync-contract)); the local IndexedDB store always remains the device source of truth.
 
 ## Entities
 
@@ -111,7 +111,7 @@ db.version(1).stores({
   farmers:    '&id, name, place, phone, createdAt',
   grainTypes: '&id, isCustom, createdAt',
   bills:      '&id, farmerId, purchaseDate, farmerName, farmerPlace, *grainTypeIds, createdAt',
-  meta:       '&key',   // settings: language pref is in localStorage; meta reserved for PIN hash (Phase 2) + business profile (Phase 3)
+  meta:       '&key',   // settings: language pref is in localStorage; meta holds PIN hash (Phase 2), business profile (Phase 3), and sync config {baseUrl, token} + lastSyncedAt (Phase 4)
 })
 ```
 

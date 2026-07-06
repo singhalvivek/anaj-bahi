@@ -7,12 +7,13 @@ import { defineConfig, devices } from '@playwright/test'
  */
 export default defineConfig({
   testDir: 'tests/e2e',
+  globalSetup: './tests/e2e/global-setup.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
   reporter: [['list']],
-  timeout: 60_000,
+  timeout: 90_000,
   expect: { timeout: 10_000 },
   use: {
     ...devices['Desktop Chrome'],
@@ -27,10 +28,26 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 } },
     },
   ],
-  webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:3000/app/',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  // Two servers boot for the E2E run: the Next.js PWA (frontend) and the Phase-4
+  // FastAPI + SQLite sync backend. The sync-journey spec drives both; the other
+  // specs are fully offline and simply ignore the backend.
+  webServer: [
+    {
+      command: 'pnpm dev',
+      url: 'http://localhost:3000/app/',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      command: 'uv run uvicorn app.main:app --port 8000',
+      cwd: '../backend',
+      url: 'http://localhost:8000/health',
+      env: {
+        DEVICE_TOKEN: 'test-device-token',
+        DATABASE_URL: 'sqlite:///./data/e2e.db',
+      },
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
 })

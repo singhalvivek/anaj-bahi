@@ -1,33 +1,36 @@
 # Capability: Offline Queue — DEFERRED (Phase 4)
 
-_Target phase: **Phase 4** · slice-b (frontend)._
+_Target phase: **Phase 4** · slice-b (frontend `lib/sync`)._
+
+Backend is **FastAPI + SQLite**; frozen `lib/sync` API: [architecture.md § Phase-4 sync contract](../architecture.md#phase-4-sync-contract).
 
 ## What It Does
-Records local mutations in an IndexedDB outbox while offline and flushes them to the sync backend automatically on reconnect.
+Tracks local mutations (the pending set) while offline and flushes them to the **FastAPI + SQLite** backend automatically on reconnect, never blocking the UI, never losing or duplicating a record.
 
 ## Inputs
 | Input | Type | Source | Required |
 |-------|------|--------|----------|
-| mutation | { entity, id, op, updatedAt } | repo writes | yes |
+| pending records | records changed since `lastSyncedAt` | Dexie (deduped by `id`) | yes |
 | online event | browser event | `navigator.onLine` / `online` | yes |
 
 ## Outputs
 | Output | Type | Destination |
 |--------|------|-------------|
-| queued mutations | outbox rows | IndexedDB |
-| flush result | pushed batch | sync engine |
+| pending set | records to sync (deduped by id) | IndexedDB / `lib/sync` state |
+| flush result | `SyncResult` | `syncNow()` / `getSyncState()` |
 
 ## External Calls
 | System | Operation | On Failure |
 |--------|-----------|------------|
-| Sync engine | flush outbox on reconnect | Retain in outbox; retry with backoff |
+| FastAPI `POST /sync/push` (via `syncNow()`) | flush pending on reconnect | Retain pending, record `lastError`, retry later |
 
 ## Business Rules
-- Every repo write also appends to the outbox.
-- On `online`, flush in order; clear entries only on server ack.
-- Idempotent by record id + `updatedAt`.
+- **Pending** = local records changed since `lastSyncedAt`, **deduped by `id`** (a record edited twice counts once, not twice).
+- `startAutoSync()` registers an `online` listener that calls `syncNow()`; `pendingCount` clears only after a successful push updates `lastSyncedAt`.
+- **Idempotent** by record `id` + `updatedAt` — re-flushing the same records is a safe no-op; sync never blocks the UI, never loses a record, never duplicates one.
 
 ## Success Criteria
-- [ ] Mutations made offline persist in the outbox.
-- [ ] Reconnecting flushes them automatically.
-- [ ] A failed flush leaves entries queued for retry.
+- [ ] Records changed offline appear in `pendingCount` and persist across reloads.
+- [ ] Reconnecting (the `online` event) flushes them automatically via `syncNow()`.
+- [ ] A failed flush leaves `pendingCount` unchanged and sets `lastError` for retry; no record is lost.
+- [ ] Editing the same record twice while offline yields `pendingCount` of 1 for it (deduped by id), and syncing produces no duplicate server row.

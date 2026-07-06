@@ -194,6 +194,27 @@ export const EN = {
   'share.unsupported': 'Sharing not supported — use Download',
   'share.error': 'Could not create the image',
   'share.close': 'Close',
+
+  // ---- Phase 4 — cloud sync ----
+  'sync.title': 'Cloud backup',
+  'sync.baseUrl': 'Backend URL',
+  'sync.token': 'Device token',
+  'sync.saveConfig': 'Save connection',
+  'sync.configSaved': 'Connection saved',
+  'sync.now': 'Back up now',
+  'sync.syncing': 'Backing up…',
+  'sync.lastSynced': 'Last backed up',
+  'sync.never': 'Never',
+  'sync.pending': 'Waiting to back up',
+  'sync.restore': 'Restore from cloud',
+  'sync.restoring': 'Restoring…',
+  'sync.restored': 'Restore complete',
+  'sync.restoreConfirm': 'Restore will merge cloud data into this device. Continue?',
+  'sync.error.auth': 'Wrong device token — check it and try again',
+  'sync.error.network': 'Backend unreachable — your data is safe on this phone',
+  'sync.error.config': 'Add the backend URL and device token first',
+  'sync.synced': 'Backed up',
+  'sync.offlineOk': 'Works offline — backup runs when you are online',
 } as const
 
 export type TKey = keyof typeof EN
@@ -386,6 +407,27 @@ export const HI: Record<TKey, string> = {
   'share.unsupported': 'साझा करना उपलब्ध नहीं — डाउनलोड करें',
   'share.error': 'तस्वीर नहीं बन सकी',
   'share.close': 'बंद करें',
+
+  // ---- Phase 4 — cloud sync ----
+  'sync.title': 'क्लाउड बैकअप',
+  'sync.baseUrl': 'बैकएंड यूआरएल',
+  'sync.token': 'डिवाइस टोकन',
+  'sync.saveConfig': 'कनेक्शन सहेजें',
+  'sync.configSaved': 'कनेक्शन सहेजा गया',
+  'sync.now': 'अभी बैकअप लें',
+  'sync.syncing': 'बैकअप हो रहा है…',
+  'sync.lastSynced': 'पिछला बैकअप',
+  'sync.never': 'कभी नहीं',
+  'sync.pending': 'बैकअप बाकी',
+  'sync.restore': 'क्लाउड से वापस लाएँ',
+  'sync.restoring': 'वापस लाया जा रहा है…',
+  'sync.restored': 'वापस लाना पूरा हुआ',
+  'sync.restoreConfirm': 'वापस लाने पर क्लाउड डेटा इस डिवाइस में मिल जाएगा। जारी रखें?',
+  'sync.error.auth': 'ग़लत डिवाइस टोकन — जाँचें और दोबारा कोशिश करें',
+  'sync.error.network': 'बैकएंड नहीं मिला — आपका डेटा इस फ़ोन पर सुरक्षित है',
+  'sync.error.config': 'पहले बैकएंड यूआरएल और डिवाइस टोकन भरें',
+  'sync.synced': 'बैकअप हो गया',
+  'sync.offlineOk': 'ऑफ़लाइन काम करता है — ऑनलाइन होने पर बैकअप होता है',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

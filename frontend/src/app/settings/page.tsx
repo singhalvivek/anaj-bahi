@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useI18n } from '@/lib/i18n/context'
-import { ComingSoon } from '@/components/ComingSoon'
+import { SyncSettings } from '@/components/SyncSettings'
 import {
   getProfile,
   saveProfile,
@@ -154,8 +154,8 @@ export default function SettingsPage() {
         )}
       </section>
 
-      {/* Cloud sync — deferred to Phase 4, remains a labelled stub */}
-      <ComingSoon feature={t('stub.sync')} testid="stub-sync" />
+      {/* Cloud backup — the real Phase-4 sync section */}
+      <SyncSettings />
     </div>
   )
 }
