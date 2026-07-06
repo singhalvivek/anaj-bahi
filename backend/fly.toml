@@ -1,0 +1,28 @@
+# Fly.io config for the Anaj Bahi cloud sync/backup backend.
+# App name is a placeholder — set your real app during `fly launch`.
+app = "anaj-bahi-sync"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[env]
+  # FOUR slashes = absolute path /data/anaj.db on the mounted volume (persistent),
+  # NOT a relative ./data on the machine's ephemeral filesystem.
+  DATABASE_URL = "sqlite:////data/anaj.db"
+
+# Persistent volume — the SQLite file survives machine restarts/redeploys.
+# Create it once: `fly volumes create anaj_data --size 1`.
+[mounts]
+  source = "anaj_data"
+  destination = "/data"
+
+# DEVICE_TOKEN is a secret — NOT stored here. Set it with:
+#   fly secrets set DEVICE_TOKEN=<long-random-string>

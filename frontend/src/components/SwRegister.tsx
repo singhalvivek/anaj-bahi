@@ -4,6 +4,11 @@ import { useEffect } from 'react'
 import { ensureSeeded } from '@/lib/db/repo'
 import { startAutoSync } from '@/lib/sync'
 
+// Base path for the static export; defaults to `/app` (local dev + E2E). The
+// Pages production build sets NEXT_PUBLIC_BASE_PATH (e.g. `/anaj-bahi`) so the
+// service worker registers/scopes under the deployed sub-path.
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? '/app'
+
 /**
  * Boot component (renders nothing):
  *  - registers the hand-written service worker at /app/sw.js (scope /app/),
@@ -29,7 +34,7 @@ export function SwRegister() {
       }
     }
     // Register from the basePath scope so the exported shell is cached.
-    navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch((err) => {
+    navigator.serviceWorker.register(`${BASE}/sw.js`, { scope: `${BASE}/` }).catch((err) => {
       console.warn('[anajbahi] service worker registration skipped', err)
     })
 

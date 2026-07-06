@@ -16,7 +16,7 @@ The full spec lives in [`spec/`](spec/) — start with [`spec/roadmap.md`](spec/
 
 ## Stack
 
-- **Frontend:** Next.js 15 (App Router, static export, `basePath: /app`) + React 19 + Tailwind CSS 4
+- **Frontend:** Next.js 15 (App Router, static export, `basePath` = `NEXT_PUBLIC_BASE_PATH` — default `/app`) + React 19 + Tailwind CSS 4
 - **Local store:** IndexedDB via **Dexie 4** (the source of truth on the device)
 - **PWA:** hand-written service worker + web manifest (installable, offline app-shell)
 - **Receipt image:** client-side rasterization via `html-to-image` + the Web Share API
@@ -41,11 +41,17 @@ the app runs and persists fully offline. On first launch you set a 4-digit PIN.
 ### Other frontend commands (from `frontend/`)
 
 ```bash
-pnpm build        # production static export -> frontend/out/
+pnpm build        # production static export -> frontend/out/ (default basePath /app)
+pnpm build:pages  # production build + base-path rewrite for GitHub Pages (see Deployment)
 pnpm lint         # lint
 pnpm test         # unit tests (vitest run) - calc / data / sync layers
 pnpm test:e2e     # end-to-end tests (playwright) - full journeys incl. live backend sync
 ```
+
+The static export's URL sub-path is parameterized by **`NEXT_PUBLIC_BASE_PATH`** (default `/app` —
+keep it unset for local dev, `pnpm build`, and E2E). The GitHub Pages production build sets it to
+`/anaj-bahi` and runs `pnpm build:pages` (which also rewrites the `/app` literals in the exported
+`manifest.webmanifest` / `sw.js`).
 
 ## Running the cloud-sync backend (optional — for backup/restore)
 
@@ -83,3 +89,11 @@ gates the sync endpoints). See [`backend/README.md`](backend/README.md).
    **Restore** reproduces all bills/farmers/payments/profile onto a fresh device.
 
 Everything is bilingual Hindi/English and mobile-first.
+
+## Deployment
+
+- **Frontend → GitHub Pages** at `https://singhalvivek.github.io/anaj-bahi/` (production basePath
+  `/anaj-bahi`), built and published by `.github/workflows/deploy-pages.yml`.
+- **Backend → Fly.io** as a FastAPI + SQLite service with the DB file on a persistent volume.
+
+Copy-paste steps for both are in [`DEPLOY.md`](DEPLOY.md).

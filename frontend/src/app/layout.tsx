@@ -6,12 +6,17 @@ import { BottomNav } from '@/components/BottomNav'
 import { SwRegister } from '@/components/SwRegister'
 import { PinGate } from '@/components/PinGate'
 
+// Base path for the static export; defaults to `/app` (local dev + E2E). The
+// Pages production build sets NEXT_PUBLIC_BASE_PATH (e.g. `/anaj-bahi`) so the
+// manifest link resolves under the deployed sub-path.
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? '/app'
+
 export const metadata: Metadata = {
   title: 'Anaj Bahi / अनाज बही',
   description:
     'Offline bill-book for grain traders — record grain purchases sack-by-sack and reopen bills. Works fully offline on your phone.',
-  // Static export under basePath /app: the manifest in public/ is served at /app/…
-  manifest: '/app/manifest.webmanifest',
+  // Static export under basePath: the manifest in public/ is served at ${BASE}/…
+  manifest: `${BASE}/manifest.webmanifest`,
   applicationName: 'Anaj Bahi',
   appleWebApp: { capable: true, title: 'Anaj Bahi', statusBarStyle: 'default' },
 }

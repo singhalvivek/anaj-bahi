@@ -91,7 +91,9 @@ No network, no server, no keys anywhere in this flow.
 | Dev run command | `pnpm dev` (cwd `frontend/`) — Next dev server |
 | Dev port | `3000` |
 | URL the user opens | `http://localhost:3000/app/` (note the `/app` basePath + trailing slash) |
-| Production build | `pnpm build` (cwd `frontend/`) — static export to `frontend/out/` |
+| Production build | `pnpm build` (cwd `frontend/`) — static export to `frontend/out/` (default basePath `/app`) |
+| Pages production build | `NEXT_PUBLIC_BASE_PATH=/anaj-bahi pnpm build:pages` (cwd `frontend/`) — `next build` + `scripts/apply-base-path.mjs` (rewrites `/app` → `/anaj-bahi` in the exported `manifest.webmanifest`/`sw.js`). Run by CI. |
+| Base path env | `NEXT_PUBLIC_BASE_PATH` — the static-export `basePath`. **Default `/app`** (unset = local dev, `pnpm build`, and E2E). GitHub Pages production sets `/anaj-bahi`. |
 | Lint command | `pnpm lint` (cwd `frontend/`) |
 | Unit test command | `pnpm test` → `vitest run` (cwd `frontend/`) |
 | E2E / UI test command | `pnpm test:e2e` → `playwright test` (cwd `frontend/`); Playwright `webServer` runs `pnpm dev`, `baseURL` `http://localhost:3000/app/` |
@@ -132,7 +134,14 @@ No network, no server, no keys anywhere in this flow.
 
 ## Deployment Model
 
-Static export (`frontend/out/`) served as plain files under `/app` — installable to the Android home screen and fully functional offline. The Phase-4 backend deploys separately as a small FastAPI service backed by a single **SQLite** file on a persistent disk (a cheap single-VM host; no DB server, no Docker, no hosted database).
+Static export (`frontend/out/`) served as plain files under a `basePath` — installable to the Android home screen and fully functional offline. The Phase-4 backend deploys separately as a small FastAPI service backed by a single **SQLite** file on a persistent disk.
+
+**Concrete targets** (copy-paste steps in [`../DEPLOY.md`](../DEPLOY.md)):
+
+- **Frontend → GitHub Pages** (repo `anaj-bahi`) at `https://singhalvivek.github.io/anaj-bahi/`. The `basePath` is parameterized by `NEXT_PUBLIC_BASE_PATH` (default `/app`; production `/anaj-bahi`). The workflow `.github/workflows/deploy-pages.yml` runs `pnpm build:pages` with `NEXT_PUBLIC_BASE_PATH=/anaj-bahi`, adds `.nojekyll`, and publishes `frontend/out/` via GitHub Pages. The postbuild `scripts/apply-base-path.mjs` rewrites the `/app` literals in the exported `manifest.webmanifest`/`sw.js` (a no-op at the default `/app`, so local dev + E2E are untouched).
+- **Backend → Fly.io** (`backend/Dockerfile` + `backend/fly.toml`): a FastAPI service on internal port **8080**, HTTPS-forced, with the SQLite file on a **persistent volume** at `/data` (`DATABASE_URL=sqlite:////data/anaj.db` — four slashes = absolute path). `DEVICE_TOKEN` is set via `fly secrets set` (never committed). Machines auto-stop/auto-start with `min_machines_running=0`. The container runs `python -m app.init_db` then `uvicorn`.
+
+The app works fully offline without the backend; the backend is only for optional cloud backup/restore.
 
 ---
 
