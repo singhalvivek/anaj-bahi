@@ -3,7 +3,7 @@
 Anaj Bahi has two independently deployable pieces:
 
 - **Frontend PWA** — a static export served from **GitHub Pages**. Fully offline-capable; the backend is optional.
-- **Sync backend** — a small FastAPI + SQLite service on **Fly.io** for optional cloud backup/restore.
+- **Sync backend** — a small FastAPI + SQLite service on **PythonAnywhere** (free, no card) for optional cloud backup/restore.
 
 The app works **fully offline without the backend**. You only need the backend if you want cloud backup across devices.
 
@@ -51,35 +51,7 @@ NEXT_PUBLIC_BASE_PATH=/anaj-bahi pnpm build:pages
 
 ---
 
-## Backend → Fly.io
-
-The backend is FastAPI + SQLite. The SQLite file lives on a **persistent Fly volume** mounted at `/data`, so data survives restarts and redeploys.
-
-From the `backend/` directory:
-
-1. **Launch** (uses the provided `fly.toml` — do not overwrite it, and do not deploy yet):
-   ```sh
-   cd backend
-   fly launch --no-deploy
-   ```
-   Keep/confirm the app name and the `[mounts]`/`[env]` from `fly.toml`.
-2. **Create the persistent volume** (name must match `fly.toml` `[mounts].source`):
-   ```sh
-   fly volumes create anaj_data --size 1
-   ```
-3. **Set the device token secret** (a long random string — the same one you enter in the app):
-   ```sh
-   fly secrets set DEVICE_TOKEN=$(openssl rand -hex 24)
-   ```
-   `DEVICE_TOKEN` is a secret and is **never** committed to `fly.toml` or the repo.
-4. **Deploy:**
-   ```sh
-   fly deploy
-   ```
-   The container runs `python -m app.init_db` (creates the SQLite tables on the volume, idempotent) and then serves `uvicorn app.main:app` on port **8080**. Fly exposes it as HTTPS.
-5. **Verify:** `https://<your-app>.fly.dev/health` returns `{"status":"ok"}`.
-
-## Backend → PythonAnywhere (free, no card — alternative to Fly)
+## Backend → PythonAnywhere (free, no card)
 
 PythonAnywhere's free "Beginner" plan needs **no credit card**, gives a **persistent home disk** (so the SQLite file survives), and serves **HTTPS**. Its web apps are **WSGI**, so the FastAPI (ASGI) app runs through the `a2wsgi` wrapper in `backend/wsgi.py`.
 
@@ -124,8 +96,8 @@ Replace `<user>` with your PythonAnywhere username and `<token>` with a long ran
 
 In the PWA: **Settings → Cloud backup**:
 
-- **Backend URL:** the backend's **HTTPS** URL — `https://<your-app>.fly.dev` (Fly) or `https://<user>.pythonanywhere.com` (PythonAnywhere). HTTPS only — an HTTP URL is blocked by the browser as mixed content.
-- **Device token:** the **same** `DEVICE_TOKEN` you configured on the backend (Fly secret / PythonAnywhere WSGI file).
+- **Backend URL:** the backend's **HTTPS** URL — `https://<user>.pythonanywhere.com`. HTTPS only — an HTTP URL is blocked by the browser as mixed content.
+- **Device token:** the **same** `DEVICE_TOKEN` you set in the PythonAnywhere WSGI file.
 
 These are stored locally on the device (Dexie `meta`), not baked into the build, so no rebuild is needed to point at a backend. The app keeps working fully offline; sync flushes opportunistically when online.
 
@@ -133,6 +105,6 @@ These are stored locally on the device (Dexie `meta`), not baked into the build,
 
 ## Notes
 
-- `DATABASE_URL` in `fly.toml` is `sqlite:////data/anaj.db` — **four** slashes = the absolute path `/data/anaj.db` on the mounted volume. A three-slash relative URL would write to the machine's ephemeral disk and be lost on redeploy.
+- `DATABASE_URL` uses **four** slashes for an absolute path (e.g. `sqlite:////home/<user>/anaj-bahi/backend/data/anaj.db`) so the SQLite file lives on PythonAnywhere's persistent home disk. A three-slash relative URL is relative to the process working directory instead.
 - The backend enables permissive CORS (`allow_origins=["*"]`); auth is a Bearer device token (no cookies), so a wildcard origin is safe.
 - The frontend is a pure static export — it needs no server and can also be hosted on any static host under any sub-path by setting `NEXT_PUBLIC_BASE_PATH` accordingly.
