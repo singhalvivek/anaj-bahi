@@ -300,13 +300,17 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
         </div>
       </div>
 
-      {/* Consolidated summary — grains as COLUMNS, line items as ROWS */}
-      <div style={{ padding: '0 0 4px', overflowX: 'auto' }}>
+      {/* Consolidated summary — grains as COLUMNS, line items as ROWS.
+          Sized to its own content (NO inner overflow/scroll) so the whole receipt
+          is a single width and html-to-image never crops a grain column off the
+          PNG. The outer preview container (bill/page.tsx) owns on-screen scroll. */}
+      <div style={{ padding: '0 0 4px' }}>
         <table
           data-testid="receipt-summary-table"
           style={{
             borderCollapse: 'collapse',
-            width: '100%',
+            width: 'max-content',
+            minWidth: '100%',
             tableLayout: 'auto',
           }}
         >
@@ -351,7 +355,8 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
                 </td>
               ))}
             </tr>
-            {/* Net weight (kg and quintals) */}
+            {/* Net weight — kg only (weight is always shown in kg; the quintal
+                unit appears only on the rate row, which is the trade standard). */}
             <tr>
               <td style={rowLabelStyle}>{t('totals.net')}</td>
               {blocks.map((block) => (
@@ -360,7 +365,7 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
                   data-testid="receipt-grain-net"
                   style={cellStyle}
                 >
-                  {fmtNum(block.totals.netWeightKg)} {kg} / {fmtNum(block.totals.netWeightKg / 100)} q
+                  {fmtNum(block.totals.netWeightKg)} {kg}
                 </td>
               ))}
             </tr>

@@ -41,10 +41,11 @@ Below the weight column-grid, render **one** summary table for the whole bill:
 - **Rows = the line items**, top-to-bottom, so reading a grain's column downward gives gross → deduction → net → rate → amount:
   1. **Gross weight (kg)** — sum of that grain's sack weights.
   2. **Deduction** — the resolved kg **and** a compact basis in one cell, e.g. `3.595 kg (0.5/sack + 1%)`; a grain with multiple deductions shows the summed resolved kg with each basis in the compact form, matching [deductions-and-totals-calc](deductions-and-totals-calc.md).
-  3. **Net weight** — in **kg and quintals**.
+  3. **Net weight** — in **kg only** (weight is always shown in kg; the quintal unit appears only on the Rate row, the trade standard).
   4. **Rate (₹/quintal)**.
   5. **Amount (₹)**.
 - **Bill grand total** for Amount is shown as either a trailing **"Total" column** or a **bill-total line** directly under the table = the sum of the grains' Amount cells.
+- **Single-width, no-crop sizing:** the table is sized to its own content — **width = `max-content`, `min-width: 100%`, and NO inner horizontal scroll/overflow** — so the whole receipt is one consistent width and the rasterized PNG never crops off the last grain column. On-screen horizontal scrolling of a wide receipt is owned by the **outer preview container**, not the table.
 - All figures come from `lib/calc` — the table only re-arranges them; it performs no arithmetic of its own beyond summing the printed Amount cells for the total.
 
 ## Business Rules
@@ -52,14 +53,15 @@ Below the weight column-grid, render **one** summary table for the whole bill:
 - Below the consolidated table, print the **bill grand total** = sum of the grains' Amount cells (trailing "Total" column or a bill-total line).
 - **Math is unchanged:** all gross/deduction/net/amount/total values come from the existing calc engine (`lib/calc`) — see [data.md](../data.md); this capability only changes the **visual arrangement**, not the arithmetic.
 - Sacks appear in the exact **entry order** captured by [sack-by-sack entry](sack-by-sack-entry.md); column fill follows that order.
-- The receipt is intentionally **wider than the old flat breakdown** (up to 10 columns) to match the paper ledger — this is expected, not a defect.
+- The receipt is intentionally **wider than the old flat breakdown** (up to 10 columns) to match the paper ledger — this is expected, not a defect. The consolidated summary table sizes to its own content (single consistent width, no inner horizontal scroll) so the rasterized image never clips the last grain column.
 - Language follows the current toggle; amounts use the same rounding as [data.md](../data.md).
 
 ## Success Criteria
 - [ ] Each grain's sacks render in vertical columns of ≤10 weights (no sack numbers), in entry order.
 - [ ] A grain with N sacks spans exactly `ceil(N/10)` columns; grains flow left-to-right with no gap or overlap in the shared column track.
 - [ ] Each column's subtotal equals the sum of the weights in that column; the grid shows **no** per-grain summary lines.
-- [ ] Below the grid, a single consolidated table has **one column per grain** (header = grain name, same order as the grid) and rows **Gross weight (kg)**, **Deduction** (resolved kg + compact basis), **Net weight** (kg + quintals), **Rate ₹/quintal**, **Amount ₹**, in that top-to-bottom order.
+- [ ] Below the grid, a single consolidated table has **one column per grain** (header = grain name, same order as the grid) and rows **Gross weight (kg)**, **Deduction** (resolved kg + compact basis), **Net weight** (kg only), **Rate ₹/quintal**, **Amount ₹**, in that top-to-bottom order.
 - [ ] Each grain's Gross = sum of that grain's sacks; each grain's Amount and the bill grand total match `lib/calc` exactly; the grains' Amount cells sum to the printed grand total.
 - [ ] Header, bill id, purchase date, and farmer details render as in Phase 3, in both Hindi and English.
+- [ ] The consolidated summary table sizes to its own content (width `max-content`, `min-width: 100%`, no inner horizontal scroll) so a multi-grain bill (e.g. 3 grains) rasterizes to a single-width PNG with the last grain column fully visible — never clipped.
 - [ ] The column-grouping helper is covered by unit tests (entry-order split, `ceil(N/10)`, per-column subtotals) independent of the DOM.

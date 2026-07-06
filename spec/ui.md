@@ -68,11 +68,12 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
    - Grains **share one continuous column track**: grain 1 starts at column 1; each next grain starts in the next free column after the previous grain's last column. E.g. grain A 25 sacks → columns 1–3 (10, 10, 5); grain B 11 → columns 4–5 (10, 1); grain C 6 → column 6.
    - **Per grain block** (width = its column count): a **grain-name header** spanning the block; its **weight columns side by side**; a **subtotal row** aligned beneath each column (each = that column's sum). **No per-grain summary lines under the grid** — the gross/deduction/net/rate/amount figures move into the consolidated table below.
 3. **Consolidated summary table** (below the grid) — **one table** where **columns = the grains** (header = grain name, same left-to-right order as the grid) and **rows = the line items**, so reading a grain's column downward gives gross → deduction → net → rate → amount:
-   - **Gross weight (kg)**, **Deduction** (resolved kg + compact basis in one cell, e.g. `3.595 kg (0.5/sack + 1%)`), **Net weight** (kg + quintals), **Rate (₹/quintal)**, **Amount (₹)**.
+   - **Gross weight (kg)**, **Deduction** (resolved kg + compact basis in one cell, e.g. `3.595 kg (0.5/sack + 1%)`), **Net weight** (kg only — the quintal unit appears only on the Rate row), **Rate (₹/quintal)**, **Amount (₹)**.
+   - **Sizing:** the table is sized to its own content (**width `max-content`, `min-width: 100%`, no inner horizontal scroll**) so the whole receipt is one consistent width and the rasterized image never crops the last grain column. Any on-screen horizontal scrolling of a wide receipt is owned by the **outer preview container**, not the table.
 4. **Bill grand total** ₹ = sum of the grains' Amount cells, shown as a trailing **"Total" column** or a **bill-total line** under the table.
 
 **Notes:**
-- The image is intentionally **wider than the old flat numbered breakdown** (up to 10 columns) to match the paper ledger — expected, not a bug.
+- The image is intentionally **wider than the old flat numbered breakdown** (up to 10 columns) to match the paper ledger — expected, not a bug. The consolidated summary table sizes to its own content (single consistent width, no inner horizontal scroll) so the rasterized PNG never clips the last grain column.
 - Bilingual Hindi/English follows the current toggle; Indian-style ₹ formatting; all amounts and the total come from the calc engine (`lib/calc`) — the math is unchanged, only the image layout changed (weight column-grid on top, one consolidated summary table below).
 - The column split uses a **pure column-grouping helper** (`ceil(N/10)` per grain, entry-order split, per-column subtotals) so it is unit-testable independent of the DOM.
 - On-screen **bill entry** and **bill detail** views are **unaffected** by this redesign.
