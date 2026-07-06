@@ -94,6 +94,6 @@ Everything is bilingual Hindi/English and mobile-first.
 
 - **Frontend → GitHub Pages** at `https://singhalvivek.github.io/anaj-bahi/` (production basePath
   `/anaj-bahi`), built and published by `.github/workflows/deploy-pages.yml`.
-- **Backend → PythonAnywhere** (free, no card) as a FastAPI + SQLite service; the SQLite file lives on the persistent home disk and the ASGI app runs via the `backend/wsgi.py` (`a2wsgi`) WSGI wrapper.
+- **Backend → PythonAnywhere** (free, no card) as a FastAPI + SQLite service; the SQLite file lives on the persistent home disk and the ASGI app runs via the `backend/wsgi.py` WSGI adapter (a fresh event loop per request — robust under PythonAnywhere's uWSGI).
 
 Copy-paste steps for both are in [`DEPLOY.md`](DEPLOY.md).

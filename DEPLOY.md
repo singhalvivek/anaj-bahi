@@ -53,7 +53,7 @@ NEXT_PUBLIC_BASE_PATH=/anaj-bahi pnpm build:pages
 
 ## Backend → PythonAnywhere (free, no card)
 
-PythonAnywhere's free "Beginner" plan needs **no credit card**, gives a **persistent home disk** (so the SQLite file survives), and serves **HTTPS**. Its web apps are **WSGI**, so the FastAPI (ASGI) app runs through the `a2wsgi` wrapper in `backend/wsgi.py`.
+PythonAnywhere's free "Beginner" plan needs **no credit card**, gives a **persistent home disk** (so the SQLite file survives), and serves **HTTPS**. Its web apps are **WSGI**, so the FastAPI (ASGI) app runs through the WSGI adapter in `backend/wsgi.py`, which drives the app with a **fresh event loop per request** (a shared-loop wrapper like `a2wsgi` deadlocks under PythonAnywhere's uWSGI after the first request).
 
 Replace `<user>` with your PythonAnywhere username and `<token>` with a long random string (the same one you enter in the app).
 
@@ -63,7 +63,7 @@ Replace `<user>` with your PythonAnywhere username and `<token>` with a long ran
    git clone https://github.com/singhalvivek/anaj-bahi.git
    cd anaj-bahi/backend
    mkvirtualenv --python=/usr/bin/python3.11 anaj
-   pip install fastapi sqlalchemy pydantic-settings a2wsgi
+   pip install fastapi sqlalchemy pydantic-settings
    ```
    (Any Python ≥ 3.11 that PythonAnywhere offers is fine; `uvicorn` is not needed under WSGI.)
 3. **Create the SQLite tables** on the persistent disk (run once):
