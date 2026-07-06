@@ -35,7 +35,10 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          # Match the repo's local pnpm (11.x). pnpm 9 rejects the settings-only
+          # frontend/pnpm-workspace.yaml ("packages field missing or empty");
+          # pnpm 11 reads its `allowBuilds` setting and installs cleanly.
+          version: 11
 
       - name: Setup Node
         uses: actions/setup-node@v4
