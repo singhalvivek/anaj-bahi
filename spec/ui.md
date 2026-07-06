@@ -56,6 +56,27 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 **Key elements:** farmer + place + phone; purchase date; bill id; each grain line with its **full sack-by-sack list**, deductions, net kg, line amount; **bill total**. Read-only view with an **Edit** action (Phase 1: edit re-opens the form pre-filled; Phase 2 locks it once a payment exists). `data-testid="detail-bill-total"`, sack list `data-testid="detail-sack-list"`.
 **Coming-soon stubs:** **Payments** panel and **Share as image** button both rendered with the `ComingSoon` badge.
 
+### Screen: Shared Image Receipt (Phase 3) — receipt-render
+
+**Purpose:** render a bill as a ledger-style receipt that the trader shares as an image. Rendered from the Bill Detail **Share as image** action (a Phase 1 stub, live in Phase 3). See [receipt-render](capabilities/receipt-render.md) for the authoritative content spec; [share-as-image](capabilities/share-as-image.md) for capture/share.
+
+**Layout (top → bottom):**
+1. **Business header** (from the [business profile](capabilities/business-profile.md)), **bill id** (`DDMMYY/xxxxx`) + purchase date, **farmer** (name / village / phone) — all UNCHANGED from Phase 3.
+2. **Top weight column-grid, left-to-right** — the sack section mirrors the trader's paper ledger:
+   - Sack weights are laid out in **vertical columns of up to 10 rows (10 sacks per column)**, **weight values only, no sack numbers**.
+   - Column 1 = sacks 1–10 (entry order), column 2 = 11–20, etc. A grain with N sacks occupies **`ceil(N/10)` columns**; max 100 sacks/bill → max 10 columns.
+   - Grains **share one continuous column track**: grain 1 starts at column 1; each next grain starts in the next free column after the previous grain's last column. E.g. grain A 25 sacks → columns 1–3 (10, 10, 5); grain B 11 → columns 4–5 (10, 1); grain C 6 → column 6.
+   - **Per grain block** (width = its column count): a **grain-name header** spanning the block; its **weight columns side by side**; a **subtotal row** aligned beneath each column (each = that column's sum). **No per-grain summary lines under the grid** — the gross/deduction/net/rate/amount figures move into the consolidated table below.
+3. **Consolidated summary table** (below the grid) — **one table** where **columns = the grains** (header = grain name, same left-to-right order as the grid) and **rows = the line items**, so reading a grain's column downward gives gross → deduction → net → rate → amount:
+   - **Gross weight (kg)**, **Deduction** (resolved kg + compact basis in one cell, e.g. `3.595 kg (0.5/sack + 1%)`), **Net weight** (kg + quintals), **Rate (₹/quintal)**, **Amount (₹)**.
+4. **Bill grand total** ₹ = sum of the grains' Amount cells, shown as a trailing **"Total" column** or a **bill-total line** under the table.
+
+**Notes:**
+- The image is intentionally **wider than the old flat numbered breakdown** (up to 10 columns) to match the paper ledger — expected, not a bug.
+- Bilingual Hindi/English follows the current toggle; Indian-style ₹ formatting; all amounts and the total come from the calc engine (`lib/calc`) — the math is unchanged, only the image layout changed (weight column-grid on top, one consolidated summary table below).
+- The column split uses a **pure column-grouping helper** (`ceil(N/10)` per grain, entry-order split, per-column subtotals) so it is unit-testable independent of the DOM.
+- On-screen **bill entry** and **bill detail** views are **unaffected** by this redesign.
+
 ### Screen: Coming-soon stub (`/due`, `/settings` etc.)
 
 A single friendly placeholder screen: icon + "Coming soon — जल्द आ रहा है" + one line describing the feature and its target phase. Reached from stub nav items. Never an error/blank.

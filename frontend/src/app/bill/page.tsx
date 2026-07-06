@@ -280,9 +280,11 @@ function SharePanel({
               </button>
             </div>
 
-            {/* Scrollable receipt preview */}
-            <div className="min-h-0 flex-1 overflow-y-auto bg-stone-100 p-4">
-              <div className="mx-auto w-fit rounded-lg shadow-sm">
+            {/* Scrollable receipt preview — scrolls in BOTH axes so a wide
+                many-column ledger receipt never clips; html-to-image still
+                captures the Receipt root at its full scroll width. */}
+            <div className="min-h-0 flex-1 overflow-auto bg-stone-100 p-4">
+              <div className="w-fit rounded-lg shadow-sm">
                 {profile ? (
                   <Receipt
                     ref={receiptRef}

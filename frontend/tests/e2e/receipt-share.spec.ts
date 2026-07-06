@@ -1,31 +1,43 @@
 import { test, expect, type Page } from '@playwright/test'
 
 /**
- * Phase-3 E2E — bilingual receipt render + share-as-image (with download fallback).
+ * Redesigned receipt E2E — paper-ledger COLUMN layout + share-as-image (with
+ * download fallback).
  *
  * Runs against the real static-export dev server (basePath /app) with real
  * IndexedDB in a fresh Chromium context (each test → first-run PIN setup). Fully
  * offline: no server DB, no network, no external image service — the PNG is
  * rasterised client-side by html-to-image.
  *
- * Two paths are exercised so neither share button is ever a dead end:
+ * Two share paths are exercised so neither button is ever a dead end:
  *   1. Native share supported (stubbed) → shareReceiptImage hands a PNG File to
  *      navigator.share; we assert the captured File type/name.
  *   2. Native share unsupported (real headless Chromium, no stub) → the PNG
  *      downloads and a clear `share-fallback` note appears.
  *
- * Expected numbers (verified against lib/calc, same as the purchase journey):
- *   sacks 40, 40, 40.5, 39 → count 4, gross 159.5 kg
- *   deductions: 0.5 kg/sack (=2 kg) + 1% of gross (=1.595 kg) → 3.595 kg
- *   net = 155.905 kg;  amount = 1.55905 quintal × ₹2400 = ₹3741.72
+ * Worked multi-grain example (verified against lib/calc — the SAME engine the
+ * receipt renders from, no reimplementation):
+ *   Grain 1 — Wheat, ₹2000/quintal, 12 sacks: 50×10 then 45, 40
+ *     → toColumns → 2 columns: [50×10] (subtotal 500) + [45,40] (subtotal 85)
+ *     → gross 585 kg, net 585 kg = 5.85 q × ₹2000 = ₹11700.00
+ *   Grain 2 — Mustard, ₹1500/quintal, 6 sacks: 40×6
+ *     → toColumns → 1 column, subtotal 240
+ *     → gross 240 kg, net 240 kg = 2.4 q × ₹1500 = ₹3600.00
+ *   Bill total = ₹11700.00 + ₹3600.00 = ₹15300.00
  */
 
 const PIN = '1234'
-const EXPECTED_TOTAL = '3741.72'
+const EXPECTED_TOTAL = '15300.00'
 
-async function addSack(page: Page, value: string) {
-  await page.getByTestId('sack-input').fill(value)
-  await page.getByTestId('sack-add').click()
+const WHEAT_WEIGHTS = ['50', '50', '50', '50', '50', '50', '50', '50', '50', '50', '45', '40']
+const MUSTARD_WEIGHTS = ['40', '40', '40', '40', '40', '40']
+const WHEAT_COL1_SUBTOTAL = '500' // sum of the first 10 wheat sacks
+const WHEAT_COL2_SUBTOTAL = '85' // sum of the remaining 2 wheat sacks (45 + 40)
+
+/** Add one sack weight to the grain line at `lineIndex` (scoped, multi-grain safe). */
+async function addSackTo(page: Page, lineIndex: number, value: string) {
+  await page.getByTestId('sack-input').nth(lineIndex).fill(value)
+  await page.getByTestId('sack-add').nth(lineIndex).click()
 }
 
 /** First-run PIN setup — unlocks the app (fresh IndexedDB each run). */
@@ -48,33 +60,30 @@ async function fillBusinessProfile(page: Page) {
   await expect(page.getByTestId('settings-saved')).toBeVisible()
 }
 
-/** Create the worked-example Wheat bill (₹2400/quintal, sacks 40/40/40.5/39). */
-async function createWheatBill(page: Page) {
+/**
+ * Create a multi-grain bill that exercises the column layout + a remainder:
+ *   Wheat  → 12 sacks → 2 columns (10 + 2)
+ *   Mustard → 6 sacks → 1 column
+ */
+async function createMultiGrainBill(page: Page) {
   await page.getByTestId('new-bill-btn').click()
   await page.waitForURL('**/app/bills/new/**')
 
   await page.getByTestId('farmer-input').fill('Ramesh')
   await page.getByLabel('Place / Village').fill('Sadar')
 
-  await page.getByTestId('grain-type-select').selectOption({ label: 'Wheat' })
-  await page.getByTestId('price-input').fill('2400')
+  // Grain 1 — Wheat, 12 sacks.
+  await page.getByTestId('grain-type-select').nth(0).selectOption({ label: 'Wheat' })
+  await page.getByTestId('price-input').nth(0).fill('2000')
+  for (const w of WHEAT_WEIGHTS) await addSackTo(page, 0, w)
 
-  await addSack(page, '40')
-  await addSack(page, '40')
-  await addSack(page, '40.5')
-  await addSack(page, '39')
-  await expect(page.getByTestId('sack-row')).toHaveCount(4)
+  // Grain 2 — Mustard, 6 sacks (added as a second grain line).
+  await page.getByText('+ Add another grain').click()
+  await page.getByTestId('grain-type-select').nth(1).selectOption({ label: 'Mustard' })
+  await page.getByTestId('price-input').nth(1).fill('1500')
+  for (const w of MUSTARD_WEIGHTS) await addSackTo(page, 1, w)
 
-  await page.getByTestId('add-deduction').click()
-  const row0 = page.getByTestId('deduction-row').nth(0)
-  await row0.locator('select').selectOption({ label: 'kg per sack' })
-  await row0.locator('input').fill('0.5')
-
-  await page.getByTestId('add-deduction').click()
-  const row1 = page.getByTestId('deduction-row').nth(1)
-  await row1.locator('select').selectOption({ label: '% of gross' })
-  await row1.locator('input').fill('1')
-
+  // Live total matches the calc engine before saving.
   await expect(page.getByTestId('bill-total')).toContainText(EXPECTED_TOTAL)
 
   await page.getByTestId('save-bill').click()
@@ -82,14 +91,15 @@ async function createWheatBill(page: Page) {
 }
 
 /**
- * PIN → English → business profile → create bill → open it. Leaves the page on
- * the bill-detail screen with the real bill loaded.
+ * PIN → English → business profile → create the multi-grain bill → open it.
+ * Leaves the page on the bill-detail screen with the real bill loaded.
  */
 async function seedAndOpenBill(page: Page) {
   await page.goto('./')
   await setupPin(page)
 
-  // English so the grain <select> option label 'Wheat' and 'Place / Village' resolve.
+  // English so the grain <select> option labels 'Wheat'/'Mustard' and
+  // 'Place / Village' resolve.
   await page.getByTestId('lang-toggle-en').click()
   await expect(page.getByTestId('new-bill-btn')).toContainText('New Bill')
 
@@ -97,7 +107,7 @@ async function seedAndOpenBill(page: Page) {
 
   await page.getByTestId('nav-bills').click()
   await page.waitForURL(/\/app\/(\?.*)?$/)
-  await createWheatBill(page)
+  await createMultiGrainBill(page)
 
   const card = page.getByTestId('bill-card').first()
   await expect(card).toBeVisible()
@@ -106,7 +116,7 @@ async function seedAndOpenBill(page: Page) {
   await expect(page.getByTestId('detail-bill-total')).toContainText(EXPECTED_TOTAL)
 }
 
-test('renders the bilingual receipt and shares it as a PNG (native share stubbed)', async ({
+test('renders the column-ledger receipt and shares it as a PNG (native share stubbed)', async ({
   page,
 }) => {
   // Stub the native file-share API BEFORE the app loads and capture what is shared.
@@ -132,23 +142,78 @@ test('renders the bilingual receipt and shares it as a PNG (native share stubbed
   const receipt = page.getByTestId('receipt')
   await expect(receipt).toBeVisible()
 
-  // --- Real content: Settings business header, total, full sack breakdown ---
+  // --- Business header + calc-engine grand total ---
   await expect(page.getByTestId('receipt-shop')).toContainText('Ramesh Traders')
   await expect(receipt).toContainText('Suresh') // trader name
   await expect(receipt).toContainText('9998887776') // business phone
   await expect(page.getByTestId('receipt-total')).toContainText(EXPECTED_TOTAL)
 
-  await expect(page.getByTestId('receipt-sack')).toHaveCount(4)
-  await expect(receipt).toContainText('40.5')
-  await expect(receipt).toContainText('39')
+  // --- No sack NUMBERS: only weight values, and there are 18 of them ---
+  const weights = page.getByTestId('receipt-weight')
+  await expect(weights).toHaveCount(WHEAT_WEIGHTS.length + MUSTARD_WEIGHTS.length) // 18
+  const noHashes = await weights.evaluateAll((els) =>
+    els.every((el) => !(el.textContent ?? '').includes('#')),
+  )
+  expect(noHashes).toBe(true)
+  // The obsolete numbered-sack element is gone entirely.
+  await expect(page.getByTestId('receipt-sack')).toHaveCount(0)
 
-  // --- Language: the receipt total label follows the live toggle ---
+  // --- Top weight column-grid: ceil(N/10) per grain, entry-order split, subtotals ---
+  // (This grid is UNCHANGED by the summary-table redesign.)
+  const blocks = page.getByTestId('receipt-grain-block')
+  await expect(blocks).toHaveCount(2)
+
+  const wheatBlock = blocks.nth(0)
+  await expect(wheatBlock.getByTestId('receipt-column')).toHaveCount(2)
+  const wheatSubtotals = wheatBlock.getByTestId('receipt-col-subtotal')
+  await expect(wheatSubtotals).toHaveCount(2)
+  await expect(wheatSubtotals.nth(0)).toHaveText(WHEAT_COL1_SUBTOTAL) // 500 = sum of 10
+  await expect(wheatSubtotals.nth(1)).toHaveText(WHEAT_COL2_SUBTOTAL) // 85 = sum of 2
+
+  const mustardBlock = blocks.nth(1)
+  await expect(mustardBlock.getByTestId('receipt-column')).toHaveCount(1)
+  await expect(mustardBlock.getByTestId('receipt-col-subtotal')).toHaveText('240')
+
+  // --- Consolidated summary TABLE: grains as columns, line items as rows ---
+  // The per-grain repeated summary blocks are GONE; a single table takes their place.
+  const summary = page.getByTestId('receipt-summary-table')
+  await expect(summary).toHaveCount(1)
+
+  // One header per grain, in grid order (Wheat then Mustard).
+  const grainHeaders = summary.getByTestId('receipt-summary-grain')
+  await expect(grainHeaders).toHaveCount(2)
+  await expect(grainHeaders.nth(0)).toContainText('Wheat')
+  await expect(grainHeaders.nth(1)).toContainText('Mustard')
+
+  // Gross / Net / Amount cells per grain match the calc engine (grid order).
+  const gross = summary.getByTestId('receipt-grain-gross')
+  await expect(gross.nth(0)).toContainText('585') // Wheat gross 585 kg
+  await expect(gross.nth(1)).toContainText('240') // Mustard gross 240 kg
+
+  const net = summary.getByTestId('receipt-grain-net')
+  await expect(net.nth(0)).toContainText('585') // Wheat net 585 kg
+  await expect(net.nth(0)).toContainText('5.85 q') // ...= 5.85 q
+  await expect(net.nth(1)).toContainText('240') // Mustard net 240 kg
+  await expect(net.nth(1)).toContainText('2.4 q') // ...= 2.4 q
+
+  const amount = summary.getByTestId('receipt-grain-amount')
+  await expect(amount).toHaveCount(2)
+  await expect(amount.nth(0)).toContainText('11700.00') // Wheat amount
+  await expect(amount.nth(1)).toContainText('3600.00') // Mustard amount
+
+  // Bill total (grand total for Amount) = sum of the grains' amounts.
+  await expect(page.getByTestId('receipt-total')).toContainText(EXPECTED_TOTAL)
+
+  // --- Language: receipt labels follow the live toggle (EN ↔ HI) ---
   await expect(page.getByTestId('receipt-total')).toContainText('Total')
+  await expect(summary).toContainText('Gross weight') // totals.gross (EN)
   await page.getByTestId('lang-toggle-hi').click()
   await expect(page.getByTestId('receipt-total')).toContainText('कुल राशि')
   await expect(page.getByTestId('receipt-total')).not.toContainText('Total')
+  await expect(summary).toContainText('कुल वज़न') // totals.gross (HI)
   // Numbers stay locale-neutral in both languages.
   await expect(page.getByTestId('receipt-total')).toContainText(EXPECTED_TOTAL)
+  await expect(amount.nth(0)).toContainText('11700.00')
 
   // --- Share path: a PNG File reaches navigator.share ---
   await page.getByTestId('share-image').click()
