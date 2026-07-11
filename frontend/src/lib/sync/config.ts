@@ -1,8 +1,8 @@
 // Sync configuration — the backend base URL + device token the user enters in
 // Settings. Stored locally in the Dexie `meta` table (key `syncConfig`), NOT a
 // build-time env var: the PWA is a static export, so pointing at a backend must
-// never require a rebuild. Mirrors the meta read/write pattern in lib/auth/pin.ts
-// and lib/settings/profile.ts.
+// never require a rebuild. Follows the same meta read/write pattern as
+// lib/settings/profile.ts (a single keyed row via db.meta.get / db.meta.put).
 
 import { db } from '@/lib/db/schema'
 

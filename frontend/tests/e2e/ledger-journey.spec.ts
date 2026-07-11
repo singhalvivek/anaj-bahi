@@ -1,15 +1,15 @@
 import { test, expect, type Page } from '@playwright/test'
 
 /**
- * Phase-2 ledger E2E — PIN gate, payments/edit-lock, due list, search, and re-lock.
+ * Phase-2 ledger E2E — payments/edit-lock, due list, and search.
  *
  * Runs against the real static-export dev server (basePath /app) with real IndexedDB
- * in a fresh Chromium context (so the app opens on first-run PIN setup). No stubs.
+ * in a fresh Chromium context (the app opens straight to the bill list). No stubs.
  *
  * Shared testids driven here that are OWNED BY SLICE-B (payments / due / edit-lock):
  *   due-date-input, outstanding-balance, paid-total, fully-paid, edit-locked,
  *   payment-amount, payment-add, detail-edit, due-overdue, due-row.
- * PIN + search + re-lock testids are owned by THIS slice (slice-c).
+ * The search testids are owned by THIS slice (slice-c).
  *
  * Expected numbers (verified against lib/calc, same as the purchase journey):
  *   sacks 40, 40, 40.5, 39 → count 4, gross 159.5 kg
@@ -17,20 +17,9 @@ import { test, expect, type Page } from '@playwright/test'
  *   net = 155.905 kg;  amount = 1.55905 quintal × ₹2400 = ₹3741.72
  */
 
-const PIN = '1234'
-
 async function addSack(page: Page, value: string) {
   await page.getByTestId('sack-input').fill(value)
   await page.getByTestId('sack-add').click()
-}
-
-/** First-run PIN setup — unlocks the app (fresh IndexedDB each run). */
-async function setupPin(page: Page) {
-  await expect(page.getByTestId('lock-screen')).toBeVisible()
-  await page.getByTestId('pin-input').fill(PIN)
-  await page.getByTestId('pin-confirm').fill(PIN)
-  await page.getByTestId('pin-submit').click()
-  await expect(page.getByTestId('new-bill-btn')).toBeVisible()
 }
 
 /**
@@ -77,10 +66,10 @@ async function createWheatBill(
   await page.waitForURL(/\/app\/(\?.*)?$/)
 }
 
-test('trader records payments, tracks dues, searches, and re-locks', async ({ page }) => {
-  // --- Step 1: PIN gate first-run setup ---
+test('trader records payments, tracks dues, and searches', async ({ page }) => {
+  // --- Step 1: the app opens straight to the bill list (no access gate) ---
   await page.goto('./')
-  await setupPin(page)
+  await expect(page.getByTestId('new-bill-btn')).toBeVisible()
 
   // English so grain labels are deterministic.
   await page.getByTestId('lang-toggle-en').click()
@@ -150,14 +139,8 @@ test('trader records payments, tracks dues, searches, and re-locks', async ({ pa
   await expect(page.getByTestId('bill-card')).toHaveCount(2)
   await page.getByTestId('search-clear').click()
 
-  // --- Step 8: reload re-locks (in-memory unlocked flag); wrong PIN denied ---
+  // --- Step 8: a full reload persists the ledger (both bills survive) ---
   await page.reload()
-  await expect(page.getByTestId('lock-screen')).toBeVisible()
-  await page.getByTestId('pin-unlock').fill('9999')
-  await page.getByTestId('pin-unlock-submit').click()
-  await expect(page.getByTestId('pin-error')).toBeVisible()
-
-  await page.getByTestId('pin-unlock').fill(PIN)
-  await page.getByTestId('pin-unlock-submit').click()
   await expect(page.getByTestId('new-bill-btn')).toBeVisible()
+  await expect(page.getByTestId('bill-card')).toHaveCount(2)
 })

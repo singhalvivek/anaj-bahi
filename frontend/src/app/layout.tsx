@@ -4,7 +4,6 @@ import { I18nProvider } from '@/lib/i18n/context'
 import { TopBar } from '@/components/TopBar'
 import { BottomNav } from '@/components/BottomNav'
 import { SwRegister } from '@/components/SwRegister'
-import { PinGate } from '@/components/PinGate'
 
 // Base path for the static export; defaults to `/app` (local dev + E2E). The
 // Pages production build sets NEXT_PUBLIC_BASE_PATH (e.g. `/anaj-bahi`) so the
@@ -36,9 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SwRegister />
           <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-stone-50 shadow-sm">
             <TopBar />
-            <main className="flex flex-1 flex-col pb-24">
-              <PinGate>{children}</PinGate>
-            </main>
+            <main className="flex flex-1 flex-col pb-24">{children}</main>
             <BottomNav />
           </div>
         </I18nProvider>
