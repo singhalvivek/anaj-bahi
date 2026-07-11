@@ -6,7 +6,9 @@
 
 ## Storage Technology
 
-**IndexedDB via Dexie 4**, on the phone. No server database on the device. A single-user app on one device — no auth/tenant scoping. Reactive reads use `dexie-react-hooks` `useLiveQuery`. Phase 4 adds an optional **FastAPI + SQLite** backend as backup/restore (schema-light JSON-row storage — see [architecture.md § Phase-4 sync contract](architecture.md#phase-4-sync-contract)); the local IndexedDB store always remains the device source of truth.
+**Phases 1–5: IndexedDB via Dexie 4**, on the phone — a single-user store on one device, no auth/tenant scoping, reactive reads via `dexie-react-hooks` `useLiveQuery`. (The Phase-4 FastAPI + SQLite backup backend is **superseded** — see [architecture.md § Phase-4 sync contract](architecture.md#phase-4-sync-contract).)
+
+**Phases 6–9: Cloud Firestore** becomes the store — accessed **directly from the client**, with **IndexedDB offline persistence as the local cache/source-of-truth-on-device**, and data **scoped per business** (multi-tenant, multi-user shared ledger). Firebase Auth (phone/OTP) provides identity. The **entities, calc rules, and worked examples below are unchanged** — the same `Bill`/`Farmer`/`GrainType`/`Payment` shapes are stored as Firestore documents instead of Dexie rows. What is added is the **tenancy layer** (users, businesses, memberships, activity) and **per-action attribution snapshots**. See [§ Firebase multi-tenant data model](#firebase-multi-tenant-data-model-phases-69) below and the frozen [architecture.md § Firebase multi-tenant redesign](architecture.md#firebase-multi-tenant-redesign-phases-69--frozen-contracts).
 
 ## Entities
 
@@ -242,3 +244,40 @@ billTotal     = Σ (each line's amount)             // summary lines contribute 
 ## Compatibility Note
 
 - The app previously shipped a 4-digit PIN gate that stored a `pinHash` key in the `meta` table. That feature has been removed. Existing installs may carry an **orphaned `pinHash` meta row**, which is now simply **ignored** — no migration or cleanup is required, and no schema version bump is needed (the `meta` table itself is unchanged).
+
+---
+
+## Firebase multi-tenant data model (Phases 6–9)
+
+> The **frozen collection-path map, field lists, and access rules** live in [architecture.md § Firestore data model](architecture.md#firestore-data-model--frozen-collection-path-map) (one fact, one place). This section describes the entities in product terms and how the existing bill/farmer/grain entities move into the tenant scope.
+
+### New tenancy entities
+
+| Entity | Where it lives | What it is |
+|--------|----------------|------------|
+| **User** | `users/{uid}` | One signed-in person. Identity = **phone (E.164)**; carries their **display name**, their single `bizId`, and `role`. A brand-new phone has `bizId: null` until onboarding completes. |
+| **Business (tenant)** | `businesses/{bizId}` | An independent shop/trader. Holds the **business profile** (shop/trader/phone/address) and owns all the ledger sub-collections. Created self-serve by an Owner. |
+| **Membership** | `memberships/{phoneKey}` (top-level lookup) + `businesses/{bizId}/members/{uid}` (per-business roster) | Ties a **phone** to a business with a **role** (`owner`/`employee`) and **status** (`invited` → an owner added the phone but they haven't signed in yet; `active` → claimed). The top-level `memberships/{phoneKey}` is what an Employee's phone is **matched against** at first run ("did an owner add me?"). |
+| **Activity entry** | `businesses/{bizId}/activity/{id}` | Append-only audit record of **bill-create / payment / edit / delete**, each with an **actor snapshot** (uid + phone + name-at-the-time) and timestamp. **Owner-only read.** |
+
+- **Roles:** `employee` may create bills (sack + quick), record payments, edit/delete bills (respecting the edit-lock), and manage farmers & custom grain types. `owner` additionally edits the business profile, adds/removes employees (by phone + name), and reads the activity log. Multiple owners per business are allowed.
+- **One person → one business:** enforced by `users/{uid}.bizId` + a single `memberships/{phoneKey}`; the pure [membership-decision logic](architecture.md#membership-decision-logic--libauthmembershipts) refuses a second business for a phone that already has a membership.
+- **Name snapshots:** `displayName`/`createdByName`/`actorName`/`addedByName` are copied at write time, never a live join — attribution survives renames and removal.
+
+### The existing ledger entities, now business-scoped
+
+The **Farmer, GrainType, Bill (with embedded lines/deductions/payments), and all calc rules above are unchanged**. They simply move from Dexie tables to Firestore sub-collections under the business:
+
+| Was (Dexie, Phases 1–5) | Now (Firestore, Phase 7+) |
+|-------------------------|---------------------------|
+| `farmers` table | `businesses/{bizId}/farmers/{farmerId}` |
+| `grainTypes` table | `businesses/{bizId}/grainTypes/{grainTypeId}` |
+| `bills` table | `businesses/{bizId}/bills/{billId}` (id still `DDMMYY/xxxxx`) |
+| `meta.businessProfile` row | fields on `businesses/{bizId}` |
+
+- **Attribution field (Phase 8):** `Bill` and each `Payment` gain an **optional** `createdBy: { uid, phone, name }` snapshot. It is **optional/back-compat** — bills migrated from the local store (or created before Phase 8) simply have no `createdBy`, read as "unknown actor", and are otherwise identical. No breaking change to the frozen `Bill` shape.
+- **One-time migration (Phase 7):** on the first **owner** sign-in, the legacy Dexie `bills`/`farmers`/`grainTypes` are uploaded into the new business scope, guarded by a `users/{uid}.migratedAt` flag (runs **once, idempotently**; the local Dexie DB is kept read-only as the source, never wiped destructively).
+
+### Storage & offline
+
+Firestore's **IndexedDB offline persistence is the on-device store**: offline writes save + queue in the local cache and auto-sync on reconnect; reads are live (`onSnapshot`) and merge across devices last-write-wins per document. There is **no separate outbox** — the retired `lib/sync/*` outbox and the FastAPI backend are removed (Phase 7).

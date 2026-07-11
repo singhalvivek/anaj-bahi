@@ -1,6 +1,8 @@
-# Capability: Backup & Restore — DEFERRED (Phase 4)
+# Capability: Backup & Restore — ⚠️ SHIPPED (Phase 4) → REPLACED-BY-Firestore (Phase 7)
 
-_Target phase: **Phase 4** · slice-c (frontend) + slice-a (**FastAPI + SQLite** backend)._
+> **Superseded.** Device restore-from-cloud is **replaced by Firestore** (see [firestore-store](firestore-store.md)): signing in on any device with the same phone loads the business's shared ledger live — no explicit backup/restore step, no base-URL/token entry. The FastAPI + SQLite backend and `restoreFromCloud` are **removed in Phase 7**. Kept only as the Phases-1–5 record.
+
+_Original target phase: **Phase 4** · slice-c (frontend) + slice-a (**FastAPI + SQLite** backend)._
 
 Frozen wire + `lib/sync` contract: [architecture.md § Phase-4 sync contract](../architecture.md#phase-4-sync-contract).
 

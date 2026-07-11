@@ -1,6 +1,8 @@
-# Capability: Offline Queue — DEFERRED (Phase 4)
+# Capability: Offline Queue — ⚠️ SHIPPED (Phase 4) → REPLACED-BY-Firestore (Phase 7)
 
-_Target phase: **Phase 4** · slice-b (frontend `lib/sync`)._
+> **Superseded.** The custom outbox/pending-set is **replaced by Firestore's built-in offline persistence** (see [firestore-store](firestore-store.md)) — offline writes queue in the local IndexedDB cache and auto-sync on reconnect with no separate outbox. `frontend/src/lib/sync/*` is **removed in Phase 7**. Kept only as the Phases-1–5 record.
+
+_Original target phase: **Phase 4** · slice-b (frontend `lib/sync`)._
 
 Backend is **FastAPI + SQLite**; frozen `lib/sync` API: [architecture.md § Phase-4 sync contract](../architecture.md#phase-4-sync-contract).
 
