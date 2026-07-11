@@ -53,7 +53,7 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 
 **Purpose:** reopen a saved bill and see identical data.
 
-**Key elements:** farmer + place + phone; purchase date; bill id; each grain line rendered as its own section card, with its sacks shown in the **paper-ledger column layout** — **vertical columns of up to 10 sacks each, weight values only (NO sack numbers)**, column 1 = sacks 1–10 in entry order, column 2 = 11–20, etc. (`ceil(N/10)` columns per grain, max 100 sacks → max 10 columns), with a **per-column subtotal row** beneath each column. Because each grain is its own section card here, the columns **restart within each grain section** (grains do NOT share one continuous column track on this screen — unlike the receipt). It reuses the same pure column-grouping helper (`toColumns` / `columnSubtotals` in `frontend/src/components/receipt/columns.ts`, `ceil(N/10)` per grain, entry-order split) that the receipt uses, so the math/layout logic is shared and already unit-tested. Also shows deductions, net kg, line amount; **bill total**. Read-only view with an **Edit** action (Phase 1: edit re-opens the form pre-filled; Phase 2 locks it once a payment exists). `data-testid="detail-bill-total"`, list container `data-testid="detail-sack-list"`; each rendered weight cell `data-testid="detail-sack-row"` (one per actual sack weight — empty filler cells that pad a short column to the tallest column do NOT carry the testid, so a 4-sack grain yields exactly 4 `detail-sack-row` elements).
+**Key elements:** farmer + place + phone; purchase date; bill id; each grain line with its **full sack-by-sack list**, deductions, net kg, line amount; **bill total**. Read-only view with an **Edit** action (Phase 1: edit re-opens the form pre-filled; Phase 2 locks it once a payment exists). `data-testid="detail-bill-total"`, sack list `data-testid="detail-sack-list"`.
 **Coming-soon stubs:** **Payments** panel and **Share as image** button both rendered with the `ComingSoon` badge.
 
 ### Screen: Shared Image Receipt (Phase 3) — receipt-render
@@ -76,7 +76,7 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 - The image is intentionally **wider than the old flat numbered breakdown** (up to 10 columns) to match the paper ledger — expected, not a bug. The consolidated summary table sizes to its own content (single consistent width, no inner horizontal scroll) so the rasterized PNG never clips the last grain column.
 - Bilingual Hindi/English follows the current toggle; Indian-style ₹ formatting; all amounts and the total come from the calc engine (`lib/calc`) — the math is unchanged, only the image layout changed (weight column-grid on top, one consolidated summary table below).
 - The column split uses a **pure column-grouping helper** (`ceil(N/10)` per grain, entry-order split, per-column subtotals) so it is unit-testable independent of the DOM.
-- The on-screen **bill entry** view (the sack-by-sack entry list) is **unaffected** by this redesign — it intentionally keeps its `#index — weight` removable rows for editing. The **bill detail** view, however, now ALSO uses the column-grid layout (weights only, no numbers) consistent with the receipt (see [Bill Detail / Reopen](#screen-bill-detail--reopen-billidencoded-id--slice-c) above).
+- On-screen **bill entry** and **bill detail** views are **unaffected** by this redesign.
 
 ### Screen: Coming-soon stub (`/due`, `/settings` etc.)
 

@@ -25,7 +25,7 @@ Shows all saved bills newest-first on the home screen and lets the trader reopen
 ## Business Rules
 - List sorted by `createdAt` descending; each card shows id, farmer + place, date, grain chips, total.
 - Detail reads the id from the URL-encoded `?id=` query param (bill ids contain `/`).
-- Detail renders each grain line's sacks in the **paper-ledger column-grid layout** (vertical columns of up to 10 sacks, **weight values only, no sack numbers**, `ceil(N/10)` columns per grain with per-column subtotals, columns restarting within each grain section) using the shared, unit-tested column-grouping helper; plus deductions, per-line and bill totals.
+- Detail renders the full sack-by-sack breakdown per line, deductions, per-line and bill totals.
 - Empty state is friendly and bilingual; Payments/Share appear as labelled stubs on detail.
 
 ## Success Criteria
