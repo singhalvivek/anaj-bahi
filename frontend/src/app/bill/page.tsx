@@ -11,6 +11,7 @@ import { computeGrainLine, computeBillTotal, billBalance, todayIso } from '@/lib
 import type { StoredGrainLine } from '@/lib/db/schema'
 import { formatRupees, formatDate } from '@/components/format'
 import Receipt from '@/components/receipt/Receipt'
+import { toColumns, columnSubtotals, fmtNum } from '@/components/receipt/columns'
 import { shareReceiptImage, type ShareResult } from '@/lib/share/shareImage'
 import { getProfile } from '@/lib/settings/profile'
 
@@ -432,22 +433,56 @@ function DetailBody() {
               </span>
             </div>
 
-            {/* Sack-by-sack list */}
-            <ol
-              data-testid="detail-sack-list"
-              className="mt-3 flex flex-col divide-y divide-stone-100 rounded-lg border border-stone-100"
-            >
-              {line.sackWeights.map((w, si) => (
-                <li
-                  key={si}
-                  data-testid="detail-sack-row"
-                  className="flex items-center justify-between px-3 py-1.5 text-sm"
+            {/* Sack ledger — paper-ledger columns of up to 10 weights (no numbers),
+                columns side by side with a per-column subtotal row beneath. */}
+            {(() => {
+              const columns = toColumns(line.sackWeights, 10)
+              const subtotals = columnSubtotals(columns)
+              const colCount = Math.max(1, columns.length)
+              const maxRows = columns.reduce((m, col) => Math.max(m, col.length), 0)
+              return (
+                <div
+                  data-testid="detail-sack-list"
+                  className="mt-3 overflow-x-auto rounded-lg border border-stone-100"
                 >
-                  <span className="text-stone-400">#{si + 1}</span>
-                  <span className="font-medium text-stone-700">{w} kg</span>
-                </li>
-              ))}
-            </ol>
+                  <div className="flex w-max min-w-full">
+                    {(columns.length ? columns : [[]]).map((col, ci) => (
+                      <div
+                        key={ci}
+                        className={
+                          ci < colCount - 1 ? 'flex flex-col border-r border-stone-100' : 'flex flex-col'
+                        }
+                      >
+                        {Array.from({ length: maxRows }).map((_, ri) => {
+                          const w = col[ri]
+                          return (
+                            <div
+                              key={ri}
+                              className="flex h-8 min-w-[3.5rem] items-center justify-center border-b border-stone-100 px-3 text-sm"
+                            >
+                              {w === undefined ? (
+                                <span className="text-stone-200">·</span>
+                              ) : (
+                                <span
+                                  data-testid="detail-sack-row"
+                                  className="font-medium text-stone-700"
+                                >
+                                  {fmtNum(w)}
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })}
+                        {/* Per-column subtotal */}
+                        <div className="flex h-8 min-w-[3.5rem] items-center justify-center border-t-2 border-stone-300 px-3 text-sm font-bold text-stone-800">
+                          {fmtNum(subtotals[ci] ?? 0)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Deductions */}
             {line.deductions.length > 0 ? (
