@@ -103,21 +103,6 @@ export const EN = {
 
   // ---- Phase 2 ----
 
-  // PIN lock
-  'pin.setTitle': 'Set a 4-digit PIN',
-  'pin.confirmTitle': 'Confirm your PIN',
-  'pin.enterTitle': 'Enter your PIN',
-  'pin.input': 'PIN',
-  'pin.wrong': 'Wrong PIN — try again',
-  'pin.mismatch': 'PINs do not match',
-  'pin.set': 'Set PIN',
-  'pin.confirm': 'Confirm',
-  'pin.unlock': 'Unlock',
-  'pin.forgot': 'Forgot PIN?',
-  'pin.reset': 'Reset PIN',
-  'pin.resetWarn': 'Resetting the PIN keeps your data but removes the lock. Continue?',
-  'pin.hint': 'Enter 4 digits',
-
   // payments
   'payment.title': 'Payments',
   'payment.add': '+ Add payment',
@@ -315,21 +300,6 @@ export const HI: Record<TKey, string> = {
   'error.generic': 'कुछ गड़बड़ हो गई',
 
   // ---- Phase 2 ----
-
-  // PIN lock
-  'pin.setTitle': '4 अंकों का पिन बनाएँ',
-  'pin.confirmTitle': 'पिन दोबारा भरें',
-  'pin.enterTitle': 'अपना पिन भरें',
-  'pin.input': 'पिन',
-  'pin.wrong': 'ग़लत पिन — दोबारा कोशिश करें',
-  'pin.mismatch': 'पिन मेल नहीं खाते',
-  'pin.set': 'पिन सेट करें',
-  'pin.confirm': 'पुष्टि करें',
-  'pin.unlock': 'खोलें',
-  'pin.forgot': 'पिन भूल गए?',
-  'pin.reset': 'पिन रीसेट करें',
-  'pin.resetWarn': 'पिन रीसेट करने पर आपका डेटा सुरक्षित रहेगा, केवल ताला हटेगा। जारी रखें?',
-  'pin.hint': '4 अंक भरें',
 
   // payments
   'payment.title': 'भुगतान',

@@ -5,9 +5,9 @@ import { test, expect, type Page } from '@playwright/test'
  * download fallback).
  *
  * Runs against the real static-export dev server (basePath /app) with real
- * IndexedDB in a fresh Chromium context (each test → first-run PIN setup). Fully
- * offline: no server DB, no network, no external image service — the PNG is
- * rasterised client-side by html-to-image.
+ * IndexedDB in a fresh Chromium context (the app opens straight to the bill
+ * list). Fully offline: no server DB, no network, no external image service —
+ * the PNG is rasterised client-side by html-to-image.
  *
  * Two share paths are exercised so neither button is ever a dead end:
  *   1. Native share supported (stubbed) → shareReceiptImage hands a PNG File to
@@ -26,7 +26,6 @@ import { test, expect, type Page } from '@playwright/test'
  *   Bill total = ₹11700.00 + ₹3600.00 = ₹15300.00
  */
 
-const PIN = '1234'
 const EXPECTED_TOTAL = '15300.00'
 
 const WHEAT_WEIGHTS = ['50', '50', '50', '50', '50', '50', '50', '50', '50', '50', '45', '40']
@@ -38,15 +37,6 @@ const WHEAT_COL2_SUBTOTAL = '85' // sum of the remaining 2 wheat sacks (45 + 40)
 async function addSackTo(page: Page, lineIndex: number, value: string) {
   await page.getByTestId('sack-input').nth(lineIndex).fill(value)
   await page.getByTestId('sack-add').nth(lineIndex).click()
-}
-
-/** First-run PIN setup — unlocks the app (fresh IndexedDB each run). */
-async function setupPin(page: Page) {
-  await expect(page.getByTestId('lock-screen')).toBeVisible()
-  await page.getByTestId('pin-input').fill(PIN)
-  await page.getByTestId('pin-confirm').fill(PIN)
-  await page.getByTestId('pin-submit').click()
-  await expect(page.getByTestId('new-bill-btn')).toBeVisible()
 }
 
 /** Fill the business profile in Settings (the receipt header source). */
@@ -135,10 +125,9 @@ async function createThreeGrainBill(page: Page) {
   await page.waitForURL(/\/app\/(\?.*)?$/)
 }
 
-/** PIN → English → business profile → create the 3-grain bill → open it. */
+/** English → business profile → create the 3-grain bill → open it. */
 async function seedAndOpenThreeGrainBill(page: Page) {
   await page.goto('./')
-  await setupPin(page)
 
   await page.getByTestId('lang-toggle-en').click()
   await expect(page.getByTestId('new-bill-btn')).toContainText('New Bill')
@@ -157,12 +146,11 @@ async function seedAndOpenThreeGrainBill(page: Page) {
 }
 
 /**
- * PIN → English → business profile → create the multi-grain bill → open it.
+ * English → business profile → create the multi-grain bill → open it.
  * Leaves the page on the bill-detail screen with the real bill loaded.
  */
 async function seedAndOpenBill(page: Page) {
   await page.goto('./')
-  await setupPin(page)
 
   // English so the grain <select> option labels 'Wheat'/'Mustard' and
   // 'Place / Village' resolve.

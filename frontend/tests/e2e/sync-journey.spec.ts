@@ -18,7 +18,6 @@ import { test, expect, type Page } from '@playwright/test'
  *   → net 155.905 kg; amount 1.55905 quintal × ₹2400 = ₹3741.72.
  */
 
-const PIN = '1234'
 const BACKEND_URL = 'http://localhost:8000'
 const DEVICE_TOKEN = 'test-device-token'
 const EXPECTED_TOTAL = '3741.72'
@@ -27,15 +26,6 @@ const DEXIE_DB_NAME = 'anajbahi' // from src/lib/db/schema.ts (Dexie super('anaj
 async function addSack(page: Page, value: string) {
   await page.getByTestId('sack-input').fill(value)
   await page.getByTestId('sack-add').click()
-}
-
-/** First-run PIN setup — unlocks the app (fresh / cleared IndexedDB → set mode). */
-async function setupPin(page: Page) {
-  await expect(page.getByTestId('lock-screen')).toBeVisible()
-  await page.getByTestId('pin-input').fill(PIN)
-  await page.getByTestId('pin-confirm').fill(PIN)
-  await page.getByTestId('pin-submit').click()
-  await expect(page.getByTestId('new-bill-btn')).toBeVisible()
 }
 
 /** Switch to English so grain labels + 'Place / Village' + assertions are deterministic. */
@@ -101,8 +91,8 @@ async function createWheatBill(page: Page, farmer: string, place: string) {
 
 /**
  * Delete the local IndexedDB (simulate a brand-new phone) and re-open the app at
- * home. PIN + sync config lived in IndexedDB, so the app returns to first-run PIN
- * setup. The delete may be `blocked` while the page still holds the Dexie
+ * home. The bills, payments, business profile, and sync config all lived in
+ * IndexedDB, so the app reopens empty. The delete may be `blocked` while the page still holds the Dexie
  * connection — navigating away closes it and the (serialised) delete completes
  * before the fresh page reopens. We navigate to `./` (home) rather than reloading
  * in place so re-onboarding lands on the home screen.
@@ -125,9 +115,8 @@ test('backs up to the cloud and restores onto a new device', async ({ page }) =>
   // Auto-accept the restore confirm() dialog.
   page.on('dialog', (dialog) => dialog.accept())
 
-  // --- Original device: PIN, English, profile, sync config ---
+  // --- Original device: English, profile, sync config ---
   await page.goto('./')
-  await setupPin(page)
   await useEnglish(page)
 
   await saveBusinessProfile(page, 'Ramesh Traders', '9998887776')
@@ -156,7 +145,6 @@ test('backs up to the cloud and restores onto a new device', async ({ page }) =>
 
   // --- Simulate a brand-new phone: wipe local data, re-onboard ---
   await simulateNewDevice(page)
-  await setupPin(page)
   // Language pref lives in localStorage (survives the IDB wipe) — ensure English anyway.
   await useEnglish(page)
 
@@ -193,7 +181,6 @@ test('saves bills locally and reports a graceful error when the backend is unrea
   page,
 }) => {
   await page.goto('./')
-  await setupPin(page)
   await useEnglish(page)
 
   // Point sync at an unreachable backend (offline-first: writes must still work).
@@ -220,7 +207,6 @@ test('saves bills locally and reports a graceful error when the backend is unrea
 
 test('reports an auth error when the device token is wrong', async ({ page }) => {
   await page.goto('./')
-  await setupPin(page)
   await useEnglish(page)
 
   // Correct URL, WRONG token → the backend gates /sync/* with 401.

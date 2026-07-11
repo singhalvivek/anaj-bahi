@@ -72,17 +72,17 @@ Today the trader keeps purchases and payments in a paper ledger: slow to write, 
   6. Toggle **हिं / EN** top-right — all labels switch instantly and stay switched after reload.
   7. Confirm the labelled **"Coming soon"** stubs (Payments, Due list, Share, Sync, Search filters) look intentional, not broken.
 
-### Phase 2 — Security, payments & finding bills
+### Phase 2 — Payments & finding bills
 
-- **Goal:** Lock the app behind a 4-digit PIN, record partial payments against a bill and see paid-to-date + outstanding balance, see a due-soon/overdue list, enforce the edit-lock rule (a bill locks once any payment is recorded), and find bills fast via search/filter.
-- **Capabilities:** [pin-lock](capabilities/pin-lock.md), [payments](capabilities/payments.md), [due-list](capabilities/due-list.md), [bill-edit-lock](capabilities/bill-edit-lock.md), [search-filters](capabilities/search-filters.md).
+- **Goal:** Record partial payments against a bill and see paid-to-date + outstanding balance, see a due-soon/overdue list, enforce the edit-lock rule (a bill locks once any payment is recorded), and find bills fast via search/filter.
+- **Capabilities:** [payments](capabilities/payments.md), [due-list](capabilities/due-list.md), [bill-edit-lock](capabilities/bill-edit-lock.md), [search-filters](capabilities/search-filters.md).
 - **Independent slices (parallel build units):**
-  - `slice-a` (lib) — extend repo with payment CRUD, balance/aggregate helpers, due-status derivation, and search/filter queries against the Dexie indexes; PIN hashing + verify in `lib/auth`. **Deps: none** (extends Phase-1 lib; adds new files/functions).
+  - `slice-a` (lib) — extend repo with payment CRUD, balance/aggregate helpers, due-status derivation, and search/filter queries against the Dexie indexes. **Deps: none** (extends Phase-1 lib; adds new files/functions).
   - `slice-b` (UI — payments & due) — payment entry + payment history on bill detail, outstanding-balance display, due-date field on create, the due/overdue list screen. **Deps: slice-a**.
-  - `slice-c` (UI — PIN gate & search) — first-run PIN setup + lock screen gate mounted in layout, and the search/filter bar wired to the home list. **Deps: slice-a**.
-- **Key surfaces / files:** slice-a: `frontend/src/lib/db/repo.ts` (extend), `frontend/src/lib/db/queries.ts` (new), `frontend/src/lib/auth/pin.ts` (new) + tests; slice-b: `frontend/src/app/bill/page.tsx` (extend), `frontend/src/components/payments/*`, `frontend/src/app/due/page.tsx`; slice-c: `frontend/src/components/PinGate.tsx`, `frontend/src/app/layout.tsx` (mount gate), `frontend/src/components/SearchBar.tsx`, `frontend/src/app/page.tsx` (wire search).
-- **Gate command:** from `frontend/`: `pnpm test && pnpm build && pnpm test:e2e` (unit tests cover payment math, balance, due-status, PIN verify; E2E covers set-PIN→unlock→add-payment→see-balance→bill-locks→search-finds-bill).
-- **How the user tests it (handoff seed):** Launch → set a 4-digit PIN → reopen requires the PIN. Open a bill, add a ₹5000 payment dated today; see paid ₹5000 / outstanding = total − 5000; try to edit the bill — editing is now locked, but you can still add another payment. Set a due date on a new bill; see it in the Due list when near/overdue. Search "Ramesh" or "wheat" or a date and see the list filter.
+  - `slice-c` (UI — search) — the search/filter bar wired to the home list. **Deps: slice-a**.
+- **Key surfaces / files:** slice-a: `frontend/src/lib/db/repo.ts` (extend), `frontend/src/lib/db/queries.ts` (new) + tests; slice-b: `frontend/src/app/bill/page.tsx` (extend), `frontend/src/components/payments/*`, `frontend/src/app/due/page.tsx`; slice-c: `frontend/src/components/SearchBar.tsx`, `frontend/src/app/page.tsx` (wire search).
+- **Gate command:** from `frontend/`: `pnpm test && pnpm build && pnpm test:e2e` (unit tests cover payment math, balance, due-status; E2E covers add-payment→see-balance→bill-locks→search-finds-bill).
+- **How the user tests it (handoff seed):** Open a bill, add a ₹5000 payment dated today; see paid ₹5000 / outstanding = total − 5000; try to edit the bill — editing is now locked, but you can still add another payment. Set a due date on a new bill; see it in the Due list when near/overdue. Search "Ramesh" or "wheat" or a date and see the list filter.
 
 ### Phase 3 — Shareable image receipt (bilingual)
 

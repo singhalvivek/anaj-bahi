@@ -111,7 +111,7 @@ db.version(1).stores({
   farmers:    '&id, name, place, phone, createdAt',
   grainTypes: '&id, isCustom, createdAt',
   bills:      '&id, farmerId, purchaseDate, farmerName, farmerPlace, *grainTypeIds, createdAt',
-  meta:       '&key',   // settings: language pref is in localStorage; meta holds PIN hash (Phase 2), business profile (Phase 3), and sync config {baseUrl, token} + lastSyncedAt (Phase 4)
+  meta:       '&key',   // settings: language pref is in localStorage; meta holds the business profile (Phase 3) and sync config {baseUrl, token} + lastSyncedAt (Phase 4)
 })
 ```
 
@@ -199,5 +199,9 @@ billTotal     = Σ (each line's rounded amount)                // 2 decimal plac
 ## Sensitive Data
 
 - Farmer name/place/phone are mildly personal but low-risk; stored locally only in Phase 1.
-- The **4-digit PIN (Phase 2)** is stored **hashed** (salted SHA-256) in the `meta` table — never in plaintext. It gates app access; it is not a cryptographic data-at-rest guarantee.
+- The app has **no access gate / PIN** — it opens straight to the bill list.
 - Phase 4 adds a device token for sync; documented in `backend/.env.example`, never committed.
+
+## Compatibility Note
+
+- The app previously shipped a 4-digit PIN gate that stored a `pinHash` key in the `meta` table. That feature has been removed. Existing installs may carry an **orphaned `pinHash` meta row**, which is now simply **ignored** — no migration or cleanup is required, and no schema version bump is needed (the `meta` table itself is unchanged).
