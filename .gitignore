@@ -24,3 +24,8 @@ playwright-report/
 # local env files (Firebase web config, etc.) — never commit
 .env.local
 .env*.local
+
+# Firebase service-account key (E2E cleanup) — real secret, never commit
+serviceAccount*.json
+**/serviceAccount*.json
+firebase-service-account*.json

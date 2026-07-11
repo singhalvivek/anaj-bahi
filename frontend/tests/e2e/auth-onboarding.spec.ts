@@ -60,8 +60,9 @@ test('clean user: login → name → owner-creates-business → gated home; sess
   await expect(page.getByTestId('gated-home')).toBeVisible()
   await expect(page.getByTestId('home-user-name')).toContainText(DISPLAY_NAME)
   await expect(page.getByTestId('home-business-name')).toContainText(BIZ_NAME)
-  // Role badge — robust to translated text ("Owner") or a raw key ("home.role.owner").
-  await expect(page.getByTestId('home-role')).toContainText(/owner/i)
+  // Role badge — the app defaults to Hindi, so an owner reads "मालिक"; accept the
+  // English "Owner" or a raw key ("home.role.owner") too, so this holds in any language.
+  await expect(page.getByTestId('home-role')).toContainText(/owner|मालिक/i)
   await expect(page.getByTestId('sign-out-btn')).toBeVisible()
 
   // The labelled "shared cloud & roles — coming soon" banner (local store is intentional).
