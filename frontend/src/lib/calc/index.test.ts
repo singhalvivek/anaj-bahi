@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   resolveDeductionKg,
   computeGrainLine,
+  computeSummaryLine,
   computeBillTotal,
   roundRupees,
   computePaid,
@@ -248,6 +249,132 @@ describe('computeBillTotal', () => {
     const each = computeGrainLine(l).amount
     expect(each).toBe(111.06)
     expect(computeBillTotal([l, l])).toBe(222.12) // 111.06 + 111.06
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 5 — summary (quick-entry) lines: amount entered verbatim, dispatch
+// ---------------------------------------------------------------------------
+
+describe('computeSummaryLine — entered amount is authoritative', () => {
+  it('Example 5 — returns gross/net/deduction/sackCount from totals; amount verbatim', () => {
+    // Wheat, price 2400, totalWeight 159.5, deduction 3.595, sackCount 4, amount 3741.72
+    const totals = computeSummaryLine(2400, {
+      totalWeightKg: 159.5,
+      deductionKg: 3.595,
+      sackCount: 4,
+      amount: 3741.72,
+    })
+    expect(totals.grossWeightKg).toBeCloseTo(159.5, 10)
+    expect(totals.deductionKg).toBeCloseTo(3.595, 10)
+    expect(totals.netWeightKg).toBeCloseTo(155.905, 10)
+    expect(totals.sackCount).toBe(4)
+    expect(totals.amount).toBe(3741.72)
+  })
+
+  it('entered amount wins even when net × price would differ (NOT recomputed)', () => {
+    // Same figures as above but a deliberately mismatched entered amount 3700.
+    // net × price would be 155.905/100 × 2400 = 3741.72, but 3700 is returned.
+    const totals = computeSummaryLine(2400, {
+      totalWeightKg: 159.5,
+      deductionKg: 3.595,
+      sackCount: 4,
+      amount: 3700,
+    })
+    expect(totals.netWeightKg).toBeCloseTo(155.905, 10)
+    expect(totals.amount).toBe(3700)
+    // prove it is NOT the weight×price figure
+    expect(totals.amount).not.toBe(3741.72)
+  })
+
+  it('rounds the entered amount half-up to 2 dp', () => {
+    const totals = computeSummaryLine(2400, { totalWeightKg: 100, amount: 3741.715 })
+    expect(totals.amount).toBe(3741.72)
+  })
+
+  it('deductionKg defaults to 0 and sackCount to 0 when omitted', () => {
+    const totals = computeSummaryLine(2400, { totalWeightKg: 200, amount: 5000 })
+    expect(totals.deductionKg).toBe(0)
+    expect(totals.netWeightKg).toBe(200)
+    expect(totals.sackCount).toBe(0)
+    expect(totals.amount).toBe(5000)
+  })
+
+  it('net clamps at 0 when deduction exceeds gross (amount still verbatim)', () => {
+    const totals = computeSummaryLine(2400, {
+      totalWeightKg: 20,
+      deductionKg: 50,
+      amount: 123.45,
+    })
+    expect(totals.netWeightKg).toBe(0)
+    expect(totals.amount).toBe(123.45)
+  })
+})
+
+describe('computeGrainLine — dispatches on line.summary', () => {
+  it('routes a summary line to the entered amount (ignores sackWeights/deductions)', () => {
+    const totals = computeGrainLine({
+      pricePerQuintal: 2400,
+      sackWeights: [], // summary lines carry empty arrays
+      deductions: [],
+      summary: { totalWeightKg: 159.5, deductionKg: 3.595, sackCount: 4, amount: 3700 },
+    })
+    expect(totals.grossWeightKg).toBeCloseTo(159.5, 10)
+    expect(totals.netWeightKg).toBeCloseTo(155.905, 10)
+    expect(totals.sackCount).toBe(4)
+    expect(totals.amount).toBe(3700) // entered, not recomputed
+  })
+
+  it('a sacks line (no summary) is unchanged — takes the sacks path', () => {
+    const totals = computeGrainLine({
+      pricePerQuintal: 2400,
+      sackWeights: [40, 40, 40.5, 39],
+      deductions: [
+        { basis: 'per_sack_kg', value: 0.5 },
+        { basis: 'percent_gross', value: 1 },
+      ],
+    })
+    expect(totals.amount).toBe(3741.72)
+  })
+})
+
+describe('computeBillTotal — mixed sacks + summary bill', () => {
+  it('sums a sacks line amount and a summary line entered amount', () => {
+    const sacksLine: GrainLineInput = {
+      pricePerQuintal: 2400,
+      sackWeights: [40, 40, 40.5, 39],
+      deductions: [
+        { basis: 'per_sack_kg', value: 0.5 },
+        { basis: 'percent_gross', value: 1 },
+      ],
+    }
+    // computed amount 3741.72
+    const summaryLine: GrainLineInput = {
+      pricePerQuintal: 5600,
+      sackWeights: [],
+      deductions: [],
+      summary: { totalWeightKg: 60, amount: 3360.0 },
+    }
+    // entered amount 3360.00
+    expect(computeGrainLine(sacksLine).amount).toBe(3741.72)
+    expect(computeGrainLine(summaryLine).amount).toBe(3360.0)
+    expect(computeBillTotal([sacksLine, summaryLine])).toBe(7101.72)
+  })
+
+  it('a two-summary-line bill totals the entered amounts (₹3741.72 + ₹3360.00)', () => {
+    const a: GrainLineInput = {
+      pricePerQuintal: 2400,
+      sackWeights: [],
+      deductions: [],
+      summary: { totalWeightKg: 159.5, deductionKg: 3.595, sackCount: 4, amount: 3741.72 },
+    }
+    const b: GrainLineInput = {
+      pricePerQuintal: 5600,
+      sackWeights: [],
+      deductions: [],
+      summary: { totalWeightKg: 60, amount: 3360.0 },
+    }
+    expect(computeBillTotal([a, b])).toBe(7101.72)
   })
 })
 

@@ -237,6 +237,79 @@ export function useI18n(): { lang: Lang; setLang: (l: Lang) => void; t: (key: st
 
 ---
 
+## Quick-entry (summary) bills — frozen additions (Phase 5)
+
+> **Additive and back-compatible.** All Phase-1 signatures above are unchanged. Slices build against these frozen shapes in parallel (foundation slice-a implements them; slices b/c compile against them). See [quick-bill-entry](capabilities/quick-bill-entry.md) and [data.md § Summary grain lines](data.md#summary-grain-lines-quick-entry).
+
+### `lib/db/schema.ts` — extended types (optional fields only)
+
+```ts
+export type BillEntryMode = 'sacks' | 'summary'
+
+export interface GrainLineSummary {
+  totalWeightKg: number     // gross, one number (not per sack)
+  sackCount?: number        // optional integer count, no per-sack weights
+  deductionKg?: number      // optional single total-kg deduction
+  amount: number            // ₹ entered verbatim from the paper bill — AUTHORITATIVE
+}
+
+// StoredGrainLine gains ONE optional field; existing fields unchanged.
+export interface StoredGrainLine {
+  id: string
+  grainTypeId: string
+  pricePerQuintal: number
+  sackWeights: number[]        // 'summary' lines: []
+  deductions: StoredDeduction[] // 'summary' lines: []
+  summary?: GrainLineSummary   // present iff the bill is entryMode 'summary'
+}
+
+// Bill gains ONE optional field; absent → 'sacks' (back-compat).
+export interface Bill { /* …all Phase-1 fields… */ entryMode?: BillEntryMode }
+```
+
+`repo.createBill` / `updateBill` need **no logic change** — Dexie persists the extra optional fields verbatim, and the Phase-4 sync serialises the whole bill as JSON (backend stores it opaquely), so summary bills round-trip through IndexedDB and cloud sync with no backend change.
+
+### `lib/calc/index.ts` — additive dispatch (existing signatures unchanged)
+
+```ts
+export interface SummaryFigures {          // == GrainLineSummary, structurally
+  totalWeightKg: number
+  sackCount?: number
+  deductionKg?: number
+  amount: number
+}
+
+// GrainLineInput gains an OPTIONAL discriminant:
+export interface GrainLineInput {
+  pricePerQuintal: number
+  sackWeights: number[]
+  deductions: Deduction[]
+  summary?: SummaryFigures                 // present → summary line
+}
+
+// gross = totalWeightKg; deductionKg = deductionKg ?? 0; net = max(0, gross − ded);
+// sackCount = sackCount ?? 0; amount = roundRupees(amount)  // ENTERED, not net×price
+export function computeSummaryLine(pricePerQuintal: number, s: SummaryFigures): GrainLineTotals
+
+// computeGrainLine DISPATCHES: line.summary present → computeSummaryLine; else the
+// existing sacks path. computeBillTotal is UNCHANGED (Σ computeGrainLine(line).amount)
+// and thus summary-aware. Every existing consumer (home totals, detail, receipt,
+// billBalance → payments/outstanding/due) keeps working for BOTH modes with no
+// call-site change. Sacks bills only take the sacks path → provably unaffected.
+```
+
+### Routes & navigation
+
+| Route | Purpose | testids |
+|-------|---------|---------|
+| `/bills/choose` (new) | Two-option chooser; `+ New Bill` retargets here | `new-bill-choice`, `choice-fresh`→`/bills/new`, `choice-quick`→`/bills/quick` |
+| `/bills/new` (unchanged) | Fresh sack-by-sack form; still handles `?edit=<id>` for sacks bills | (existing) |
+| `/bills/quick` (new) | Summary quick-entry form; handles `?edit=<id>` for summary bills | `save-bill` (reused), `total-weight-input`, `amount-input`, `sack-count-input`, `deduction-kg-input` |
+
+Bill Detail's Edit link branches on `entryMode`: `'summary'` → `/bills/quick?edit=`, else `/bills/new?edit=`.
+
+---
+
 ## Phase-4 sync contract
 
 > **Frozen.** Backend (slice-a) and frontend (slices b/c) build against this in parallel — the wire shapes, auth, storage model, and the frontend `lib/sync` API below do not change during the Phase-4 build. Backend is **FastAPI + SQLite**; the local IndexedDB store always remains the device source of truth.

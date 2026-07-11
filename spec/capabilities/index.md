@@ -39,6 +39,12 @@ One file per capability. Phase 1 delivers the full local purchase-capture journe
 | Offline Queue | [offline-queue.md](offline-queue.md) |
 | Backup & Restore | [backup-restore.md](backup-restore.md) |
 
+## Phase 5 — Quick-entry (summary) bills
+
+| Capability | File | Slice |
+|-----------|------|-------|
+| Quick-Entry (Summary) Bills | [quick-bill-entry.md](quick-bill-entry.md) | a (data + calc) + b (chooser + quick form) + c (summary detail + receipt) |
+
 ## Notes
 
 - This project uses **no agent framework / no LLM** — see [../agent.md](../agent.md).

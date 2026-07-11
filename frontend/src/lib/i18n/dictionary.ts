@@ -200,6 +200,27 @@ export const EN = {
   'sync.error.config': 'Add the backend URL and device token first',
   'sync.synced': 'Backed up',
   'sync.offlineOk': 'Works offline — backup runs when you are online',
+
+  // ---- Phase 5 — quick-entry (summary) bills ----
+
+  // new-bill chooser (/bills/choose)
+  'choice.title': 'New Bill',
+  'choice.fresh.title': 'Fresh bill',
+  'choice.fresh.hint': 'Enter each sack weight',
+  'choice.quick.title': 'Quick entry',
+  'choice.quick.hint': 'From a bill already written on paper',
+
+  // quick-entry summary form (/bills/quick)
+  'quick.title': 'Quick Entry',
+  'quick.totalWeight': 'Total weight (kg)',
+  'quick.amount': 'Amount (₹)',
+  'quick.sackCount': 'Total sacks',
+  'quick.deductionKg': 'Deduction (kg)',
+  'quick.amountHint': 'Amount as written on the paper bill',
+
+  // quick-entry validation (in addition to the shared farmer/price rules)
+  'validation.totalWeightRequired': 'Enter a total weight greater than 0',
+  'validation.amountRequired': 'Enter an amount greater than 0',
 } as const
 
 export type TKey = keyof typeof EN
@@ -398,6 +419,27 @@ export const HI: Record<TKey, string> = {
   'sync.error.config': 'पहले बैकएंड यूआरएल और डिवाइस टोकन भरें',
   'sync.synced': 'बैकअप हो गया',
   'sync.offlineOk': 'ऑफ़लाइन काम करता है — ऑनलाइन होने पर बैकअप होता है',
+
+  // ---- Phase 5 — quick-entry (summary) bills ----
+
+  // new-bill chooser (/bills/choose)
+  'choice.title': 'नई बही',
+  'choice.fresh.title': 'पूरी बही',
+  'choice.fresh.hint': 'हर बोरे का वज़न भरें',
+  'choice.quick.title': 'झटपट प्रविष्टि',
+  'choice.quick.hint': 'काग़ज़ पर लिखी बही से',
+
+  // quick-entry summary form (/bills/quick)
+  'quick.title': 'झटपट बही',
+  'quick.totalWeight': 'कुल वज़न (कि.ग्रा.)',
+  'quick.amount': 'राशि (₹)',
+  'quick.sackCount': 'कुल बोरे',
+  'quick.deductionKg': 'कटौती (कि.ग्रा.)',
+  'quick.amountHint': 'काग़ज़ की बही में लिखी राशि',
+
+  // quick-entry validation (in addition to the shared farmer/price rules)
+  'validation.totalWeightRequired': '0 से बड़ा कुल वज़न भरें',
+  'validation.amountRequired': '0 से बड़ी राशि भरें',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

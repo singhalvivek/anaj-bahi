@@ -57,6 +57,11 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
   const kg = t('receipt.kg')
   const billTotal = computeBillTotal(bill.lines)
 
+  // Phase 5 — a summary (quick-entry) bill has no per-sack weights, so the top
+  // weight column-grid is omitted entirely; only the consolidated table renders.
+  // A bill with no entryMode reads as 'sacks' (back-compat) and is unchanged.
+  const isSummary = (bill.entryMode ?? 'sacks') === 'summary'
+
   // Pre-compute the column layout for every grain so the whole track can share a
   // single row height — subtotal rows then align across grains (a clean ledger).
   const blocks = bill.lines.map((line: StoredGrainLine, li: number) => {
@@ -87,6 +92,11 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
    * and the surrounding parentheses.
    */
   function deductionText(block: (typeof blocks)[number]): string {
+    // Summary lines carry a single resolved deduction kg (from computeGrainLine)
+    // with NO basis note — deductions[] is empty for them, so use the computed kg.
+    if (isSummary) {
+      return `${fmtNum(block.totals.deductionKg)} ${kg}`
+    }
     const { kg: deductionKg, note } = deductionSummary(block.line)
     const base = `${fmtNum(deductionKg)} ${kg}`
     return note ? `${base} (${note})` : base
@@ -191,7 +201,10 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
         ) : null}
       </div>
 
-      {/* Sack ledger — grains as horizontal blocks over one continuous column track */}
+      {/* Sack ledger — grains as horizontal blocks over one continuous column track.
+          Omitted for a summary bill (no per-sack weights): the consolidated table
+          below carries the totals-only figures. */}
+      {!isSummary ? (
       <div style={{ padding: '12px 0' }}>
         <div style={{ fontSize: '11px', color: COLORS.faint, marginBottom: '6px' }}>
           {t('receipt.sacks')}
@@ -299,6 +312,7 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
           })}
         </div>
       </div>
+      ) : null}
 
       {/* Consolidated summary — grains as COLUMNS, line items as ROWS.
           Sized to its own content (NO inner overflow/scroll) so the whole receipt

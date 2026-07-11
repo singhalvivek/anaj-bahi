@@ -61,6 +61,7 @@ Belongs to one farmer; a purchase date; 1..N grain lines. Farmer name/place and 
 | lines | StoredGrainLine[] | yes | Embedded, ordered; ≥1 |
 | dueDate | string | no | ISO `yyyy-mm-dd` — **Phase 2** |
 | payments | Payment[] | yes | Embedded; **empty `[]` in Phase 1** (Phase 2 populates) |
+| entryMode | `'sacks' \| 'summary'` | no | **Phase 5** — how the bill was captured. **Absent → `'sacks'`** (back-compat). See [Summary grain lines](#summary-grain-lines-quick-entry). |
 | createdAt | number | yes | Creation time |
 | updatedAt | number | yes | Last edit time |
 
@@ -70,9 +71,27 @@ Belongs to one farmer; a purchase date; 1..N grain lines. Farmer name/place and 
 |-------|------|----------|-------------|
 | id | string (uuid) | yes | Line id (stable for editing) |
 | grainTypeId | string | yes | FK → GrainType.id |
-| pricePerQuintal | number | yes | ₹ per 100 kg |
-| sackWeights | number[] | yes | Individual sack weights (kg), **in entry order**; may be decimal |
-| deductions | StoredDeduction[] | yes | Zero or more; applied additively |
+| pricePerQuintal | number | yes | ₹ per 100 kg (rate; **not** used to compute a summary line's amount) |
+| sackWeights | number[] | yes | Individual sack weights (kg), **in entry order**; may be decimal. **Summary lines: `[]`.** |
+| deductions | StoredDeduction[] | yes | Zero or more; applied additively. **Summary lines: `[]`.** |
+| summary | GrainLineSummary | no | **Phase 5** — present iff the bill is `entryMode: 'summary'`; the per-line discriminant. See below. |
+
+### Summary grain lines (quick-entry)  — **Phase 5**
+
+A **summary** grain line transcribes a paper bill: it stores the entered figures directly and carries **no per-sack weights and no multi-basis deductions**. Its authoritative money `amount` is entered verbatim and **never recomputed**.
+
+**Embedded: `GrainLineSummary`** (present only on summary lines):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| totalWeightKg | number | yes | Gross weight (kg), entered as ONE number (not per sack); > 0 |
+| sackCount | number (int) | no | Count of sacks only; no per-sack weights |
+| deductionKg | number | no | Single total-kg deduction (NOT the multi-basis editor) |
+| amount | number (₹) | yes | Money amount taken verbatim from the paper bill — **authoritative, never recomputed**; > 0 |
+
+**Representation decision:** the discriminator is the bill-level `entryMode` plus the presence of `summary` on the line. Summary lines keep `sackWeights: []` and `deductions: []` (empty, never read) rather than omitting them, so `StoredGrainLine`'s existing (required) fields stay non-optional and **every existing reader/serializer keeps working unchanged**. The alternative — a discriminated union that omits the arrays — was rejected because it would force `sackWeights`/`deductions` optional and add guard-rails across every existing consumer (detail, receipt, sync), increasing churn and risk to the proven sacks path. A `'sacks'` line's stored shape is **byte-for-byte identical to before** (no `summary` key).
+
+**Back-compat read rule:** always read the mode as `bill.entryMode ?? 'sacks'`. Bills created before Phase 5 (no `entryMode`, no `summary`) read as `'sacks'` and render/total exactly as today.
 
 ### Embedded: SackWeight
 
@@ -122,6 +141,7 @@ db.version(1).stores({
   - by **place**: `farmerPlace` (`startsWithIgnoreCase`).
   - by **grain type**: `*grainTypeIds` (multiEntry — a bill matches if any line uses that grain).
 - Payments/dueDate are embedded on the bill (no separate table) — fine for a single-user local store; Phase 2 reads them by loading the bill.
+- **Phase 5 (`entryMode` + line `summary`) needs no schema/version bump:** neither field is indexed (grain search still uses the existing `*grainTypeIds`), and Dexie stores whatever object is `put`, so the new optional fields ride along with no migration. `createBill`/`updateBill` are unchanged — only the `Bill`/`StoredGrainLine` TypeScript interfaces gain the optional fields.
 
 ## Bill-ID Generation Rule
 
@@ -188,6 +208,23 @@ billTotal     = Σ (each line's rounded amount)                // 2 decimal plac
 - `billTotal = 3741.72 + 3360.00 = ₹7101.72`.
 
 **Example 4 — clamp guard:** if deductions exceed gross (misconfiguration), `netWeightKg = max(0, …) = 0` and `amount = ₹0.00` (never negative). Unit-tested.
+
+### Summary-line calc (quick-entry)  — **Phase 5**
+
+For a **summary** grain line the engine does **not** sum sacks and does **not** recompute the amount:
+
+```
+grossWeightKg = summary.totalWeightKg
+deductionKg   = summary.deductionKg ?? 0
+netWeightKg   = max(0, grossWeightKg − deductionKg)
+sackCount     = summary.sackCount ?? 0
+amount        = roundRupees(summary.amount)        // ENTERED verbatim — NOT netQuintals × price
+billTotal     = Σ (each line's amount)             // summary lines contribute their entered amount
+```
+
+`computeGrainLine` **dispatches** on `line.summary`: present → the summary rule above; absent → the unchanged sacks rule. `computeBillTotal` is unchanged (Σ `computeGrainLine(line).amount`) and is therefore summary-aware transitively. The sacks path only runs when `summary` is absent, so **sacks bills are provably unaffected**. `pricePerQuintal` is still stored and shown as the rate, but a summary line's amount ignores it.
+
+**Example 5 — summary line (amount authoritative):** Wheat, price ₹2400/quintal, `totalWeightKg 159.5`, `deductionKg 3.595`, `sackCount 4`, entered `amount 3741.72`. → gross 159.5, deduction 3.595, net 155.905, sackCount 4, **amount ₹3741.72 (returned as entered, not derived)**. A deliberately mismatched entered amount (e.g. `amount 3700` on the same figures) is still returned as **₹3700.00** — the entered value wins. Unit-tested.
 
 ## Data Lifecycle
 

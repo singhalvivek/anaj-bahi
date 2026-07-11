@@ -2,6 +2,8 @@
 
 _Phase 1 · slice-b (UI) + slice-a (data)_
 
+> **Phase 5:** this is the **Fresh** (sack-by-sack) way to create a bill. `+ New Bill` now opens a chooser; **Fresh** lands in this unchanged `/bills/new` form. The second way — transcribing a paper bill's summary totals — is [quick-bill-entry](quick-bill-entry.md). This capability and its form are unaffected by that addition.
+
 ## What It Does
 Lets the trader create and save a complete purchase bill — one farmer, a purchase date, an auto-generated `DDMMYY/xxxxx` id, and one or more grain lines — to local IndexedDB, offline.
 

@@ -109,7 +109,7 @@ export default function HomePage() {
 
       {/* Primary action — large, thumb-reachable above the bottom nav. */}
       <Link
-        href="/bills/new"
+        href="/bills/choose"
         data-testid="new-bill-btn"
         className="fixed inset-x-0 bottom-16 z-10 mx-auto flex w-full max-w-md justify-center px-4"
       >

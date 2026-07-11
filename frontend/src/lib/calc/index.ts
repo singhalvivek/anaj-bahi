@@ -13,10 +13,23 @@ export interface Deduction {
   value: number
 }
 
+/**
+ * Phase 5 — the figures transcribed for a summary (quick-entry) grain line.
+ * Structurally equal to `GrainLineSummary` in lib/db/schema. Its `amount` is
+ * entered verbatim from the paper bill and is authoritative — never recomputed.
+ */
+export interface SummaryFigures {
+  totalWeightKg: number // gross, one number (not per sack)
+  sackCount?: number // optional integer count
+  deductionKg?: number // optional single total-kg deduction
+  amount: number // ₹ entered verbatim — AUTHORITATIVE
+}
+
 export interface GrainLineInput {
   pricePerQuintal: number // ₹ per 100 kg
   sackWeights: number[] // kg, in entry order (may be decimal)
   deductions: Deduction[] // zero or more, applied additively
+  summary?: SummaryFigures // Phase 5 — present → summary line (dispatch discriminant)
 }
 
 export interface GrainLineTotals {
@@ -77,10 +90,38 @@ export function resolveDeductionKg(
 }
 
 /**
+ * Phase 5 — compute the totals for a summary (quick-entry) grain line.
+ * The engine does NOT sum sacks and does NOT recompute the amount:
+ *   grossWeightKg = totalWeightKg; deductionKg = deductionKg ?? 0;
+ *   netWeightKg   = max(0, gross − deduction); sackCount = sackCount ?? 0;
+ *   amount        = roundRupees(entered amount)  — the ENTERED figure, verbatim,
+ *                   NOT netQuintals × price. The entered value always wins.
+ * `pricePerQuintal` is retained/shown as the rate but never drives the amount.
+ */
+export function computeSummaryLine(
+  pricePerQuintal: number,
+  s: SummaryFigures,
+): GrainLineTotals {
+  void pricePerQuintal // rate is displayed, but a summary line's amount ignores it
+  const grossWeightKg = s.totalWeightKg
+  const deductionKg = s.deductionKg ?? 0
+  const netWeightKg = Math.max(0, grossWeightKg - deductionKg)
+  const sackCount = s.sackCount ?? 0
+  const amount = roundRupees(s.amount)
+  return { sackCount, grossWeightKg, deductionKg, netWeightKg, amount }
+}
+
+/**
  * Compute the full set of totals for one grain line.
+ * Dispatches on `line.summary`: present → the summary rule (entered amount is
+ * authoritative); absent → the unchanged sacks rule below. The sacks path only
+ * ever runs when `summary` is absent, so sacks bills are provably unaffected.
  * Weights are kept exactly as entered (not rounded); only the final ₹ amount is rounded.
  */
 export function computeGrainLine(line: GrainLineInput): GrainLineTotals {
+  if (line.summary) {
+    return computeSummaryLine(line.pricePerQuintal, line.summary)
+  }
   const sackCount = line.sackWeights.length
   const grossWeightKg = line.sackWeights.reduce((sum, w) => sum + w, 0)
   const deductionKg = line.deductions.reduce(

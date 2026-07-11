@@ -25,12 +25,26 @@ export interface StoredDeduction {
   value: number
 }
 
+// Phase 5 — how a bill was captured. Absent on a stored bill ⇒ read as 'sacks'.
+export type BillEntryMode = 'sacks' | 'summary'
+
+// Phase 5 — present only on a summary (quick-entry) grain line. The per-line
+// discriminant. Its `amount` is entered verbatim from the paper bill and is
+// authoritative — never recomputed from weight × price.
+export interface GrainLineSummary {
+  totalWeightKg: number // gross, one number (not per sack); > 0
+  sackCount?: number // optional integer count, no per-sack weights
+  deductionKg?: number // optional single total-kg deduction
+  amount: number // ₹ entered verbatim from the paper bill — AUTHORITATIVE; > 0
+}
+
 export interface StoredGrainLine {
   id: string
   grainTypeId: string
   pricePerQuintal: number
-  sackWeights: number[]
-  deductions: StoredDeduction[]
+  sackWeights: number[] // 'summary' lines: [] (empty, never read)
+  deductions: StoredDeduction[] // 'summary' lines: [] (empty, never read)
+  summary?: GrainLineSummary // Phase 5 — present iff the bill is entryMode 'summary'
 }
 
 // Phase 2 — modelled now, populated later.
@@ -52,6 +66,7 @@ export interface Bill {
   lines: StoredGrainLine[]
   dueDate?: string // Phase 2
   payments: Payment[] // Phase 2 (empty [] in Phase 1)
+  entryMode?: BillEntryMode // Phase 5 — absent ⇒ 'sacks' (back-compat)
   createdAt: number
   updatedAt: number
 }
