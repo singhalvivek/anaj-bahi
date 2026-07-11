@@ -27,7 +27,38 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 - **`data-testid="new-bill-btn"`**, list container **`data-testid="bill-list"`**, each card **`data-testid="bill-card"`**.
 - **Coming-soon stubs (labelled):** a disabled **Search / Filter** bar at the top with a "coming soon" pill; a **Due** and **Share** entry showing the `ComingSoon` badge. Each stub uses `data-testid="stub-<name>"` and the visible text "Coming soon / जल्द आ रहा है".
 
-**Actions:** tap **+ New Bill** → `/bills/new`; tap a card → `/bill?id=<encoded id>`.
+**Actions:** tap **+ New Bill** → `/bills/choose` (the Phase-5 chooser; was `/bills/new`); tap a card → `/bill?id=<encoded id>`. Card totals use `computeBillTotal`, which is summary-aware, so a summary bill's card shows the sum of its entered amounts with no code change.
+
+### Screen: New Bill Chooser (`/bills/choose`) — slice-b _(Phase 5)_
+
+**Purpose:** let the trader pick how to create a bill. `+ New Bill` (`new-bill-btn`) now routes here instead of straight to the fresh form.
+
+**Key elements:**
+- Two large, thumb-reachable, bilingual choice cards (≥56 px tall, big touch targets), stacked vertically in a container `data-testid="new-bill-choice"`:
+  1. **Fresh bill** (`data-testid="choice-fresh"`, a `Link` to `/bills/new`) — title + one-line hint "Enter each sack weight / हर बोरे का वज़न भरें". Lands in **exactly today's unchanged sack form**.
+  2. **Quick entry** (`data-testid="choice-quick"`, a `Link` to `/bills/quick`) — title + one-line hint "From a bill already written on paper / काग़ज़ पर लिखी बही से". Opens the summary form.
+- Back link to home. No stubs; both options are live.
+
+### Screen: Quick-Entry Bill (`/bills/quick`) — slice-b _(Phase 5)_
+
+**Purpose:** transcribe a summary bill already written on paper — per-grain totals only, entered money amount authoritative. See [quick-bill-entry](capabilities/quick-bill-entry.md).
+
+**Layout (top → bottom, single scroll) — mirrors the fresh form's bill-level chrome:**
+1. **Farmer picker** (`FarmerPicker`, reused) — name **required**, place/village **required**, phone optional; same autocomplete. `data-testid="farmer-input"`.
+2. **Purchase date** (defaults today, required) `data-testid="purchase-date"`; **Due date** (optional) `data-testid="due-date-input"`.
+3. **Bill id preview** — read-only `DDMMYY/xxxxx`, finalised on save (same scheme as fresh).
+4. **Grain lines** — one card per line, **≥1**, `+ Add another grain` (`grain.addAnother`). Per line (`QuickGrainLineEditor`):
+   - **Grain type** selector (seeded + add-custom, reused) — **required**. `data-testid="grain-type-select"`.
+   - **Price per quintal (₹)** — **required, > 0**. `data-testid="price-input"`.
+   - **Total weight (kg)** — **required, > 0**; ONE number (gross), `inputmode="decimal"`. `data-testid="total-weight-input"`.
+   - **Amount (₹)** — **required, > 0**; entered directly, verbatim from the paper bill; `inputmode="decimal"`. `data-testid="amount-input"`. (Authoritative — never recomputed.)
+   - **Total sacks** — optional integer, `inputmode="numeric"`, **rendered WITHOUT any "(optional)" label** (just field + placeholder). `data-testid="sack-count-input"`.
+   - **Deduction (kg)** — optional single number, `inputmode="decimal"`, **rendered WITHOUT any "(optional)" label**. `data-testid="deduction-kg-input"`. (NOT the multi-basis deduction editor — one total-kg figure.)
+   - **Remove line** when > 1 line.
+5. **Live bill total** (`LiveTotals`, reused) — at the end of the form in normal flow (NOT sticky) = **Σ the entered line Amounts**. `data-testid="bill-total"`.
+6. **Save** (`data-testid="save-bill"`, reused) at the end of the form. **Enabled only when** farmer name + place + purchase date are set AND every line has grainType + price > 0 + total weight > 0 + amount > 0; disabled otherwise with an inline bilingual hint (same pattern as the fresh form). `sackCount`/`deductionKg` are never required.
+
+**On save:** assemble a `Bill` with `entryMode: 'summary'`, each line carrying `summary: { totalWeightKg, sackCount?, deductionKg?, amount }` (and `sackWeights: []`, `deductions: []`), call `repo.createBill`, navigate to `/`. In edit mode (`/bills/quick?edit=<id>`) it loads the summary bill, pre-fills, and `updateBill` (respecting the edit-lock). No network.
 
 ### Screen: New Bill (`/bills/new`) — slice-b
 
@@ -53,7 +84,11 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 
 **Purpose:** reopen a saved bill and see identical data.
 
-**Key elements:** farmer + place + phone; purchase date; bill id; each grain line rendered as its own section card, with its sacks shown in the **paper-ledger column layout** — **vertical columns of up to 10 sacks each, weight values only (NO sack numbers)**, column 1 = sacks 1–10 in entry order, column 2 = 11–20, etc. (`ceil(N/10)` columns per grain, max 100 sacks → max 10 columns), with a **per-column subtotal row** beneath each column. Because each grain is its own section card here, the columns **restart within each grain section** (grains do NOT share one continuous column track on this screen — unlike the receipt). It reuses the same pure column-grouping helper (`toColumns` / `columnSubtotals` in `frontend/src/components/receipt/columns.ts`, `ceil(N/10)` per grain, entry-order split) that the receipt uses, so the math/layout logic is shared and already unit-tested. Also shows deductions, net kg, line amount; **bill total**. Read-only view with an **Edit** action (Phase 1: edit re-opens the form pre-filled; Phase 2 locks it once a payment exists). `data-testid="detail-bill-total"`, list container `data-testid="detail-sack-list"`; each rendered weight cell `data-testid="detail-sack-row"` (one per actual sack weight — empty filler cells that pad a short column to the tallest column do NOT carry the testid, so a 4-sack grain yields exactly 4 `detail-sack-row` elements).
+**Branch on `entryMode` (`bill.entryMode ?? 'sacks'`) — Phase 5:**
+- **`'summary'` bill** → render each grain **totals-only**: grain name, price, **total weight**, **sacks** (only if `summary.sackCount` given), **deduction kg** (only if `summary.deductionKg` given), and the **entered amount** — plus the bill total. **No sack column-grid.** Container `data-testid="detail-summary-line"` per grain; `detail-bill-total` reused. Edit link points to `/bills/quick?edit=<encoded id>`.
+- **`'sacks'` bill** → renders **exactly as today** (the paper-ledger column-grid below). Edit link points to `/bills/new?edit=<encoded id>`. Provably unchanged.
+
+**Key elements (sacks bill):** farmer + place + phone; purchase date; bill id; each grain line rendered as its own section card, with its sacks shown in the **paper-ledger column layout** — **vertical columns of up to 10 sacks each, weight values only (NO sack numbers)**, column 1 = sacks 1–10 in entry order, column 2 = 11–20, etc. (`ceil(N/10)` columns per grain, max 100 sacks → max 10 columns), with a **per-column subtotal row** beneath each column. Because each grain is its own section card here, the columns **restart within each grain section** (grains do NOT share one continuous column track on this screen — unlike the receipt). It reuses the same pure column-grouping helper (`toColumns` / `columnSubtotals` in `frontend/src/components/receipt/columns.ts`, `ceil(N/10)` per grain, entry-order split) that the receipt uses, so the math/layout logic is shared and already unit-tested. Also shows deductions, net kg, line amount; **bill total**. Read-only view with an **Edit** action (Phase 1: edit re-opens the form pre-filled; Phase 2 locks it once a payment exists). `data-testid="detail-bill-total"`, list container `data-testid="detail-sack-list"`; each rendered weight cell `data-testid="detail-sack-row"` (one per actual sack weight — empty filler cells that pad a short column to the tallest column do NOT carry the testid, so a 4-sack grain yields exactly 4 `detail-sack-row` elements).
 **Coming-soon stubs:** **Payments** panel and **Share as image** button both rendered with the `ComingSoon` badge.
 
 ### Screen: Shared Image Receipt (Phase 3) — receipt-render
@@ -71,6 +106,8 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
    - **Gross weight (kg)**, **Deduction** (resolved kg + compact basis in one cell, e.g. `3.595 kg (0.5/sack + 1%)`), **Net weight** (kg only — the quintal unit appears only on the Rate row), **Rate (₹/quintal)**, **Amount (₹)**.
    - **Sizing:** the table is sized to its own content (**width `max-content`, `min-width: 100%`, no inner horizontal scroll**) so the whole receipt is one consistent width and the rasterized image never crops the last grain column. Any on-screen horizontal scrolling of a wide receipt is owned by the **outer preview container**, not the table.
 4. **Bill grand total** ₹ = sum of the grains' Amount cells, shown as a trailing **"Total" column** or a **bill-total line** under the table.
+
+**Summary bill (Phase 5):** a bill with `entryMode: 'summary'` **omits the top weight column-grid entirely** (there are no per-sack weights). It renders the business header + identity + the **consolidated summary table only**, sourced from the summary figures: gross = `totalWeightKg`, deduction = `deductionKg ?? 0` (**resolved kg only, no basis note**), net = gross − deduction, rate = price, amount = the **entered** amount; bill total = Σ entered amounts. All these come from `computeGrainLine` (summary-aware), so the table needs no arithmetic change — only the grid is hidden. Sharing/PNG capture is unchanged and still works. A `'sacks'` bill's receipt is entirely unchanged.
 
 **Notes:**
 - The image is intentionally **wider than the old flat numbered breakdown** (up to 10 columns) to match the paper ledger — expected, not a bug. The consolidated summary table sizes to its own content (single consistent width, no inner horizontal scroll) so the rasterized PNG never clips the last grain column.

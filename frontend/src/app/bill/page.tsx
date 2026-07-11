@@ -394,6 +394,14 @@ function DetailBody() {
   // purchase details are frozen and only payments may be added.
   const locked = bill.payments.length > 0
 
+  // Phase 5 — a bill with no entryMode reads as 'sacks' (back-compat). A summary
+  // bill renders totals-only lines (no sack column-grid) and edits via the quick
+  // form; a sacks bill is provably unchanged (renders the paper-ledger grid).
+  const isSummary = (bill.entryMode ?? 'sacks') === 'summary'
+  const editHref = isSummary
+    ? `/bills/quick?edit=${encodeURIComponent(bill.id)}`
+    : `/bills/new?edit=${encodeURIComponent(bill.id)}`
+
   return (
     <div className="flex flex-col gap-4 px-4 py-4">
       {/* Farmer + bill meta */}
@@ -418,9 +426,64 @@ function DetailBody() {
         </div>
       </section>
 
-      {/* Grain lines with full sack-by-sack breakdown */}
+      {/* Grain lines. A summary (quick-entry) bill renders TOTALS-ONLY per grain
+          (no sack column-grid); a sacks bill renders the paper-ledger grid below,
+          byte-for-byte unchanged. All figures come from computeGrainLine. */}
       {bill.lines.map((line: StoredGrainLine, li: number) => {
         const totals = computeGrainLine(line)
+
+        // --- Summary bill: totals-only line, no sack grid ---
+        if (isSummary && line.summary) {
+          const s = line.summary
+          return (
+            <section
+              key={line.id ?? li}
+              data-testid="detail-summary-line"
+              className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-stone-800">{grainName(line.grainTypeId)}</h3>
+                <span className="text-sm text-stone-500">
+                  {t('grain.price')}: {formatRupees(line.pricePerQuintal)}
+                </span>
+              </div>
+
+              <dl className="mt-3 grid grid-cols-2 gap-y-1 text-sm">
+                {/* Total weight (label carries the kg unit) */}
+                <dt className="text-stone-400">{t('quick.totalWeight')}</dt>
+                <dd className="text-right text-stone-700">{fmtNum(totals.grossWeightKg)}</dd>
+
+                {/* Total sacks — only when the trader entered a count */}
+                {s.sackCount != null ? (
+                  <>
+                    <dt className="text-stone-400">{t('quick.sackCount')}</dt>
+                    <dd className="text-right text-stone-700">{totals.sackCount}</dd>
+                  </>
+                ) : null}
+
+                {/* Deduction kg — only when the trader entered one (label carries kg) */}
+                {s.deductionKg != null ? (
+                  <>
+                    <dt className="text-stone-400">{t('quick.deductionKg')}</dt>
+                    <dd className="text-right text-stone-700">{fmtNum(totals.deductionKg)}</dd>
+                  </>
+                ) : null}
+
+                <dt className="font-medium text-stone-600">{t('totals.net')}</dt>
+                <dd className="text-right font-medium text-stone-800">
+                  {fmtNum(totals.netWeightKg)} kg
+                </dd>
+
+                <dt className="font-medium text-stone-600">{t('totals.lineAmount')}</dt>
+                <dd className="text-right font-semibold text-green-700">
+                  {formatRupees(totals.amount)}
+                </dd>
+              </dl>
+            </section>
+          )
+        }
+
+        // --- Sacks bill: the existing paper-ledger grid (UNCHANGED) ---
         return (
           <section
             key={line.id ?? li}
@@ -553,7 +616,7 @@ function DetailBody() {
         </>
       ) : (
         <Link
-          href={`/bills/new?edit=${encodeURIComponent(bill.id)}`}
+          href={editHref}
           data-testid="detail-edit"
           className="flex h-12 items-center justify-center rounded-full border border-green-700 text-sm font-semibold text-green-700 active:bg-green-50"
         >
