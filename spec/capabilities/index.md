@@ -14,11 +14,10 @@ One file per capability. Phase 1 delivers the full local purchase-capture journe
 | Bilingual Hindi/English Toggle | [i18n-toggle.md](i18n-toggle.md) | a + c |
 | Installable PWA Shell | [pwa-shell.md](pwa-shell.md) | c |
 
-## Phase 2 — Security, payments & finding bills (deferred)
+## Phase 2 — Payments & finding bills (deferred)
 
 | Capability | File |
 |-----------|------|
-| PIN Lock | [pin-lock.md](pin-lock.md) |
 | Payments & Outstanding Balance | [payments.md](payments.md) |
 | Due-Soon / Overdue List | [due-list.md](due-list.md) |
 | Bill Edit-Lock Rule | [bill-edit-lock.md](bill-edit-lock.md) |

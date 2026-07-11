@@ -1,6 +1,6 @@
 // Business profile — the trader's receipt header (shop/trader name + phone + address).
 // Persisted as a single row in the Dexie `meta` table under key `businessProfile`
-// (mirrors the meta read/write pattern in lib/auth/pin.ts). Plain data, no crypto.
+// (a single keyed row read via db.meta.get and written via db.meta.put). Plain data, no crypto.
 // The receipt (Phase 3 slice-b) renders its header from getProfile().
 
 import { db } from '@/lib/db/schema'
