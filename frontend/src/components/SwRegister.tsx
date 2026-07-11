@@ -33,10 +33,22 @@ export function SwRegister() {
         stopAutoSync()
       }
     }
-    // Register from the basePath scope so the exported shell is cached.
-    navigator.serviceWorker.register(`${BASE}/sw.js`, { scope: `${BASE}/` }).catch((err) => {
-      console.warn('[anajbahi] service worker registration skipped', err)
-    })
+
+    if (process.env.NODE_ENV === 'production') {
+      // Register from the basePath scope so the exported shell is cached.
+      navigator.serviceWorker.register(`${BASE}/sw.js`, { scope: `${BASE}/` }).catch((err) => {
+        console.warn('[anajbahi] service worker registration skipped', err)
+      })
+    } else {
+      // Dev only: never register the cache-first shell SW — it would serve stale
+      // pages/chunks during local iteration (and break HMR across branch switches).
+      // Also proactively unregister any SW left from a production visit or an
+      // earlier dev session so `pnpm dev` always serves fresh code.
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => regs.forEach((r) => r.unregister()))
+        .catch(() => {})
+    }
 
     return () => {
       stopAutoSync()
