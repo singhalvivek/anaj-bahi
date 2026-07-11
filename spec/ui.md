@@ -44,8 +44,8 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
    - **Deduction editor** (`DeductionEditor`) — add **multiple** deductions; each row = a basis dropdown (per-sack kg / per-quintal kg / % of gross / flat kg) + a value input + remove button. `data-testid="add-deduction"`, rows `data-testid="deduction-row"`.
    - **Line totals** (live): sack count, gross kg, deduction kg, **net kg**, **line amount ₹**. `data-testid="line-net"`, `data-testid="line-amount"`.
    - **+ Add another grain** button.
-5. **Live bill total** (`LiveTotals`) — sticky near the bottom, updates on every keystroke. `data-testid="bill-total"`.
-6. **Save** (large primary button). `data-testid="save-bill"`. Validation: ≥1 farmer, ≥1 grain line with ≥1 sack and a price > 0; disabled otherwise with an inline hint.
+5. **Live bill total** (`LiveTotals`) — rendered **at the end of the form in normal flow (NOT sticky/fixed)**, updates on every keystroke. `data-testid="bill-total"`. It must **not** be pinned to the viewport: while the trader is entering sacks the on-screen keyboard already occupies the bottom (see the sack-entry rationale below), so a pinned total + Save would leave almost nothing of the input visible on a phone.
+6. **Save** (large primary button), **also at the end of the form in normal flow** (below the live total, not fixed). `data-testid="save-bill"`. Validation: ≥1 farmer, ≥1 grain line with ≥1 sack and a price > 0; disabled otherwise with an inline hint.
 
 **On save:** assemble the `Bill`, call `repo.createBill`, navigate to `/` (list). No network.
 

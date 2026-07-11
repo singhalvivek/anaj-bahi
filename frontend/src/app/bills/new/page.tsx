@@ -435,9 +435,11 @@ function NewBillForm() {
         )}
       </div>
 
-      {/* Sticky footer: live total + save. Sits above the fixed global BottomNav. */}
+      {/* Footer: live total + save. Flows at the END of the form (NOT sticky/fixed) so
+          it never competes with the on-screen keyboard while sacks are being entered;
+          <main>'s pb-24 clears the fixed global BottomNav below it. */}
       {!loading && (
-        <footer className="sticky bottom-16 z-10 mt-2 space-y-2 border-t border-stone-200 bg-white p-4 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+        <footer className="mt-2 space-y-2 border-t border-stone-200 bg-white p-4">
           <LiveTotals billTotal={billTotal} />
           {!valid && hint && (
             <p className="text-center text-sm text-amber-700">{hint}</p>

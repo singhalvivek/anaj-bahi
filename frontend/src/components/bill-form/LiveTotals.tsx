@@ -6,7 +6,7 @@ interface LiveTotalsProps {
   billTotal: number
 }
 
-/** Sticky bill total near the bottom; updates on every keystroke. */
+/** Live bill total shown at the end of the form (in normal flow); updates on every keystroke. */
 export function LiveTotals({ billTotal }: LiveTotalsProps) {
   const { t } = useI18n()
   return (
