@@ -59,6 +59,8 @@ async function createWheatBill(page: Page, farmer: string, place: string) {
   await page.getByTestId('nav-bills').click()
   await page.waitForURL(/\/app\/(\?.*)?$/)
   await page.getByTestId('new-bill-btn').click()
+  await page.waitForURL('**/app/bills/choose/**')
+  await page.getByTestId('choice-fresh').click()
   await page.waitForURL('**/app/bills/new/**')
 
   await page.getByTestId('farmer-input').fill(farmer)

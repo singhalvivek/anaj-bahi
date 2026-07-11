@@ -33,6 +33,8 @@ test('trader creates a bill, reopens it, and toggles language', async ({ page })
 
   // --- Step 1: open the New Bill form ---
   await page.getByTestId('new-bill-btn').click()
+  await page.waitForURL('**/app/bills/choose/**')
+  await page.getByTestId('choice-fresh').click()
   await page.waitForURL('**/app/bills/new/**')
 
   // --- Step 2: add a NEW farmer. Typing an unseen name + a place resolves a new

@@ -57,6 +57,8 @@ async function fillBusinessProfile(page: Page) {
  */
 async function createMultiGrainBill(page: Page) {
   await page.getByTestId('new-bill-btn').click()
+  await page.waitForURL('**/app/bills/choose/**')
+  await page.getByTestId('choice-fresh').click()
   await page.waitForURL('**/app/bills/new/**')
 
   await page.getByTestId('farmer-input').fill('Ramesh')
@@ -96,6 +98,8 @@ const SOYBEAN3_WEIGHTS = ['45', '45']
 
 async function createThreeGrainBill(page: Page) {
   await page.getByTestId('new-bill-btn').click()
+  await page.waitForURL('**/app/bills/choose/**')
+  await page.getByTestId('choice-fresh').click()
   await page.waitForURL('**/app/bills/new/**')
 
   await page.getByTestId('farmer-input').fill('Ramesh')

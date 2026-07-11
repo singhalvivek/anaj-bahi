@@ -33,6 +33,8 @@ async function createWheatBill(
   dueDate: string,
 ) {
   await page.getByTestId('new-bill-btn').click()
+  await page.waitForURL('**/app/bills/choose/**')
+  await page.getByTestId('choice-fresh').click()
   await page.waitForURL('**/app/bills/new/**')
 
   await page.getByTestId('farmer-input').fill(farmerName)
