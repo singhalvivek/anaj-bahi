@@ -1,4 +1,10 @@
 import { test, expect, type Page } from '@playwright/test'
+import { signInTestOwner } from './support/auth'
+
+// Phase 6+: the app now runs behind the auth gate — sign the test owner in first.
+test.beforeEach(async ({ page }) => {
+  await signInTestOwner(page)
+})
 
 /**
  * Phase-2 ledger E2E — payments/edit-lock, due list, and search.
