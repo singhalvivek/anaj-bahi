@@ -70,12 +70,13 @@ function makeAuth(): Auth {
   } catch {
     instance = getAuth(app)
   }
-  // On localhost (local dev + Playwright E2E) disable reCAPTCHA app verification so
-  // Firebase **test phone numbers** resolve instantly without a reCAPTCHA challenge —
-  // an automated/headless browser can never complete invisible reCAPTCHA, so
-  // signInWithPhoneNumber would otherwise hang. Scoped to localhost ONLY: the
-  // deployed GitHub Pages domain keeps full reCAPTCHA protection for real users.
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  // Disable reCAPTCHA app verification ONLY under browser AUTOMATION (Playwright sets
+  // `navigator.webdriver = true`), so the E2E can drive phone sign-in without a
+  // reCAPTCHA challenge an automated browser can't solve. A REAL browser — including
+  // local `pnpm dev` — gets the full invisible reCAPTCHA, so dev behaves exactly like
+  // production. (Firebase TEST phone numbers still bypass reCAPTCHA + SMS regardless;
+  // sign in with a REAL number on dev to watch the invisible reCAPTCHA actually run.)
+  if (typeof navigator !== 'undefined' && navigator.webdriver === true) {
     instance.settings.appVerificationDisabledForTesting = true
   }
   return instance
