@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect } from 'react'
-import { ensureSeeded } from '@/lib/db/repo'
-import { startAutoSync } from '@/lib/sync'
 
 // Base path for the static export; defaults to `/app` (local dev + E2E). The
 // Pages production build sets NEXT_PUBLIC_BASE_PATH (e.g. `/anaj-bahi`) so the
@@ -10,28 +8,21 @@ import { startAutoSync } from '@/lib/sync'
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? '/app'
 
 /**
- * Boot component (renders nothing):
- *  - registers the hand-written service worker at /app/sw.js (scope /app/),
- *    guarded so unsupported browsers just run online with no crash;
- *  - seeds the starter grain-type list once on first launch;
- *  - starts opportunistic auto-sync (flushes on the `online` event). Safe when
- *    sync is unconfigured (a no-op) and never blocks the local write path.
+ * Boot component (renders nothing): registers the hand-written service worker at
+ * /app/sw.js (scope /app/), guarded so unsupported browsers just run online with
+ * no crash.
+ *
+ * No auto-sync and no seeding happen here anymore:
+ *  - Sync is now NATIVE to Firestore's `persistentLocalCache` (writes flush on
+ *    reconnect automatically) — there is no `lib/sync` engine to start.
+ *  - Grain-type seeding runs on business activation in `AuthProvider` (it needs an
+ *    active business scope); calling it here would run before a business is active
+ *    and throw.
  */
 export function SwRegister() {
   useEffect(() => {
-    // Seed grain types (idempotent). Never let a storage error crash the app.
-    ensureSeeded().catch((err) => {
-      console.error('[anajbahi] seed failed', err)
-    })
-
-    // Opportunistic cloud backup when connectivity returns. Offline-safe no-op
-    // when unconfigured; returns an unsubscribe fn we clean up on unmount.
-    const stopAutoSync = startAutoSync()
-
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-      return () => {
-        stopAutoSync()
-      }
+      return
     }
 
     if (process.env.NODE_ENV === 'production') {
@@ -48,10 +39,6 @@ export function SwRegister() {
         .getRegistrations()
         .then((regs) => regs.forEach((r) => r.unregister()))
         .catch(() => {})
-    }
-
-    return () => {
-      stopAutoSync()
     }
   }, [])
 

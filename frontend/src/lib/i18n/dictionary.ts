@@ -321,6 +321,17 @@ export const EN = {
   'auth.signOut': 'Sign out',
   'auth.comingSoon.cloud': 'Shared cloud & roles — coming soon',
   'auth.splash': 'Anaj Bahi',
+
+  // ---- Phase 7 — local-first sync status (Firestore offline persistence) ----
+  'syncStatus.title': 'Sync',
+  'syncStatus.hint': 'Your ledger is saved on this phone and syncs automatically when you are online.',
+  'syncStatus.online': 'Online',
+  'syncStatus.offline': 'Offline',
+  'syncStatus.pending': 'Saving your changes…',
+  'syncStatus.synced': 'All changes saved',
+  'syncStatus.syncNow': 'Sync now',
+  'syncStatus.syncing': 'Syncing…',
+  'syncStatus.syncedNow': 'Synced',
 } as const
 
 export type TKey = keyof typeof EN
@@ -639,6 +650,17 @@ export const HI: Record<TKey, string> = {
   'auth.signOut': 'साइन आउट',
   'auth.comingSoon.cloud': 'साझा क्लाउड और भूमिकाएँ — जल्द आ रहा है',
   'auth.splash': 'अनाज बही',
+
+  // ---- Phase 7 — local-first sync status (Firestore offline persistence) ----
+  'syncStatus.title': 'सिंक',
+  'syncStatus.hint': 'आपकी बही इसी फ़ोन पर सुरक्षित है और ऑनलाइन होने पर अपने-आप सिंक होती है।',
+  'syncStatus.online': 'ऑनलाइन',
+  'syncStatus.offline': 'ऑफ़लाइन',
+  'syncStatus.pending': 'आपके बदलाव सहेजे जा रहे हैं…',
+  'syncStatus.synced': 'सभी बदलाव सहेजे गए',
+  'syncStatus.syncNow': 'अभी सिंक करें',
+  'syncStatus.syncing': 'सिंक हो रहा है…',
+  'syncStatus.syncedNow': 'सिंक हो गया',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

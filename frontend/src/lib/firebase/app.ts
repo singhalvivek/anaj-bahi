@@ -88,8 +88,14 @@ function makeFirestore(): Firestore {
     return initializeFirestore(
       app,
       isBrowser
-        ? { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }
-        : {},
+        ? {
+            // Firestore rejects `undefined` field values by default; the Bill/Farmer
+            // shapes carry optional fields (dueDate, note, phone, summary) that are
+            // often undefined. Silently drop them instead of throwing on every write.
+            ignoreUndefinedProperties: true,
+            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+          }
+        : { ignoreUndefinedProperties: true },
     )
   } catch {
     // `initializeFirestore` throws if already called for this app (HMR) — reuse it.

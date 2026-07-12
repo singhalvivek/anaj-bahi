@@ -1,10 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '@/lib/i18n/context'
-import * as repo from '@/lib/db/repo'
+import { useBills, useGrainTypes } from '@/lib/db/hooks'
 import { searchBills, type BillFilter } from '@/lib/db/queries'
 import { computeBillTotal } from '@/lib/calc'
 import { SearchBar } from '@/components/SearchBar'
@@ -16,10 +15,11 @@ export default function HomePage() {
   const [filter, setFilter] = useState<BillFilter>({})
   const hasFilter = Object.keys(filter).length > 0
 
-  // Reactive reads — a newly saved bill appears at the top with no manual refresh;
-  // the list re-runs whenever the search/filter changes.
-  const bills = useLiveQuery(() => searchBills(filter), [filter])
-  const grainTypes = useLiveQuery(() => repo.listGrainTypes(), [])
+  // Reactive reads — the live Firestore bill list re-renders on any write; the
+  // pure filter re-runs whenever the list or the search/filter changes.
+  const allBills = useBills()
+  const bills = useMemo(() => searchBills(allBills ?? [], filter), [allBills, filter])
+  const grainTypes = useGrainTypes()
 
   const grainName = (id: string): string => {
     const g = grainTypes?.find((gt) => gt.id === id)
@@ -27,7 +27,7 @@ export default function HomePage() {
     return lang === 'hi' ? g.nameHi : g.nameEn
   }
 
-  const loading = bills === undefined
+  const loading = allBills === undefined
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4">

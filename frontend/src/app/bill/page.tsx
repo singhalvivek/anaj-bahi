@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '@/lib/i18n/context'
 import * as repo from '@/lib/db/repo'
+import { useBill } from '@/lib/db/hooks'
 import type { Bill } from '@/lib/db/repo'
 import { computeGrainLine, computeBillTotal, billBalance, todayIso } from '@/lib/calc'
 import type { StoredGrainLine } from '@/lib/db/schema'
@@ -347,12 +348,9 @@ function DetailBody() {
   const params = useSearchParams()
   const id = params.get('id') ?? '' // Next already decodes query params.
 
-  // Return `null` (not undefined) for a missing bill so loading (undefined) and
-  // not-found (null) are distinguishable.
-  const bill = useLiveQuery(
-    () => (id ? repo.getBill(id).then((b) => b ?? null) : Promise.resolve(null)),
-    [id],
-  )
+  // Live single-bill read over Firestore. `undefined` = loading OR absent; the
+  // navigational not-found case (no id in the URL) is handled explicitly below.
+  const bill = useBill(id || null)
   const farmer = useLiveQuery(
     () => (bill ? repo.getFarmer(bill.farmerId) : Promise.resolve(undefined)),
     [bill?.farmerId],
@@ -365,15 +363,9 @@ function DetailBody() {
     return lang === 'hi' ? g.nameHi : g.nameEn
   }
 
-  if (bill === undefined) {
-    return (
-      <div className="px-4 py-8">
-        <div className="h-40 animate-pulse rounded-xl bg-stone-200" aria-hidden />
-      </div>
-    )
-  }
-
-  if (bill === null) {
+  // No id in the URL → not-found (a valid navigational miss). A present-but-absent
+  // id resolves to `undefined` and shows the loading state below.
+  if (!id) {
     return (
       <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
         <span className="text-4xl" aria-hidden>
@@ -386,6 +378,14 @@ function DetailBody() {
         >
           {t('action.back')}
         </Link>
+      </div>
+    )
+  }
+
+  if (bill === undefined) {
+    return (
+      <div className="px-4 py-8">
+        <div className="h-40 animate-pulse rounded-xl bg-stone-200" aria-hidden />
       </div>
     )
   }

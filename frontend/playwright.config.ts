@@ -17,7 +17,11 @@ export default defineConfig({
   // cross-test races.
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // One retry absorbs transient flakiness inherent to this setup — the Next dev
+  // server compiles routes on-demand (first hit of a route under full-suite load can
+  // lag past the nav timeout) and the E2E talks to REAL Firebase/Firestore over the
+  // network. App-logic failures still fail deterministically on the retry too.
+  retries: 1,
   workers: 1,
   reporter: [['list']],
   timeout: 90_000,

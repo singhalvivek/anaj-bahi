@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useI18n } from '@/lib/i18n/context'
-import { SyncSettings } from '@/components/SyncSettings'
+import { SyncStatus } from '@/components/SyncStatus'
 import {
   getProfile,
   saveProfile,
@@ -154,8 +154,8 @@ export default function SettingsPage() {
         )}
       </section>
 
-      {/* Cloud backup — the real Phase-4 sync section */}
-      <SyncSettings />
+      {/* Local-first sync status — Phase-7 Firestore offline persistence */}
+      <SyncStatus />
     </div>
   )
 }

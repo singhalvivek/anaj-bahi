@@ -37,6 +37,8 @@ import {
   findMembershipByPhone,
   type NewBusinessInput,
 } from '@/lib/tenancy/business'
+import { setActiveBusiness, ensureSeeded } from '@/lib/db/repo'
+import { migrateLocalToFirestore } from '@/lib/db/migrate'
 
 export type AuthStatus = 'loading' | 'signed-out' | 'onboarding' | 'ready'
 
@@ -106,18 +108,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The pending OTP confirmation handle between startPhoneSignIn and confirmOtp.
   const confirmRef = useRef<ConfirmationHandle | null>(null)
 
-  const applyUser = useCallback((u: AppUser) => {
-    setUser(u)
-    userRef.current = u
-    setStatus(u.bizId ? 'ready' : 'onboarding')
+  // Activate the ambient business scope for the data layer whenever a user is
+  // ready, and (owner only) kick off the one-time local→cloud migration in the
+  // background. Fire-and-forget: this must never gate `status` or block the UI.
+  const activateBusinessScope = useCallback((u: AppUser) => {
+    if (!u.bizId) return
+    setActiveBusiness(u.bizId)
+    // Seed the starter grain types into this business (idempotent) so the grain
+    // picker is populated as soon as the user is in the business. Fire-and-forget.
+    ensureSeeded().catch(() => {})
+    if (u.role === 'owner') {
+      migrateLocalToFirestore(u.bizId, u.uid).catch(() => {
+        // Idempotent — a failure is retried on the next owner sign-in.
+      })
+    }
   }, [])
 
-  const enterReady = useCallback((u: AppUser, bizId: string, role: Role) => {
-    const next: AppUser = { ...u, bizId, role }
-    setUser(next)
-    userRef.current = next
-    setStatus('ready')
-  }, [])
+  const applyUser = useCallback(
+    (u: AppUser) => {
+      setUser(u)
+      userRef.current = u
+      if (u.bizId) {
+        activateBusinessScope(u)
+        setStatus('ready')
+      } else {
+        setStatus('onboarding')
+      }
+    },
+    [activateBusinessScope],
+  )
+
+  const enterReady = useCallback(
+    (u: AppUser, bizId: string, role: Role) => {
+      const next: AppUser = { ...u, bizId, role }
+      setUser(next)
+      userRef.current = next
+      activateBusinessScope(next)
+      setStatus('ready')
+    },
+    [activateBusinessScope],
+  )
 
   // Single source of truth for session state: react to Firebase auth changes.
   // Fires on initial load (LOCAL persistence → stays signed in across reloads),
@@ -125,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsub = onFirebaseAuthChange((uid, phone) => {
       if (!uid) {
+        setActiveBusiness(null)
         userRef.current = null
         setUser(null)
         setStatus('signed-out')

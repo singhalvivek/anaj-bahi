@@ -60,8 +60,14 @@ export async function signInTestOwner(page: Page, opts: SignInOptions = {}): Pro
   await page.getByTestId('login-otp-input').fill(TEST_OTP)
   await page.getByTestId('login-verify').click()
 
-  // --- After OTP: either straight to the app (returning user) or onboarding ---
-  if (await isVisibleSoon(page, 'gated-home', 4000)) return
+  // --- After OTP the app resolves to EITHER the gated home (returning user with a
+  // business) or onboarding (fresh user). Cold Firestore reads on a fresh context
+  // can take several seconds, so wait generously for whichever appears rather than
+  // a short fixed poll, then branch. ---
+  const gatedHome = page.getByTestId('gated-home')
+  const onboardingName = page.getByTestId('onboarding-name')
+  await expect(gatedHome.or(onboardingName).first()).toBeVisible({ timeout: 25000 })
+  if (await gatedHome.isVisible()) return
 
   await expect(page.getByTestId('onboarding-flow')).toBeVisible()
 
