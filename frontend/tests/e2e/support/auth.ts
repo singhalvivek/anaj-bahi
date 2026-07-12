@@ -152,8 +152,9 @@ export async function signInTestEmployee(
   return (await gatedHome.isVisible()) ? 'joined' : 'unadded'
 }
 
-/** Sign out from the gated home, returning to the Login screen. */
+/** Sign out (the Sign-out button now lives on the Settings screen), returning to Login. */
 export async function signOut(page: Page): Promise<void> {
+  await page.getByTestId('nav-settings').click()
   await page.getByTestId('sign-out-btn').click()
   await expect(page.getByTestId('auth-login')).toBeVisible()
 }

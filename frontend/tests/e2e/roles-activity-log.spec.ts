@@ -106,12 +106,16 @@ test('activity log records both owner and employee bill-creates, attributed; emp
     expect(outcome).toBe('joined')
     await expect(page2.getByTestId('gated-home')).toBeVisible()
 
-    // The employee's OWN rendered display name — attribution snapshots the actor's
-    // name at action time, so we assert the activity row against exactly this. (In a
-    // fresh reset this is EMP_NAME; in a full-suite run it is the employee's persisted
-    // name — reading it here keeps the attribution assertion truthful either way.)
+    // The employee's OWN rendered display name (now on the Settings screen) —
+    // attribution snapshots the actor's name at action time, so we assert the
+    // activity row against exactly this. (In a fresh reset this is EMP_NAME; in a
+    // full-suite run it is the employee's persisted name — reading it here keeps the
+    // attribution assertion truthful either way.)
+    await page2.getByTestId('nav-settings').click()
+    await page2.waitForURL('**/app/settings/**')
     const empDisplayName = (await page2.getByTestId('home-user-name').innerText()).trim()
     expect(empDisplayName.length).toBeGreaterThan(0)
+    await page2.getByTestId('nav-bills').click()
 
     await page2.getByTestId('lang-toggle-en').click()
     await expect(page2.getByTestId('new-bill-btn')).toContainText('New Bill')

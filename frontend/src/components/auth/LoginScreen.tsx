@@ -3,22 +3,19 @@
 import { useState } from 'react'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/lib/auth/context'
+import { PhoneField, isValidIndianPhone } from '@/components/PhoneField'
 
 /**
  * Full-screen phone + SMS-OTP login (shown by the AuthGate when
  * `status === 'signed-out'`). Two internal phases: enter phone → enter OTP.
  *
- * The phone is captured/submitted in E.164 (default prefill `+91`). The invisible
+ * India-only: the phone is captured through <PhoneField> (fixed +91 prefix; the
+ * user types just the local 10 digits) and submitted in E.164. The invisible
  * reCAPTCHA target (`#recaptcha-container`) is mounted by the AuthProvider — this
  * component deliberately does NOT render its own.
  *
  * i18n: keys live in slice-a's shipped dictionary under `auth.*`.
  */
-
-/** Accepts an E.164 number: leading `+` then 8–15 digits. */
-function isValidE164(value: string): boolean {
-  return /^\+\d{8,15}$/.test(value.trim())
-}
 
 /** Pull a translatable i18n key off an AuthError, else a generic fallback. */
 function errorKey(err: unknown): string {
@@ -38,7 +35,7 @@ export function LoginScreen() {
   const { startPhoneSignIn, confirmOtp } = useAuth()
 
   const [phase, setPhase] = useState<'phone' | 'otp'>('phone')
-  const [phone, setPhone] = useState('+91')
+  const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [sending, setSending] = useState(false)
   const [verifying, setVerifying] = useState(false)
@@ -48,7 +45,7 @@ export function LoginScreen() {
 
   async function onSendCode() {
     setError(null)
-    if (!isValidE164(trimmedPhone)) {
+    if (!isValidIndianPhone(trimmedPhone)) {
       setError(t('auth.error.invalidPhone'))
       return
     }
@@ -138,15 +135,13 @@ export function LoginScreen() {
           <div className="flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-stone-600">{t('auth.phone.label')}</span>
-              <input
-                data-testid="login-phone-input"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
+              <PhoneField
+                testId="login-phone-input"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={setPhone}
+                ariaLabel={t('auth.phone.label')}
                 placeholder={t('auth.phone.placeholder')}
-                className={inputClass}
+                className="h-14 rounded-xl border-2 border-stone-300 bg-white text-lg text-stone-800 focus-within:border-green-600"
               />
             </label>
 

@@ -23,6 +23,7 @@ import { generateBillId } from '@/lib/db/id'
 import {
   computeGrainLine,
   computeBillTotal,
+  roundRupees,
   type GrainLineInput,
 } from '@/lib/calc'
 import type { FarmerValue } from '@/app/bills/new/page'
@@ -38,12 +39,23 @@ export interface QuickGrainLineDraft {
   grainTypeId: string
   price: string // controlled numeric input; parsed for calc
   totalWeight: string // gross kg, one number
-  amount: string // ₹ entered verbatim — authoritative
+  amount: string // ₹ — auto-computed from (weight − deduction)/100 × price, but editable
   sackCount: string // optional integer; '' → omitted
   deductionKg: string // optional single total-kg deduction; '' → omitted
+  amountTouched: boolean // Phase 10 — true once the user edits amount by hand → stop auto-recomputing
 }
 
 // ---- helpers ----
+
+/** Keep digits and at most one decimal point; strip everything else. */
+function sanitizeDecimal(raw: string): string {
+  let s = raw.replace(/[^0-9.]/g, '')
+  const firstDot = s.indexOf('.')
+  if (firstDot !== -1) {
+    s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
+  }
+  return s
+}
 
 function todayIso(): string {
   const d = new Date()
@@ -82,6 +94,7 @@ function newLineDraft(grainTypeId: string): QuickGrainLineDraft {
     amount: '',
     sackCount: '',
     deductionKg: '',
+    amountTouched: false, // fresh line → amount auto-computes until the user edits it
   }
 }
 
@@ -97,6 +110,7 @@ function storedLineToDraft(line: StoredGrainLine): QuickGrainLineDraft {
     amount: s ? String(s.amount) : '',
     sackCount: s?.sackCount != null ? String(s.sackCount) : '',
     deductionKg: s?.deductionKg != null ? String(s.deductionKg) : '',
+    amountTouched: true, // a stored amount is authoritative — never auto-overwrite it on edit
   }
 }
 
@@ -122,6 +136,7 @@ function QuickBillForm() {
   const [dueDate, setDueDate] = useState<string>('')
   const [billId, setBillId] = useState<string>('')
   const [lines, setLines] = useState<QuickGrainLineDraft[]>([newLineDraft('')])
+  const [paldari, setPaldari] = useState('') // Phase 10 — bill-level labor charge (₹)
 
   // Seed + load grain types on mount; in edit mode also load and pre-fill the bill.
   useEffect(() => {
@@ -150,6 +165,7 @@ function QuickBillForm() {
             setDueDate(bill.dueDate ?? '')
             setBillId(bill.id)
             setLines(bill.lines.map(storedLineToDraft))
+            setPaldari(bill.paldari != null ? String(bill.paldari) : '')
           }
         } else {
           // Default any empty grain line to the first available type.
@@ -196,10 +212,12 @@ function QuickBillForm() {
     () => lines.map((l) => computeGrainLine(draftToInput(l))),
     [lines],
   )
-  const billTotal = useMemo(
+  const linesTotal = useMemo(
     () => computeBillTotal(lines.map(draftToInput)),
     [lines],
   )
+  const paldariNum = Number(paldari) || 0
+  const netTotal = roundRupees(linesTotal - paldariNum)
 
   // ---- validation ----
   const farmerReady = !!farmer && !!farmer.name.trim() && !!farmer.place.trim()
@@ -304,6 +322,7 @@ function QuickBillForm() {
           grainTypeIds,
           lines: storedLines,
           entryMode: 'summary',
+          paldari: paldariNum > 0 ? paldariNum : undefined,
         }
         await updateBill(updated)
         router.push(`/bill?id=${encodeURIComponent(original.id)}`)
@@ -330,6 +349,7 @@ function QuickBillForm() {
         lines: storedLines,
         payments: [],
         entryMode: 'summary',
+        paldari: paldariNum > 0 ? paldariNum : undefined,
       })
 
       router.push('/')
@@ -456,7 +476,22 @@ function QuickBillForm() {
           mirroring the fresh form; <main>'s pb-24 clears the fixed global BottomNav. */}
       {!loading && (
         <footer className="mt-2 space-y-2 border-t border-stone-200 bg-white p-4">
-          <LiveTotals billTotal={billTotal} />
+          {/* Paldari (labor charge) — bill-level ₹ borne by the farmer; reduces the total */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-stone-700">{t('paldari.label')}</label>
+            <input
+              data-testid="paldari-input"
+              type="text"
+              inputMode="decimal"
+              value={paldari}
+              onChange={(e) => setPaldari(sanitizeDecimal(e.target.value))}
+              placeholder={t('paldari.label')}
+              className="h-14 w-full rounded-lg border border-stone-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <p className="text-xs text-stone-500">{t('paldari.hint')}</p>
+          </div>
+
+          <LiveTotals billTotal={netTotal} paldari={paldariNum} />
           {!valid && hint && (
             <p className="text-center text-sm text-amber-700">{hint}</p>
           )}

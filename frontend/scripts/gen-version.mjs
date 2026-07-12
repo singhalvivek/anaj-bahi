@@ -24,9 +24,18 @@ function buildId() {
 
 const id = buildId()
 const date = new Date().toISOString().slice(0, 10)
-const version = `${id} · ${date}`
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
+// Prefix the human-readable version with the semantic package version, so a release
+// bump in package.json is visible in Settings (e.g. "v0.2.0 · 5dc0d4f · 2026-07-12").
+let semver = ''
+try {
+  semver = 'v' + JSON.parse(readFileSync(join(scriptDir, '..', 'package.json'), 'utf8')).version + ' · '
+} catch {
+  semver = ''
+}
+const version = `${semver}${id} · ${date}`
+
 const envPath = join(scriptDir, '..', '.env.production.local')
 
 // Merge: preserve any existing keys, set/replace only the two version keys.

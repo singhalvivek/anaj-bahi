@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useI18n } from '@/lib/i18n/context'
 import { useBills, useGrainTypes } from '@/lib/db/hooks'
 import { searchBills, type BillFilter } from '@/lib/db/queries'
-import { computeBillTotal } from '@/lib/calc'
+import { billBalance } from '@/lib/calc'
 import { SearchBar } from '@/components/SearchBar'
 import { formatRupees, formatDate } from '@/components/format'
 
@@ -88,7 +88,7 @@ export default function HomePage() {
                     </p>
                   </div>
                   <span className="shrink-0 text-lg font-bold text-green-700">
-                    {formatRupees(computeBillTotal(bill.lines))}
+                    {formatRupees(billBalance(bill).total)}
                   </span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">

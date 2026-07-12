@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/lib/i18n/context'
 import { searchFarmers, type Farmer } from '@/lib/db/repo'
+import { PhoneField } from '@/components/PhoneField'
 import type { FarmerValue } from '@/app/bills/new/page'
 
 interface FarmerPickerProps {
@@ -140,13 +141,12 @@ export function FarmerPicker({ value, onChange }: FarmerPickerProps) {
         aria-label={t('farmer.place')}
         className="h-12 w-full rounded-lg border border-gray-300 px-4 text-base focus:border-emerald-500 focus:outline-none"
       />
-      <input
-        type="tel"
+      <PhoneField
         value={phone}
-        onChange={(e) => setPhone(e.target.value)}
+        onChange={setPhone}
+        ariaLabel={t('farmer.phone')}
         placeholder={t('farmer.phone')}
-        aria-label={t('farmer.phone')}
-        className="h-12 w-full rounded-lg border border-gray-300 px-4 text-base focus:border-emerald-500 focus:outline-none"
+        className="h-12 rounded-lg border border-gray-300 text-base focus-within:border-emerald-500"
       />
 
       {isNew && query.trim() && (

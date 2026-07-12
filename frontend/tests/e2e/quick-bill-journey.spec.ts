@@ -162,3 +162,59 @@ test('trader transcribes a summary bill, reopens the totals-only detail, and sha
   await page.getByTestId('share-close').click()
   await expect(page.getByTestId('receipt-preview')).toHaveCount(0)
 })
+
+/**
+ * Phase 10 — quick form: field reorder is testid/index-agnostic (fillQuickLine still
+ * works), the Amount auto-computes from (weight − deduction)/100 × price until edited,
+ * and a bill-level Paldari (labour charge) is subtracted from the total end-to-end
+ * (live → saved → detail). No stubs — real dev server + real IndexedDB/Firestore-offline.
+ */
+test('quick bill: amount auto-computes (and is overridable) + paldari nets the total', async ({
+  page,
+}) => {
+  await page.goto('./')
+  await page.getByTestId('lang-toggle-en').click()
+
+  await page.getByTestId('new-bill-btn').click()
+  await page.waitForURL('**/app/bills/choose/**')
+  await page.getByTestId('choice-quick').click()
+  await page.waitForURL('**/app/bills/quick/**')
+
+  await page.getByTestId('farmer-input').fill('Paldari Farmer')
+  await page.getByLabel('Place / Village').fill('Kheri')
+
+  // --- Auto-compute: fill grain/price/total-weight/deduction, NEVER touch amount ---
+  await page.getByTestId('grain-type-select').nth(0).selectOption({ label: 'Wheat' })
+  await page.getByTestId('price-input').nth(0).fill('2000')
+  await page.getByTestId('total-weight-input').nth(0).fill('585')
+  await page.getByTestId('deduction-kg-input').nth(0).fill('5')
+  // net = 580 kg → 5.8 quintal × 2000 = ₹11600, computed into the editable Amount field.
+  await expect(page.getByTestId('amount-input').nth(0)).toHaveValue('11600')
+
+  // --- Override: once the trader edits Amount by hand it stays authoritative ---
+  await page.getByTestId('amount-input').nth(0).fill('11000')
+  // Changing deduction afterwards must NOT overwrite the manual amount.
+  await page.getByTestId('deduction-kg-input').nth(0).fill('10')
+  await expect(page.getByTestId('amount-input').nth(0)).toHaveValue('11000')
+
+  // Live total before paldari = the (overridden) line amount.
+  await expect(page.getByTestId('bill-total')).toContainText('11000.00')
+
+  // --- Paldari: bill-level labour charge subtracted from the total ---
+  await page.getByTestId('paldari-input').fill('200')
+  await expect(page.getByTestId('paldari-line')).toContainText('200.00')
+  // net payable = 11000 − 200 = ₹10800.
+  await expect(page.getByTestId('bill-total')).toContainText('10800.00')
+
+  // --- Save → reopen → detail shows the net total + the paldari deduction ---
+  await page.getByTestId('save-bill').click()
+  await page.waitForURL(/\/app\/(\?.*)?$/)
+  const card = page.getByTestId('bill-card').first()
+  await expect(card).toContainText('Paldari Farmer')
+  await expect(card).toContainText('10800.00') // home card is net-of-paldari
+  await card.click()
+  await page.waitForURL('**/app/bill/**')
+
+  await expect(page.getByTestId('detail-bill-total')).toContainText('10800.00')
+  await expect(page.getByTestId('detail-paldari')).toContainText('200.00')
+})

@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth/context'
 import { SyncStatus } from '@/components/SyncStatus'
 import { PersonalProfile } from '@/components/settings/PersonalProfile'
 import { UpdateAppButton } from '@/components/settings/UpdateAppButton'
+import { PhoneField } from '@/components/PhoneField'
 import {
   getProfile,
   saveProfile,
@@ -16,7 +17,7 @@ import {
 
 export default function SettingsPage() {
   const { t } = useI18n()
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_PROFILE)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -80,6 +81,51 @@ export default function SettingsPage() {
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-5 py-8">
       <h2 className="text-2xl font-semibold text-stone-800">{t('settings.title')}</h2>
 
+      {/* Account strip — greeting + business + role + Sign out. This used to sit
+          above every screen; it now lives HERE only, so the bill list gets the
+          full viewport. `home-*` / `sign-out-btn` testids are unchanged. */}
+      <section
+        data-testid="account-strip"
+        className="flex items-center justify-between gap-2 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"
+      >
+        <div className="min-w-0">
+          <p className="truncate text-sm text-stone-500">
+            {t('home.greeting')}{' '}
+            <span data-testid="home-user-name" className="font-semibold text-stone-800">
+              {user?.displayName ?? '—'}
+            </span>
+          </p>
+          <div className="mt-0.5 flex items-center gap-2">
+            <span
+              data-testid="home-business-name"
+              className="truncate text-base font-bold text-stone-900"
+            >
+              {profile.shopName || '—'}
+            </span>
+            <span
+              data-testid="home-role"
+              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                user?.role === 'employee'
+                  ? 'bg-sky-100 text-sky-700'
+                  : 'bg-green-100 text-green-700'
+              }`}
+            >
+              {t(user?.role === 'employee' ? 'home.role.employee' : 'home.role.owner')}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          data-testid="sign-out-btn"
+          onClick={() => {
+            void signOut()
+          }}
+          className="shrink-0 rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-600 active:bg-stone-100"
+        >
+          {t('home.signOut')}
+        </button>
+      </section>
+
       {/* Personal profile — the signed-in user's own identity (editable name) */}
       <PersonalProfile />
 
@@ -136,16 +182,14 @@ export default function SettingsPage() {
 
         <label className="flex flex-col gap-1">
           <span className={labelClass}>{t('settings.phone')}</span>
-          <input
-            data-testid="settings-phone"
-            className={inputClass}
-            type="tel"
-            inputMode="tel"
+          <PhoneField
+            testId="settings-phone"
             value={profile.phone}
-            onChange={(e) => update('phone', e.target.value)}
+            onChange={(next) => update('phone', next)}
+            ariaLabel={t('settings.phone')}
             disabled={!canEditBusiness}
             readOnly={!isOwner}
-            autoComplete="off"
+            className="rounded-xl border-2 border-stone-300 bg-white py-3 text-base text-stone-800 focus-within:border-emerald-500"
           />
         </label>
 

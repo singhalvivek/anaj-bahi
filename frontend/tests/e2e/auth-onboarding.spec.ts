@@ -17,9 +17,10 @@ import { TEST_PHONE, TEST_OTP } from './support/auth'
  * `login-verify`, `onboarding-flow`, `onboarding-name`, `name-input`, `name-continue`,
  * `role-chooser`, `role-owner`, `create-business`, `create-shop-input`,
  * `create-business-submit`) — these diverge from the names frozen in spec/ui.md
- * (reported drift); the gated-home ids (`gated-home`, `home-user-name`,
- * `home-business-name`, `home-role`, `sign-out-btn`, `stub-shared-cloud`) are this
- * slice's and match ui.md.
+ * (reported drift). The identity ids (`home-user-name`, `home-business-name`,
+ * `home-role`, `sign-out-btn`) now live on the SETTINGS screen (the identity strip
+ * moved off the app shell); `gated-home` is the ready-shell marker on `<main>`.
+ * The old `stub-shared-cloud` coming-soon banner was removed (shared cloud shipped).
  */
 
 const DISPLAY_NAME = 'Ramesh Kumar'
@@ -56,8 +57,13 @@ test('clean user: login → name → owner-creates-business → gated home; sess
   await page.getByTestId('create-shop-input').fill(BIZ_NAME)
   await page.getByTestId('create-business-submit').click()
 
-  // --- Landed on the gated home: identity + role + business + sign out + banner ---
+  // --- Landed on the gated home: the bill list shell (no identity strip here now) ---
   await expect(page.getByTestId('gated-home')).toBeVisible()
+  await expect(page.getByTestId('new-bill-btn')).toBeVisible()
+
+  // Identity + role + business + Sign out now live on the SETTINGS screen only.
+  await page.getByTestId('nav-settings').click()
+  await page.waitForURL('**/app/settings/**')
   await expect(page.getByTestId('home-user-name')).toContainText(DISPLAY_NAME)
   await expect(page.getByTestId('home-business-name')).toContainText(BIZ_NAME)
   // Role badge — the app defaults to Hindi, so an owner reads "मालिक"; accept the
@@ -65,19 +71,13 @@ test('clean user: login → name → owner-creates-business → gated home; sess
   await expect(page.getByTestId('home-role')).toContainText(/owner|मालिक/i)
   await expect(page.getByTestId('sign-out-btn')).toBeVisible()
 
-  // The labelled "shared cloud & roles — coming soon" banner (local store is intentional).
-  await expect(page.getByTestId('stub-shared-cloud')).toBeVisible()
-
-  // The existing bill list renders below the gate (still the local store in Phase 6).
-  await expect(page.getByTestId('new-bill-btn')).toBeVisible()
-
-  // --- Session persists across a full reload — no re-login ---
+  // --- Session persists across a full reload — no re-login (still on Settings) ---
   await page.reload()
   await expect(page.getByTestId('gated-home')).toBeVisible()
   await expect(page.getByTestId('auth-login')).toHaveCount(0)
   await expect(page.getByTestId('home-business-name')).toContainText(BIZ_NAME)
 
-  // --- Sign out → back to Login ---
+  // --- Sign out (from Settings) → back to Login ---
   await page.getByTestId('sign-out-btn').click()
   await expect(page.getByTestId('auth-login')).toBeVisible()
   await expect(page.getByTestId('gated-home')).toHaveCount(0)

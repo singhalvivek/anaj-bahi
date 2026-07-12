@@ -4,7 +4,6 @@ import { useAuth } from '@/lib/auth/context'
 import { useI18n } from '@/lib/i18n/context'
 import { TopBar } from '@/components/TopBar'
 import { BottomNav } from '@/components/BottomNav'
-import { GatedHomeHeader } from '@/components/GatedHomeHeader'
 import { LoginScreen } from '@/components/auth/LoginScreen'
 import { OnboardingFlow } from '@/components/auth/OnboardingFlow'
 
@@ -16,10 +15,13 @@ import { OnboardingFlow } from '@/components/auth/OnboardingFlow'
  *   loading    → a minimal branded splash (no chrome).
  *   signed-out → the full-screen <LoginScreen/> (no TopBar/BottomNav).
  *   onboarding → the full-screen <OnboardingFlow/> (no TopBar/BottomNav).
- *   ready      → the full app shell: TopBar + gated-home header + the app
- *                (`children`) + BottomNav. AuthGate now owns the app chrome that
- *                the root layout used to render, so TopBar/BottomNav never show
- *                on the login/onboarding screens.
+ *   ready      → the full app shell: TopBar + the app (`children`) + BottomNav.
+ *                AuthGate owns the app chrome that the root layout used to render,
+ *                so TopBar/BottomNav never show on the login/onboarding screens.
+ *                The signed-in identity strip (name/business/role/sign-out) lives
+ *                on the Settings screen only — it no longer sits above every
+ *                screen eating vertical space. `<main data-testid="gated-home">`
+ *                remains the "app is ready" marker the auth flow keys on.
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { status } = useAuth()
@@ -51,8 +53,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <>
       <TopBar />
-      <GatedHomeHeader />
-      <main className="flex flex-1 flex-col pb-24">{children}</main>
+      <main data-testid="gated-home" className="flex flex-1 flex-col pb-24">
+        {children}
+      </main>
       <BottomNav />
     </>
   )

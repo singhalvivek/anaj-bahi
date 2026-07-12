@@ -467,6 +467,59 @@ describe('billBalance', () => {
   })
 })
 
+describe('billBalance — paldari (Phase 10)', () => {
+  const lineA: GrainLineInput = {
+    pricePerQuintal: 2400,
+    sackWeights: [40, 40, 40.5, 39],
+    deductions: [
+      { basis: 'per_sack_kg', value: 0.5 },
+      { basis: 'percent_gross', value: 1 },
+    ],
+  }
+
+  it('paldari subtracts from total and outstanding (no payments)', () => {
+    // lineA amount 3741.72; paldari 200 → payable total 3541.72
+    const balance = billBalance({ lines: [lineA], paldari: 200, payments: [] })
+    expect(balance.linesTotal).toBe(3741.72)
+    expect(balance.paldari).toBe(200)
+    expect(balance.total).toBe(3541.72)
+    expect(balance.paid).toBe(0)
+    expect(balance.outstanding).toBe(3541.72)
+    expect(balance.fullyPaid).toBe(false)
+  })
+
+  it('absent paldari behaves exactly as before — total === linesTotal, paldari 0', () => {
+    const balance = billBalance({ lines: [lineA], payments: [] })
+    expect(balance.linesTotal).toBe(3741.72)
+    expect(balance.paldari).toBe(0)
+    expect(balance.total).toBe(3741.72)
+    expect(balance.total).toBe(balance.linesTotal)
+    expect(balance.outstanding).toBe(3741.72)
+  })
+
+  it('paldari with a partial payment → outstanding = linesTotal − paldari − paid', () => {
+    // 3741.72 − 200 − 1000 = 2541.72
+    const balance = billBalance({ lines: [lineA], paldari: 200, payments: [pay(1000)] })
+    expect(balance.total).toBe(3541.72)
+    expect(balance.paid).toBe(1000)
+    expect(balance.outstanding).toBe(2541.72)
+    expect(balance.fullyPaid).toBe(false)
+  })
+
+  it('paldari rounds half-up to 2 dp (200.005 → 200.01 effect)', () => {
+    const balance = billBalance({ lines: [lineA], paldari: 200.005, payments: [] })
+    expect(balance.paldari).toBe(200.01)
+    expect(balance.total).toBe(3541.71) // 3741.72 − 200.01
+  })
+
+  it('paldari can settle the whole bill (outstanding ≤ 0, fully paid)', () => {
+    const balance = billBalance({ lines: [lineA], paldari: 3741.72, payments: [] })
+    expect(balance.total).toBe(0)
+    expect(balance.outstanding).toBe(0)
+    expect(balance.fullyPaid).toBe(true)
+  })
+})
+
 describe('addDaysIso', () => {
   it('adds days across a month boundary', () => {
     expect(addDaysIso('2026-07-06', 3)).toBe('2026-07-09')

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useI18n } from '@/lib/i18n/context'
 import type { GrainType } from '@/lib/db/repo'
-import type { GrainLineTotals } from '@/lib/calc'
+import { roundRupees, type GrainLineTotals } from '@/lib/calc'
 import type { QuickGrainLineDraft } from '@/app/bills/quick/page'
 
 interface QuickGrainLineEditorProps {
@@ -38,6 +38,20 @@ function formatKg(n: number): string {
 }
 
 /**
+ * Phase 10 — the suggested amount for a summary line: (totalWeight − deduction)/100 × price,
+ * rounded half-up. Returned as a string ('' when it works out to ≤ 0) so it slots straight
+ * into the controlled amount input. Only ever used while the user has NOT edited amount by hand.
+ */
+function computeSuggestedAmount(price: string, totalWeight: string, deductionKg: string): string {
+  const p = Number(price) || 0
+  const w = Number(totalWeight) || 0
+  const d = Number(deductionKg) || 0
+  const net = Math.max(0, w - d)
+  const amt = roundRupees((net / 100) * p)
+  return amt > 0 ? String(amt) : ''
+}
+
+/**
  * One summary (quick-entry) grain line: type + price/quintal + total weight +
  * entered amount, plus optional total sacks and a single total-kg deduction.
  * The amount is authoritative (never recomputed); the derived net is shown for
@@ -61,6 +75,19 @@ export function QuickGrainLineEditor({
 
   function grainName(g: GrainType): string {
     return lang === 'hi' ? g.nameHi : g.nameEn
+  }
+
+  /**
+   * Patch price / total-weight / deduction and, while the amount is still untouched,
+   * re-derive the suggested amount from the new figures. Once the user has edited the
+   * amount by hand (amountTouched), it stays authoritative and is never overwritten.
+   */
+  function patch(p: Partial<QuickGrainLineDraft>) {
+    const next = { ...line, ...p }
+    if (!next.amountTouched) {
+      next.amount = computeSuggestedAmount(next.price, next.totalWeight, next.deductionKg)
+    }
+    onChange(next)
   }
 
   async function confirmCustom() {
@@ -160,39 +187,10 @@ export function QuickGrainLineEditor({
           type="text"
           inputMode="decimal"
           value={line.price}
-          onChange={(e) => onChange({ ...line, price: sanitizeDecimal(e.target.value) })}
+          onChange={(e) => patch({ price: sanitizeDecimal(e.target.value) })}
           placeholder={t('grain.price')}
           className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
-      </div>
-
-      {/* Total weight (kg) — required, one gross number */}
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-gray-700">{t('quick.totalWeight')}</label>
-        <input
-          data-testid="total-weight-input"
-          type="text"
-          inputMode="decimal"
-          value={line.totalWeight}
-          onChange={(e) => onChange({ ...line, totalWeight: sanitizeDecimal(e.target.value) })}
-          placeholder={t('quick.totalWeight')}
-          className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-        />
-      </div>
-
-      {/* Amount (₹) — required, entered verbatim, authoritative */}
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-gray-700">{t('quick.amount')}</label>
-        <input
-          data-testid="amount-input"
-          type="text"
-          inputMode="decimal"
-          value={line.amount}
-          onChange={(e) => onChange({ ...line, amount: sanitizeDecimal(e.target.value) })}
-          placeholder={t('quick.amount')}
-          className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-        />
-        <p className="text-xs text-gray-500">{t('quick.amountHint')}</p>
       </div>
 
       {/* Total sacks — optional; rendered WITHOUT any "(optional)" text */}
@@ -209,6 +207,20 @@ export function QuickGrainLineEditor({
         />
       </div>
 
+      {/* Total weight (kg) — required, one gross number */}
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-gray-700">{t('quick.totalWeight')}</label>
+        <input
+          data-testid="total-weight-input"
+          type="text"
+          inputMode="decimal"
+          value={line.totalWeight}
+          onChange={(e) => patch({ totalWeight: sanitizeDecimal(e.target.value) })}
+          placeholder={t('quick.totalWeight')}
+          className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        />
+      </div>
+
       {/* Deduction (kg) — optional single number; rendered WITHOUT any "(optional)" text */}
       <div className="space-y-1">
         <label className="text-sm font-medium text-gray-700">{t('quick.deductionKg')}</label>
@@ -217,10 +229,28 @@ export function QuickGrainLineEditor({
           type="text"
           inputMode="decimal"
           value={line.deductionKg}
-          onChange={(e) => onChange({ ...line, deductionKg: sanitizeDecimal(e.target.value) })}
+          onChange={(e) => patch({ deductionKg: sanitizeDecimal(e.target.value) })}
           placeholder={t('quick.deductionKg')}
           className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
+      </div>
+
+      {/* Amount (₹) — auto-computed from (weight − deduction)/100 × price, but editable.
+          Once the user edits it by hand it stays authoritative (amountTouched). */}
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-gray-700">{t('quick.amount')}</label>
+        <input
+          data-testid="amount-input"
+          type="text"
+          inputMode="decimal"
+          value={line.amount}
+          onChange={(e) =>
+            onChange({ ...line, amount: sanitizeDecimal(e.target.value), amountTouched: true })
+          }
+          placeholder={t('quick.amount')}
+          className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        />
+        <p className="text-xs text-gray-500">{t('quick.amountAuto')}</p>
       </div>
 
       {/* Live line figures — net is derived (weight − deduction); amount is entered verbatim */}

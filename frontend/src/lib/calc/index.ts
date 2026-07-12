@@ -157,6 +157,7 @@ export interface PaymentLike {
 export interface BillLike {
   lines: GrainLineInput[]
   payments: PaymentLike[]
+  paldari?: number // Phase 10 — bill-level labor charge borne by the farmer (₹); absent ⇒ 0
 }
 
 /** Total paid to date = rounded sum of all payment amounts, 2 dp. */
@@ -178,18 +179,29 @@ export function isFullyPaid(billTotal: number, payments: PaymentLike[]): boolean
 }
 
 export interface BillBalance {
-  total: number
+  linesTotal: number // Σ line amounts, BEFORE paldari
+  paldari: number // labor charge borne by the farmer (₹), 0 if none
+  total: number // linesTotal − paldari (the payable bill total)
   paid: number
   outstanding: number
   fullyPaid: boolean
 }
 
-/** Convenience: full balance snapshot for a bill (total, paid, outstanding, fullyPaid). */
+/**
+ * Convenience: full balance snapshot for a bill.
+ * Phase 10 — the bill-level paldari (labor charge borne by the farmer) is
+ * subtracted from the gross line subtotal to give the payable total, so
+ * outstanding/fullyPaid (and everything downstream: due list, detail, home)
+ * are all net-of-paldari through this single chokepoint. `total` is NOT clamped
+ * (the entered figure is trusted; validation keeps paldari ≥ 0).
+ */
 export function billBalance(bill: BillLike): BillBalance {
-  const total = computeBillTotal(bill.lines)
+  const linesTotal = computeBillTotal(bill.lines)
+  const paldari = roundRupees(bill.paldari ?? 0)
+  const total = roundRupees(linesTotal - paldari)
   const paid = computePaid(bill.payments)
   const outstanding = roundRupees(total - paid)
-  return { total, paid, outstanding, fullyPaid: outstanding <= 0 }
+  return { linesTotal, paldari, total, paid, outstanding, fullyPaid: outstanding <= 0 }
 }
 
 // ---------------------------------------------------------------------------

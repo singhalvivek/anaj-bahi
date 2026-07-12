@@ -230,7 +230,7 @@ export const EN = {
   // login (phone + OTP)
   'auth.login.title': 'Sign in',
   'auth.phone.label': 'Phone number',
-  'auth.phone.placeholder': '+91 98765 43210',
+  'auth.phone.placeholder': '98765 43210',
   'auth.sendCode': 'Send code',
   'auth.sending': 'Sending code…',
   'auth.changeNumber': 'Change number',
@@ -290,7 +290,7 @@ export const EN = {
 
   // login screen
   'auth.login.phoneLabel': 'Phone number',
-  'auth.login.phonePlaceholder': '+91 98765 43210',
+  'auth.login.phonePlaceholder': '98765 43210',
   'auth.login.sendCode': 'Send code',
   'auth.login.otpLabel': 'Enter the code',
   'auth.login.verify': 'Verify',
@@ -382,6 +382,15 @@ export const EN = {
   'settings.updateAppHint': 'Get the latest version. Your saved bills stay safe.',
   'settings.updating': 'Updating…',
   'settings.version': 'Version',
+
+  // ---- Phase 10 — paldari (labor charge) ----
+  'paldari.label': 'Paldari (labour charge)',
+  'paldari.short': 'Paldari',
+  'paldari.hint': 'Loading/unloading charge borne by the farmer — reduces the bill total',
+  'totals.subtotal': 'Subtotal',
+  'quick.amountAuto': 'Auto-calculated — edit or cross-check',
+  'receipt.subtotal': 'Subtotal',
+  'receipt.paldari': 'Paldari',
 } as const
 
 export type TKey = keyof typeof EN
@@ -610,7 +619,7 @@ export const HI: Record<TKey, string> = {
   // login (phone + OTP)
   'auth.login.title': 'साइन इन करें',
   'auth.phone.label': 'फ़ोन नंबर',
-  'auth.phone.placeholder': '+91 98765 43210',
+  'auth.phone.placeholder': '98765 43210',
   'auth.sendCode': 'कोड भेजें',
   'auth.sending': 'कोड भेजा जा रहा है…',
   'auth.changeNumber': 'नंबर बदलें',
@@ -669,7 +678,7 @@ export const HI: Record<TKey, string> = {
 
   // login screen
   'auth.login.phoneLabel': 'फ़ोन नंबर',
-  'auth.login.phonePlaceholder': '+91 98765 43210',
+  'auth.login.phonePlaceholder': '98765 43210',
   'auth.login.sendCode': 'कोड भेजें',
   'auth.login.otpLabel': 'कोड भरें',
   'auth.login.verify': 'पुष्टि करें',
@@ -761,6 +770,15 @@ export const HI: Record<TKey, string> = {
   'settings.updateAppHint': 'नवीनतम संस्करण पाएँ। आपकी सहेजी बहियाँ सुरक्षित रहेंगी।',
   'settings.updating': 'अपडेट हो रहा है…',
   'settings.version': 'संस्करण',
+
+  // ---- Phase 10 — paldari (labor charge) ----
+  'paldari.label': 'पल्लेदारी (मज़दूरी)',
+  'paldari.short': 'पल्लेदारी',
+  'paldari.hint': 'किसान द्वारा वहन की गई चढ़ाई-उतराई मज़दूरी — बिल की राशि से घटती है',
+  'totals.subtotal': 'उप-योग',
+  'quick.amountAuto': 'अपने-आप जुड़ा — जाँचें या बदलें',
+  'receipt.subtotal': 'उप-योग',
+  'receipt.paldari': 'पल्लेदारी',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

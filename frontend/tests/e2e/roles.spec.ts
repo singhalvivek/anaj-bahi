@@ -113,6 +113,9 @@ test('owner adds employee → employee joins, shares the ledger, is attributed, 
     expect(outcome).toBe('joined')
     await expect(page2.getByTestId('gated-home')).toBeVisible()
 
+    // Identity (name + role badge) now lives on the Settings screen.
+    await page2.getByTestId('nav-settings').click()
+    await page2.waitForURL('**/app/settings/**')
     // The employee's role badge reads Employee.
     await expect(page2.getByTestId('home-role')).toBeVisible()
 
@@ -120,6 +123,9 @@ test('owner adds employee → employee joins, shares the ledger, is attributed, 
     // run a prior spec may already have claimed this shared test phone with a different
     // name, so we assert against what actually renders, not the hardcoded label.
     const empName = ((await page2.getByTestId('home-user-name').textContent()) ?? '').trim() || EMP_NAME
+
+    // Back to the bill list for the shared-ledger + attribution checks below.
+    await page2.getByTestId('nav-bills').click()
 
     // --- Back on the OWNER context: the roster now lists the JOINED employee ---
     // (a claimed member exists once Context B onboarded), proving add → join works.

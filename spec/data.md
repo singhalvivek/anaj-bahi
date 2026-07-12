@@ -64,6 +64,7 @@ Belongs to one farmer; a purchase date; 1..N grain lines. Farmer name/place and 
 | dueDate | string | no | ISO `yyyy-mm-dd` — **Phase 2** |
 | payments | Payment[] | yes | Embedded; **empty `[]` in Phase 1** (Phase 2 populates) |
 | entryMode | `'sacks' \| 'summary'` | no | **Phase 5** — how the bill was captured. **Absent → `'sacks'`** (back-compat). See [Summary grain lines](#summary-grain-lines-quick-entry). |
+| paldari | number | no | **Phase 10** — bill-level labor (loading/unloading) charge in ₹ borne by the farmer; subtracted from the bill total. Absent → 0. See [Paldari](#paldari-labor-charge--phase-10). |
 | createdAt | number | yes | Creation time |
 | updatedAt | number | yes | Last edit time |
 
@@ -144,6 +145,7 @@ db.version(1).stores({
   - by **grain type**: `*grainTypeIds` (multiEntry — a bill matches if any line uses that grain).
 - Payments/dueDate are embedded on the bill (no separate table) — fine for a single-user local store; Phase 2 reads them by loading the bill.
 - **Phase 5 (`entryMode` + line `summary`) needs no schema/version bump:** neither field is indexed (grain search still uses the existing `*grainTypeIds`), and Dexie stores whatever object is `put`, so the new optional fields ride along with no migration. `createBill`/`updateBill` are unchanged — only the `Bill`/`StoredGrainLine` TypeScript interfaces gain the optional fields.
+- **Phase 10 (`paldari`) needs no schema/version bump either:** `paldari` is an unindexed optional bill-level number that rides along on the stored object exactly like `entryMode` did — no Dexie/Firestore migration, `createBill`/`updateBill` unchanged, only the `Bill` interface gains the optional field. Omitted (never stored as `0`/`undefined`) when blank or zero.
 
 ## Bill-ID Generation Rule
 
@@ -227,6 +229,21 @@ billTotal     = Σ (each line's amount)             // summary lines contribute 
 `computeGrainLine` **dispatches** on `line.summary`: present → the summary rule above; absent → the unchanged sacks rule. `computeBillTotal` is unchanged (Σ `computeGrainLine(line).amount`) and is therefore summary-aware transitively. The sacks path only runs when `summary` is absent, so **sacks bills are provably unaffected**. `pricePerQuintal` is still stored and shown as the rate, but a summary line's amount ignores it.
 
 **Example 5 — summary line (amount authoritative):** Wheat, price ₹2400/quintal, `totalWeightKg 159.5`, `deductionKg 3.595`, `sackCount 4`, entered `amount 3741.72`. → gross 159.5, deduction 3.595, net 155.905, sackCount 4, **amount ₹3741.72 (returned as entered, not derived)**. A deliberately mismatched entered amount (e.g. `amount 3700` on the same figures) is still returned as **₹3700.00** — the entered value wins. Unit-tested.
+
+### Paldari (labor charge)  — **Phase 10**
+
+**Paldari** is a single **bill-level** loading/unloading labor charge in ₹, borne by the farmer. When the farmer bears it the merchant enters a rupee amount and it is **subtracted from the bill total** (so outstanding/due drop by that amount); when the merchant bears it the field is left blank. It is **NOT** per grain line and **NOT** a kg deduction — it is one bill-level rupee figure that applies to **both** entry modes (`sacks` and `summary`).
+
+```
+linesTotal        = computeBillTotal(lines)          // Σ line amounts, gross-of-paldari (unchanged)
+paldari           = roundRupees(bill.paldari ?? 0)   // absent → 0
+payableBillTotal  = roundRupees(linesTotal − paldari) // NOT clamped; validation keeps paldari ≥ 0
+outstanding       = roundRupees(payableBillTotal − paid)
+```
+
+`billBalance` is the single chokepoint: it now returns `{ linesTotal, paldari, total, paid, outstanding, fullyPaid }` where `total` is the payable (net-of-paldari) figure. Everything downstream — the due list (`queries.ts`), the due page, the bill detail total, the home card, and the receipt total — reads through `billBalance` (or mirrors its net formula) and is therefore automatically net-of-paldari. `computeBillTotal(lines)` is **unchanged** (still "sum of line amounts") — many call-sites depend on that meaning.
+
+**Example 6 — paldari subtracted:** a bill whose lines total **₹7101.72** (Example 3) with `paldari 200` → **payable ₹6901.72**; a ₹1000 payment leaves outstanding **₹5901.72**. Absent paldari → payable === linesTotal (existing bills unchanged). Unit-tested.
 
 ## Data Lifecycle
 

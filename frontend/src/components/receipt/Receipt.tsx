@@ -4,7 +4,7 @@ import React from 'react'
 import { useI18n } from '@/lib/i18n/context'
 import type { Bill, StoredGrainLine } from '@/lib/db/repo'
 import type { BusinessProfile } from '@/lib/settings/profile'
-import { computeGrainLine, computeBillTotal } from '@/lib/calc'
+import { computeGrainLine, computeBillTotal, roundRupees } from '@/lib/calc'
 import { formatRupees, formatDate } from '@/components/format'
 import { toColumns, columnSubtotals, fmtNum, deductionSummary } from './columns'
 
@@ -55,7 +55,12 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
   const { t } = useI18n()
   const nameOf = (id: string): string => (grainName ? grainName(id) : id)
   const kg = t('receipt.kg')
-  const billTotal = computeBillTotal(bill.lines)
+  // Phase 10 — bill-level paldari (labor charge borne by the farmer) is subtracted
+  // from the line subtotal to give the payable net total. Absent ⇒ 0, so the receipt
+  // is visually unchanged for existing bills (netTotal === linesTotal).
+  const linesTotal = computeBillTotal(bill.lines)
+  const paldari = roundRupees(bill.paldari ?? 0)
+  const netTotal = roundRupees(linesTotal - paldari)
 
   // Phase 5 — a summary (quick-entry) bill has no per-sack weights, so the top
   // weight column-grid is omitted entirely; only the consolidated table renders.
@@ -411,7 +416,25 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
         </table>
       </div>
 
-      {/* Bill total */}
+      {/* Paldari breakdown (Phase 10) — subtle subtotal + labor-charge deduction, shown
+          only when a paldari charge is present. Inline-hex styling (never Tailwind
+          colour classes) so html-to-image rasterises cleanly. */}
+      {paldari > 0 ? (
+        <div style={{ padding: '10px 0 0' }}>
+          <div style={metaRowStyle}>
+            <span style={labelStyle}>{t('receipt.subtotal')}</span>
+            <span style={valueStyle}>{formatRupees(linesTotal)}</span>
+          </div>
+          <div style={metaRowStyle}>
+            <span style={labelStyle}>{t('receipt.paldari')}</span>
+            <span data-testid="receipt-paldari" style={{ ...valueStyle, color: COLORS.accent }}>
+              −{formatRupees(paldari)}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Bill total — net of paldari */}
       <div
         data-testid="receipt-total"
         style={{
@@ -426,7 +449,7 @@ const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(function Receipt(
         }}
       >
         <span style={{ fontSize: '14px', fontWeight: 600 }}>{t('receipt.total')}</span>
-        <span style={{ fontSize: '20px', fontWeight: 800 }}>{formatRupees(billTotal)}</span>
+        <span style={{ fontSize: '20px', fontWeight: 800 }}>{formatRupees(netTotal)}</span>
       </div>
 
       {/* Footer */}
