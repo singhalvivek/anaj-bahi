@@ -155,11 +155,11 @@ Shown when `status === 'onboarding'` (signed in, no `bizId`). A short stepped fl
 3b. **Employee (added) → joins** the business automatically (decision `employee-joined`), landing in the app.
 3c. **Employee (not added) → Ask your owner** (`data-testid="ask-owner-screen"`): a friendly bilingual "Ask your owner to add your number <phone>, then sign in again" with a **Sign out** button. No app access.
 
-### Screen: Gated home header — Phase 6, slice-c
+### Signed-in identity / account strip — Phase 6 (relocated to Settings)
 
-When `status === 'ready'` the existing app renders, wrapped by a header (edit to `TopBar`/a new `GatedHomeHeader`) container `data-testid="gated-home"` showing:
-- **Display name** `data-testid="home-user-name"`, **business name** `data-testid="home-business-name"`, **role** badge (owner/employee) `data-testid="home-role"`, and **Sign out** `data-testid="sign-out-btn"` (calls `signOut` → returns to Login).
-- The existing bill list/screens render below, still reading the local store in Phase 6, with a labelled **`ComingSoon`** banner "Shared cloud & roles — coming soon / साझा क्लाउड और भूमिकाएँ — जल्द" (`data-testid="stub-shared-cloud"`) so the local-only state reads as intentional, not a bug.
+When `status === 'ready'` the app shell is `TopBar` + `<main data-testid="gated-home">` (the ready-state marker) + `BottomNav`. The signed-in **identity strip is NOT rendered above every screen** — it eats vertical space that the bill list needs. It lives on the **Settings** screen only, as the top **Account strip** (`data-testid="account-strip"`):
+- **Greeting + display name** `data-testid="home-user-name"`, **business name** `data-testid="home-business-name"`, **role** badge (owner/employee) `data-testid="home-role"`, and **Sign out** `data-testid="sign-out-btn"` (calls `signOut` → returns to Login).
+- The shared cloud & roles ledger **shipped** (Phases 6–9 = Firestore multi-user shared store), so the old "shared cloud & roles — coming soon" banner (`stub-shared-cloud`) is **removed** — it is no longer accurate.
 
 ### Screen: Settings — Personal profile vs Business profile — Phase 8
 
