@@ -47,6 +47,15 @@ export interface StoredGrainLine {
   summary?: GrainLineSummary // Phase 5 — present iff the bill is entryMode 'summary'
 }
 
+// Phase 8 — per-action attribution snapshot. Written at action time (never a live
+// join to users/members), so it survives the actor renaming themselves or being
+// removed from the business. Optional: legacy bills/payments predate it.
+export interface Attribution {
+  uid: string
+  phone: string
+  name: string
+}
+
 // Phase 2 — modelled now, populated later.
 export interface Payment {
   id: string
@@ -54,6 +63,7 @@ export interface Payment {
   date: string
   note?: string
   createdAt: number
+  createdBy?: Attribution // Phase 8 — who recorded this payment (snapshot)
 }
 
 export interface Bill {
@@ -67,6 +77,7 @@ export interface Bill {
   dueDate?: string // Phase 2
   payments: Payment[] // Phase 2 (empty [] in Phase 1)
   entryMode?: BillEntryMode // Phase 5 — absent ⇒ 'sacks' (back-compat)
+  createdBy?: Attribution // Phase 8 — who created this bill (snapshot); absent on legacy bills
   createdAt: number
   updatedAt: number
 }

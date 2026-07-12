@@ -83,6 +83,9 @@ export const EN = {
   'detail.farmer': 'Farmer',
   'detail.phone': 'Phone',
 
+  // attribution (Phase 8)
+  'attribution.createdBy': 'Created by',
+
   // validation
   'validation.farmerRequired': 'Choose or add a farmer',
   'validation.lineRequired': 'Add at least one grain line',
@@ -332,6 +335,39 @@ export const EN = {
   'syncStatus.syncNow': 'Sync now',
   'syncStatus.syncing': 'Syncing…',
   'syncStatus.syncedNow': 'Synced',
+
+  // ---- Phase 8 — employee management (owner-only Employees screen) ----
+  'employees.title': 'Employees',
+  'employees.addTitle': 'Add an employee',
+  'employees.phoneLabel': 'Phone number',
+  'employees.nameLabel': 'Name',
+  'employees.add': 'Add',
+  'employees.adding': 'Adding…',
+  'employees.existsError': 'That phone number already belongs to a business',
+  'employees.rosterTitle': 'Members',
+  'employees.empty': 'No employees yet — add one above',
+  'employees.remove': 'Remove',
+  'employees.removing': 'Removing…',
+  'employees.ownerOnly': 'Only the owner can manage employees',
+  'employees.roleOwner': 'Owner',
+  'employees.roleEmployee': 'Employee',
+  'employees.back': 'Back',
+  'employees.invited': 'Invited',
+  'employees.active': 'Active',
+
+  // ---- Phase 8 slice-c — personal profile + settings split ----
+  'personal.title': 'Your profile',
+  'personal.nameLabel': 'Your name',
+  'personal.phoneLabel': 'Phone',
+  'personal.roleLabel': 'Role',
+  'personal.save': 'Save name',
+  'personal.saving': 'Saving…',
+  'personal.saved': 'Name saved',
+  'personal.roleOwner': 'Owner',
+  'personal.roleEmployee': 'Employee',
+  'settings.employeesEntry': 'Manage employees',
+  'settings.businessReadonly': 'Only owners can edit the business profile',
+  'settings.activityComingSoon': 'Activity log — coming soon',
 } as const
 
 export type TKey = keyof typeof EN
@@ -412,6 +448,9 @@ export const HI: Record<TKey, string> = {
   'detail.title': 'बही',
   'detail.farmer': 'किसान',
   'detail.phone': 'फ़ोन',
+
+  // attribution (Phase 8)
+  'attribution.createdBy': 'द्वारा बनाया गया',
 
   // validation
   'validation.farmerRequired': 'किसान चुनें या जोड़ें',
@@ -661,6 +700,39 @@ export const HI: Record<TKey, string> = {
   'syncStatus.syncNow': 'अभी सिंक करें',
   'syncStatus.syncing': 'सिंक हो रहा है…',
   'syncStatus.syncedNow': 'सिंक हो गया',
+
+  // ---- Phase 8 — employee management (owner-only Employees screen) ----
+  'employees.title': 'कर्मचारी',
+  'employees.addTitle': 'कर्मचारी जोड़ें',
+  'employees.phoneLabel': 'फ़ोन नंबर',
+  'employees.nameLabel': 'नाम',
+  'employees.add': 'जोड़ें',
+  'employees.adding': 'जोड़ा जा रहा है…',
+  'employees.existsError': 'यह फ़ोन नंबर पहले से किसी व्यापार से जुड़ा है',
+  'employees.rosterTitle': 'सदस्य',
+  'employees.empty': 'अभी कोई कर्मचारी नहीं — ऊपर से जोड़ें',
+  'employees.remove': 'हटाएँ',
+  'employees.removing': 'हटाया जा रहा है…',
+  'employees.ownerOnly': 'केवल मालिक ही कर्मचारी प्रबंधित कर सकते हैं',
+  'employees.roleOwner': 'मालिक',
+  'employees.roleEmployee': 'कर्मचारी',
+  'employees.back': 'वापस',
+  'employees.invited': 'आमंत्रित',
+  'employees.active': 'सक्रिय',
+
+  // ---- Phase 8 slice-c — personal profile + settings split ----
+  'personal.title': 'आपकी जानकारी',
+  'personal.nameLabel': 'आपका नाम',
+  'personal.phoneLabel': 'फ़ोन',
+  'personal.roleLabel': 'भूमिका',
+  'personal.save': 'नाम सहेजें',
+  'personal.saving': 'सहेजा जा रहा है…',
+  'personal.saved': 'नाम सहेजा गया',
+  'personal.roleOwner': 'मालिक',
+  'personal.roleEmployee': 'कर्मचारी',
+  'settings.employeesEntry': 'कर्मचारी प्रबंधित करें',
+  'settings.businessReadonly': 'केवल मालिक ही व्यापार की जानकारी बदल सकते हैं',
+  'settings.activityComingSoon': 'गतिविधि लॉग — जल्द आ रहा है',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

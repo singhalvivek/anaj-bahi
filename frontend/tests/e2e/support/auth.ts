@@ -24,6 +24,12 @@ export const TEST_OTP = '000000'
 export const TEST_OWNER_NAME = 'Test Owner'
 export const DEFAULT_BIZ_NAME = 'Anaj Test Traders'
 
+// Phase-8 roles.spec: the EMPLOYEE test number (a SECOND registered Firebase test
+// number → fixed OTP, no SMS). Onboarding decides employee-joined vs unadded from
+// whether the owner has already invited this phone.
+export const TEST_EMPLOYEE_PHONE = '+919000000002'
+export const TEST_EMPLOYEE_OTP = '222222'
+
 async function isVisibleSoon(page: Page, testid: string, timeout = 4000): Promise<boolean> {
   try {
     await page.getByTestId(testid).waitFor({ state: 'visible', timeout })
@@ -87,6 +93,63 @@ export async function signInTestOwner(page: Page, opts: SignInOptions = {}): Pro
 
   // Landed on the gated home.
   await expect(page.getByTestId('gated-home')).toBeVisible()
+}
+
+export interface EmployeeSignInOptions {
+  name: string
+}
+
+/**
+ * Sign the EMPLOYEE test number in and drive onboarding as an Employee.
+ *
+ * Returns which terminal the app reached:
+ *   • `'joined'`   — the owner had already invited this phone, so choosing Employee
+ *                    claimed the membership and landed on the gated home.
+ *   • `'unadded'`  — no invite yet, so the calm "ask your owner" screen is shown.
+ *
+ * Idempotent-ish: if the context is already `ready` (persisted session, or a prior
+ * spec already joined) it returns `'joined'` immediately. Uses the same generous
+ * `gatedHome.or(...)` waiting as `signInTestOwner` (cold Firestore reads on a fresh
+ * context are slow).
+ */
+export async function signInTestEmployee(
+  page: Page,
+  opts: EmployeeSignInOptions,
+): Promise<'joined' | 'unadded'> {
+  await page.goto('./')
+
+  // Already signed in and ready (persisted session / already joined) → done.
+  if (await isVisibleSoon(page, 'gated-home', 3000)) return 'joined'
+
+  // --- Login: phone → OTP ---
+  await expect(page.getByTestId('auth-login')).toBeVisible()
+  await page.getByTestId('login-phone-input').fill(TEST_EMPLOYEE_PHONE)
+  await page.getByTestId('login-send-code').click()
+
+  await expect(page.getByTestId('login-otp-input')).toBeVisible()
+  await page.getByTestId('login-otp-input').fill(TEST_EMPLOYEE_OTP)
+  await page.getByTestId('login-verify').click()
+
+  // --- After OTP: EITHER already ready (returning employee) or onboarding. ---
+  const gatedHome = page.getByTestId('gated-home')
+  const onboardingName = page.getByTestId('onboarding-name')
+  await expect(gatedHome.or(onboardingName).first()).toBeVisible({ timeout: 25000 })
+  if (await gatedHome.isVisible()) return 'joined'
+
+  // Step 1 — display name.
+  await expect(page.getByTestId('onboarding-name')).toBeVisible()
+  await page.getByTestId('name-input').fill(opts.name)
+  await page.getByTestId('name-continue').click()
+
+  // Step 2 — role chooser → Employee.
+  await expect(page.getByTestId('role-chooser')).toBeVisible()
+  await page.getByTestId('role-employee').click()
+
+  // Step 3 — the decision resolves to EITHER the gated home (invite existed →
+  // membership claimed) OR the ask-owner screen (no invite). Wait generously.
+  const askOwner = page.getByTestId('ask-owner')
+  await expect(gatedHome.or(askOwner).first()).toBeVisible({ timeout: 25000 })
+  return (await gatedHome.isVisible()) ? 'joined' : 'unadded'
 }
 
 /** Sign out from the gated home, returning to the Login screen. */

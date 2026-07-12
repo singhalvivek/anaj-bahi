@@ -6,7 +6,7 @@
 // action time — never a live join — so attribution survives renames/removal.
 // `createdAt` / `updatedAt` / `addedAt` / `claimedAt` are numeric (`Date.now()`).
 
-import { doc, getDoc, writeBatch } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase/app'
 import type { AppUser } from '@/lib/auth/session'
 import type { Role } from '@/lib/auth/membership'
@@ -109,6 +109,115 @@ export async function createBusiness(owner: AppUser, input: NewBusinessInput): P
 
   await batch.commit()
   return bizId
+}
+
+// ---- Phase 8 — employee management (owner-only roster + add/remove) ----
+
+/**
+ * A claimed row of the in-business roster, read from `businesses/{bizId}/members`.
+ * These are the members who have actually signed in and joined (the owner on
+ * create; employees once they claim their invited membership).
+ */
+export interface MemberRecord {
+  uid: string
+  phone: string
+  displayName: string
+  role: Role
+  status: 'invited' | 'active'
+  addedByUid: string
+  addedByName: string
+  addedAt: number
+}
+
+/**
+ * Thrown by `addEmployee` when the phone already belongs to a business — the
+ * one-person-one-business rule. The UI catches this to show a translated inline
+ * error (`employees.existsError`).
+ */
+export class EmployeeExistsError extends Error {
+  constructor(message = 'That phone number already belongs to a business.') {
+    super(message)
+    this.name = 'EmployeeExistsError'
+  }
+}
+
+/**
+ * The roster of CLAIMED members for a business: read `businesses/{bizId}/members`
+ * and sort owners first, then by `addedAt` ascending. Newly-invited employees
+ * appear here once they sign in and claim their membership.
+ */
+export async function listMembers(bizId: string): Promise<MemberRecord[]> {
+  const snap = await getDocs(collection(firestore, 'businesses', bizId, 'members'))
+  const members: MemberRecord[] = snap.docs.map((d) => {
+    const data = d.data() as Partial<MemberRecord>
+    return {
+      uid: data.uid ?? d.id,
+      phone: data.phone ?? '',
+      displayName: data.displayName ?? '',
+      role: (data.role ?? 'employee') as Role,
+      status: (data.status ?? 'active') as 'invited' | 'active',
+      addedByUid: data.addedByUid ?? '',
+      addedByName: data.addedByName ?? '',
+      addedAt: data.addedAt ?? 0,
+    }
+  })
+  members.sort((a, b) => {
+    if (a.role !== b.role) return a.role === 'owner' ? -1 : 1
+    return a.addedAt - b.addedAt
+  })
+  return members
+}
+
+/**
+ * Owner adds an employee by phone + name label. Enforces one-person-one-business:
+ * if the phone already has ANY membership, throws `EmployeeExistsError`. Otherwise
+ * writes an `invited` employee membership at `memberships/{phoneKey}` matching the
+ * frozen `MembershipRecord` shape, so the Phase-6 claim flow resolves it to
+ * `employee-joined` when that phone signs in and picks Employee. The `displayName`
+ * is a snapshot label; the employee's own name replaces it once they sign in.
+ */
+export async function addEmployee(
+  owner: AppUser,
+  bizId: string,
+  employeePhoneE164: string,
+  employeeName: string,
+): Promise<void> {
+  const existing = await findMembershipByPhone(employeePhoneE164)
+  if (existing) {
+    throw new EmployeeExistsError()
+  }
+  const key = phoneKey(employeePhoneE164)
+  const membership: MembershipRecord = {
+    phone: employeePhoneE164,
+    phoneKey: key,
+    bizId,
+    role: 'employee',
+    displayName: employeeName,
+    addedByUid: owner.uid,
+    addedByName: owner.displayName ?? '',
+    status: 'invited',
+    uid: null,
+    createdAt: Date.now(),
+    claimedAt: null,
+  }
+  await setDoc(doc(firestore, 'memberships', key), membership)
+}
+
+/**
+ * Owner removes a member: delete the top-level `memberships/{phoneKey}` lookup and,
+ * if the member has claimed (has a `uid`), the per-business `members/{uid}` doc.
+ * Security Rules then reject the removed person's reads/writes. Their own
+ * `users/{uid}` doc and past bill/activity attribution snapshots are left intact
+ * (history stays truthful; on next load with no membership they re-onboard).
+ */
+export async function removeEmployee(
+  bizId: string,
+  member: { uid: string | null; phone: string },
+): Promise<void> {
+  await deleteDoc(doc(firestore, 'memberships', phoneKey(member.phone)))
+  if (member.uid) {
+    await deleteDoc(doc(firestore, 'businesses', bizId, 'members', member.uid))
+  }
 }
 
 /**

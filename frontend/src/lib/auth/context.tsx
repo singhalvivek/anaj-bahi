@@ -37,7 +37,7 @@ import {
   findMembershipByPhone,
   type NewBusinessInput,
 } from '@/lib/tenancy/business'
-import { setActiveBusiness, ensureSeeded } from '@/lib/db/repo'
+import { setActiveBusiness, setActiveActor, ensureSeeded } from '@/lib/db/repo'
 import { migrateLocalToFirestore } from '@/lib/db/migrate'
 
 export type AuthStatus = 'loading' | 'signed-out' | 'onboarding' | 'ready'
@@ -114,6 +114,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activateBusinessScope = useCallback((u: AppUser) => {
     if (!u.bizId) return
     setActiveBusiness(u.bizId)
+    // Phase 8 — stamp the acting member so repo writes (createBill/addPayment) are
+    // attributed to them. Name is a snapshot; it refreshes on rename below.
+    setActiveActor({ uid: u.uid, phone: u.phone, name: u.displayName ?? '' })
     // Seed the starter grain types into this business (idempotent) so the grain
     // picker is populated as soon as the user is in the business. Fire-and-forget.
     ensureSeeded().catch(() => {})
@@ -156,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsub = onFirebaseAuthChange((uid, phone) => {
       if (!uid) {
         setActiveBusiness(null)
+        setActiveActor(null)
         userRef.current = null
         setUser(null)
         setStatus('signed-out')
@@ -200,6 +204,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const next: AppUser = { ...cur, displayName: name }
     setUser(next)
     userRef.current = next
+    // Phase 8 — if a business is active, refresh the attribution snapshot so
+    // subsequent bills/payments carry the new name (past writes keep the old one).
+    if (next.bizId) {
+      setActiveActor({ uid: next.uid, phone: next.phone, name })
+    }
   }, [])
 
   const chooseRole = useCallback(

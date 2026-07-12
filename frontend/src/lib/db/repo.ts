@@ -29,10 +29,18 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase/app'
-import { type Farmer, type GrainType, type Bill, type Payment } from './schema'
+import { type Farmer, type GrainType, type Bill, type Payment, type Attribution } from './schema'
 import { buildSeedGrainTypes, GRAIN_SEEDS } from './seed'
 
-export type { Farmer, GrainType, Bill, StoredGrainLine, StoredDeduction, Payment } from './schema'
+export type {
+  Farmer,
+  GrainType,
+  Bill,
+  StoredGrainLine,
+  StoredDeduction,
+  Payment,
+  Attribution,
+} from './schema'
 
 /**
  * Thrown when purchase data is edited on a bill that already has a payment.
@@ -119,6 +127,24 @@ export function setActiveBusiness(bizId: string | null): void {
 /** Read the ambient business scope (used by the sync-status helpers). */
 export function getActiveBusiness(): string | null {
   return activeBizId
+}
+
+// ---------- active actor (ambient attribution — Phase 8) ----------
+
+// The acting member's identity snapshot, stamped onto bills/payments as `createdBy`
+// so every mutation is attributed. Ambient (mirrors activeBizId): `AuthProvider`
+// calls `setActiveActor(...)` when a user becomes `ready` (and `setActiveActor(null)`
+// on sign-out). When unset, writes simply omit `createdBy` (legacy-compatible).
+let activeActor: Attribution | null = null
+
+/** Set (or clear) the ambient acting-member attribution. Called by `AuthProvider`. */
+export function setActiveActor(actor: Attribution | null): void {
+  activeActor = actor
+}
+
+/** Read the ambient acting-member attribution (mainly for tests/introspection). */
+export function getActiveActor(): Attribution | null {
+  return activeActor
 }
 
 /** Guard: every imperative call requires an active business. */
@@ -250,7 +276,14 @@ export async function ensureSeeded(): Promise<void> {
 export async function createBill(input: Omit<Bill, 'createdAt' | 'updatedAt'>): Promise<Bill> {
   const bizId = requireBizId()
   const ts = now()
-  const bill: Bill = { ...input, createdAt: ts, updatedAt: ts }
+  // Phase 8 — stamp the acting member as `createdBy` when an actor is set. When no
+  // actor is active we omit the field entirely (never write `createdBy: undefined`).
+  const bill: Bill = {
+    ...input,
+    ...(activeActor ? { createdBy: activeActor } : {}),
+    createdAt: ts,
+    updatedAt: ts,
+  }
   // Sanitized doc id; ORIGINAL bill.id kept verbatim in the doc data. Local-first.
   fireWrite(setDoc(billDoc(bizId, bill.id), bill))
   return bill
@@ -308,6 +341,8 @@ export async function addPayment(
     amount: payment.amount,
     date: payment.date,
     ...(payment.note !== undefined ? { note: payment.note } : {}),
+    // Phase 8 — attribute the payment to the acting member when an actor is set.
+    ...(activeActor ? { createdBy: activeActor } : {}),
     createdAt: now(),
   }
   const updated: Bill = {

@@ -424,6 +424,13 @@ function DetailBody() {
             </span>
           ) : null}
         </div>
+        {/* Phase 8 — per-action attribution (only when a creator snapshot exists;
+            legacy bills predate it and simply omit this line). */}
+        {bill.createdBy?.name ? (
+          <p data-testid="detail-created-by" className="mt-1 text-xs text-stone-400">
+            {t('attribution.createdBy')}: {bill.createdBy.name}
+          </p>
+        ) : null}
       </section>
 
       {/* Grain lines. A summary (quick-entry) bill renders TOTALS-ONLY per grain

@@ -26,6 +26,12 @@ import path from 'node:path'
 const TEST_PHONE_E164 = '+919352277260'
 const TEST_PHONE_KEY = '919352277260' // E.164 without the leading '+'
 
+// Phase-8 roles.spec: a SECOND registered test number for the EMPLOYEE. Its
+// membership + user doc are reset too so the invite/onboarding runs fresh every
+// run (deterministic 'unadded' → owner-invites → 'joined' round-trip).
+const TEST_EMPLOYEE_PHONE_E164 = '+919000000002'
+const TEST_EMPLOYEE_PHONE_KEY = '919000000002' // E.164 without the leading '+'
+
 /** Minimal `.env.local` loader (global-setup does not go through Next's loader). */
 function loadEnvLocal(): Record<string, string> {
   const envPath = path.resolve(__dirname, '../../.env.local')
@@ -95,6 +101,21 @@ async function resetViaAdmin(serviceAccountRaw: string): Promise<void> {
   if (uid) {
     await db.doc(`users/${uid}`).delete().catch(() => {})
   }
+
+  // 4) Also reset the EMPLOYEE test user (Phase-8 roles.spec) so the invite +
+  //    onboarding run fresh. Resolve their uid from Admin Auth by phone.
+  const empMembershipRef = db.doc(`memberships/${TEST_EMPLOYEE_PHONE_KEY}`)
+  let empUid: string | undefined
+  try {
+    const empAuthUser = await admin.auth(app).getUserByPhoneNumber(TEST_EMPLOYEE_PHONE_E164)
+    empUid = empAuthUser.uid
+  } catch {
+    // No employee auth user yet (first run) — fine.
+  }
+  await empMembershipRef.delete().catch(() => {})
+  if (empUid) {
+    await db.doc(`users/${empUid}`).delete().catch(() => {})
+  }
 }
 
 /** Delete the test owner's footprint with the unprivileged client web SDK. */
@@ -145,6 +166,12 @@ async function resetViaClient(env: Record<string, string>): Promise<void> {
     if (uid) {
       await deleteDoc(doc(db, 'users', uid)).catch(() => {})
     }
+
+    // Also reset the EMPLOYEE invite (Phase-8 roles.spec). The client can't
+    // resolve the employee's uid (no Admin Auth), so best-effort delete their
+    // membership doc — that alone re-arms onboarding, so an un-invited employee
+    // sees the ask-owner screen on the next run.
+    await deleteDoc(doc(db, 'memberships', TEST_EMPLOYEE_PHONE_KEY)).catch(() => {})
   } finally {
     await deleteApp(app).catch(() => {})
   }
