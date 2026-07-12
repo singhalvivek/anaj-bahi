@@ -7,11 +7,13 @@
 // validate one canonical shape everywhere.
 
 /**
- * Local 10-digit part of any phone value — tolerant of a stored E.164
- * (`+919876543210` → `9876543210`), a legacy free-form string, or a full number
- * pasted with the country code. A leading `91` is stripped only when the value is
- * longer than 10 digits (so a genuine 10-digit number starting with `91` survives),
- * then the first 10 digits are kept (extra typed digits are ignored, not shifted).
+ * Local 10-digit part of a value the user TYPED into the field — tolerant of a
+ * full number pasted with the country code. A leading `91` is stripped only when
+ * the value is longer than 10 digits (so a genuine 10-digit number starting with
+ * `91` survives), then the first 10 digits are kept (extra digits are ignored).
+ *
+ * NOTE: use `displayLocal` (below) — not this — to render a STORED E.164 value, so
+ * the fixed `+91` prefix never leaks back into the visible input as you type.
  */
 export function localDigits(raw: string): string {
   let d = raw.replace(/\D/g, '')
@@ -19,7 +21,19 @@ export function localDigits(raw: string): string {
   return d.slice(0, 10)
 }
 
-/** Compose the canonical E.164 (`+91` + local 10 digits); `''` stays `''`. */
+/**
+ * Local digits to SHOW for a stored value. Our own `onChange` always stores a
+ * canonical `+91…`, so we strip exactly that country-code prefix — making the
+ * type → store → display round-trip an identity (typing `9` shows `9`, never
+ * `919`). Legacy/free-form values (no `+91` prefix) fall back to the tolerant
+ * parser and normalise on the first edit.
+ */
+export function displayLocal(value: string): string {
+  if (value.startsWith('+91')) return value.slice(3).replace(/\D/g, '').slice(0, 10)
+  return localDigits(value)
+}
+
+/** Compose the canonical E.164 (`+91` + local 10 digits) from typed input; `''` stays `''`. */
 export function toE164(raw: string): string {
   const d = localDigits(raw)
   return d ? `+91${d}` : ''
@@ -62,7 +76,7 @@ export function PhoneField({
   readOnly,
   className = '',
 }: PhoneFieldProps) {
-  const local = localDigits(value)
+  const local = displayLocal(value)
   return (
     <div
       className={`flex items-stretch overflow-hidden ${
