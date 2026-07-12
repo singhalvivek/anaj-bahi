@@ -230,7 +230,7 @@ export const EN = {
   // login (phone + OTP)
   'auth.login.title': 'Sign in',
   'auth.phone.label': 'Phone number',
-  'auth.phone.placeholder': '+91 98765 43210',
+  'auth.phone.placeholder': '98765 43210',
   'auth.sendCode': 'Send code',
   'auth.sending': 'Sending code…',
   'auth.changeNumber': 'Change number',
@@ -290,7 +290,7 @@ export const EN = {
 
   // login screen
   'auth.login.phoneLabel': 'Phone number',
-  'auth.login.phonePlaceholder': '+91 98765 43210',
+  'auth.login.phonePlaceholder': '98765 43210',
   'auth.login.sendCode': 'Send code',
   'auth.login.otpLabel': 'Enter the code',
   'auth.login.verify': 'Verify',
@@ -619,7 +619,7 @@ export const HI: Record<TKey, string> = {
   // login (phone + OTP)
   'auth.login.title': 'साइन इन करें',
   'auth.phone.label': 'फ़ोन नंबर',
-  'auth.phone.placeholder': '+91 98765 43210',
+  'auth.phone.placeholder': '98765 43210',
   'auth.sendCode': 'कोड भेजें',
   'auth.sending': 'कोड भेजा जा रहा है…',
   'auth.changeNumber': 'नंबर बदलें',
@@ -678,7 +678,7 @@ export const HI: Record<TKey, string> = {
 
   // login screen
   'auth.login.phoneLabel': 'फ़ोन नंबर',
-  'auth.login.phonePlaceholder': '+91 98765 43210',
+  'auth.login.phonePlaceholder': '98765 43210',
   'auth.login.sendCode': 'कोड भेजें',
   'auth.login.otpLabel': 'कोड भरें',
   'auth.login.verify': 'पुष्टि करें',

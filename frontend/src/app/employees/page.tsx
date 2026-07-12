@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/lib/auth/context'
+import { PhoneField, isValidIndianPhone } from '@/components/PhoneField'
 import {
   addEmployee,
   listMembers,
@@ -57,7 +58,7 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
 
-  const [phone, setPhone] = useState('+91')
+  const [phone, setPhone] = useState('')
   const [name, setName] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
@@ -83,7 +84,7 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
 
   const trimmedName = name.trim()
   const trimmedPhone = phone.trim()
-  const canAdd = trimmedName !== '' && /^\+\d{7,15}$/.test(trimmedPhone) && !adding
+  const canAdd = trimmedName !== '' && isValidIndianPhone(trimmedPhone) && !adding
 
   async function onAdd() {
     if (!user) return
@@ -92,7 +93,7 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
     setAdding(true)
     try {
       await addEmployee(user, bizId, trimmedPhone, trimmedName)
-      setPhone('+91')
+      setPhone('')
       setName('')
       await refresh()
     } catch (err) {
@@ -136,17 +137,15 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
 
         <label className="flex flex-col gap-1">
           <span className={labelClass}>{t('employees.phoneLabel')}</span>
-          <input
-            data-testid="employee-phone-input"
-            className={inputClass}
-            type="tel"
-            inputMode="tel"
+          <PhoneField
+            testId="employee-phone-input"
             value={phone}
-            onChange={(e) => {
-              setPhone(e.target.value)
+            onChange={(next) => {
+              setPhone(next)
               setAddError(null)
             }}
-            autoComplete="off"
+            ariaLabel={t('employees.phoneLabel')}
+            className="min-h-[48px] rounded-xl border-2 border-stone-300 bg-white text-base text-stone-800 focus-within:border-emerald-500"
           />
         </label>
 

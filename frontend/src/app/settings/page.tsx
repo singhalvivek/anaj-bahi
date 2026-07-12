@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth/context'
 import { SyncStatus } from '@/components/SyncStatus'
 import { PersonalProfile } from '@/components/settings/PersonalProfile'
 import { UpdateAppButton } from '@/components/settings/UpdateAppButton'
+import { PhoneField } from '@/components/PhoneField'
 import {
   getProfile,
   saveProfile,
@@ -136,16 +137,14 @@ export default function SettingsPage() {
 
         <label className="flex flex-col gap-1">
           <span className={labelClass}>{t('settings.phone')}</span>
-          <input
-            data-testid="settings-phone"
-            className={inputClass}
-            type="tel"
-            inputMode="tel"
+          <PhoneField
+            testId="settings-phone"
             value={profile.phone}
-            onChange={(e) => update('phone', e.target.value)}
+            onChange={(next) => update('phone', next)}
+            ariaLabel={t('settings.phone')}
             disabled={!canEditBusiness}
             readOnly={!isOwner}
-            autoComplete="off"
+            className="rounded-xl border-2 border-stone-300 bg-white py-3 text-base text-stone-800 focus-within:border-emerald-500"
           />
         </label>
 
