@@ -1,6 +1,8 @@
-# Capability: Cloud Sync — DEFERRED (Phase 4)
+# Capability: Cloud Sync — ⚠️ SHIPPED (Phase 4) → REPLACED-BY-Firestore (Phase 7)
 
-_Target phase: **Phase 4** · slice-a (FastAPI/**SQLite** backend) + slice-b (frontend `lib/sync` engine). First phase requiring `.env`/secrets (backend only)._
+> **Superseded.** This FastAPI + SQLite push/pull sync is **replaced by [firestore-store](firestore-store.md)** — Cloud Firestore with IndexedDB offline persistence, accessed directly from the client. Its code (`backend/`, `frontend/src/lib/sync/*`, `SyncSettings`) is **removed in Phase 7**. Kept only as the Phases-1–5 record.
+
+_Original target phase: **Phase 4** · slice-a (FastAPI/**SQLite** backend) + slice-b (frontend `lib/sync` engine)._
 
 Frozen wire + storage + `lib/sync` contract: [architecture.md § Phase-4 sync contract](../architecture.md#phase-4-sync-contract).
 

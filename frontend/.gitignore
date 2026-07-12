@@ -1,3 +1,7 @@
 .next/
 out/
 node_modules/
+
+# Firebase env — NEVER commit real config/secrets (Phase 6+)
+.env.local
+.env*.local

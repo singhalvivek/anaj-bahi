@@ -1,11 +1,13 @@
 # Deploying Anaj Bahi
 
-Anaj Bahi has two independently deployable pieces:
+Anaj Bahi is a single deployable piece:
 
-- **Frontend PWA** — a static export served from **GitHub Pages**. Fully offline-capable; the backend is optional.
-- **Sync backend** — a small FastAPI + SQLite service on **PythonAnywhere** (free, no card) for optional cloud backup/restore.
+- **Frontend PWA** — a static export served from **GitHub Pages**. Fully offline-capable (local-first).
 
-The app works **fully offline without the backend**. You only need the backend if you want cloud backup across devices.
+There is **no self-hosted backend to deploy**. Identity and data are hosted **Firebase** — Phone
+Authentication (SMS-OTP) + Cloud Firestore with offline persistence — configured entirely from the
+frontend build (see [Firebase](#firebase-auth--data) below). Writes work offline and sync
+automatically to the shared business ledger when signal returns.
 
 ---
 
@@ -51,60 +53,46 @@ NEXT_PUBLIC_BASE_PATH=/anaj-bahi pnpm build:pages
 
 ---
 
-## Backend → PythonAnywhere (free, no card)
+## Firebase (auth + data)
 
-PythonAnywhere's free "Beginner" plan needs **no credit card**, gives a **persistent home disk** (so the SQLite file survives), and serves **HTTPS**. Its web apps are **WSGI**, so the FastAPI (ASGI) app runs through the WSGI adapter in `backend/wsgi.py`, which drives the app with a **fresh event loop per request** (a shared-loop wrapper like `a2wsgi` deadlocks under PythonAnywhere's uWSGI after the first request).
+Identity and data are hosted Firebase — nothing to deploy on a server, but the project must be
+configured and its config baked into the production build.
 
-Replace `<user>` with your PythonAnywhere username and `<token>` with a long random string (the same one you enter in the app).
+1. **Create a Firebase project** and enable **Authentication → Phone** and **Cloud Firestore**.
+2. **Web config:** add a Web app and provide its 6 `NEXT_PUBLIC_FIREBASE_*` values to the
+   production build. These are **public web config** (build-time inlined), not secrets — access
+   control is the Firestore Security Rules. For GitHub Pages, add them as repo **Actions secrets**
+   consumed by `.github/workflows/deploy-pages.yml`; for a local production build, set them in
+   `frontend/.env.local`.
+3. **Security Rules:** publish [`firestore.rules`](firestore.rules) to the project
+   (Firebase console → Firestore → Rules, or `firebase deploy --only firestore:rules`). These
+   enforce the real boundaries — a shared per-business ledger, owner-only business/employee/activity
+   writes-and-reads — so publishing them is required, not optional.
+4. **SMS region policy:** in **Authentication → Settings → SMS region policy**, make sure the
+   **user's country is allowed**, or OTP delivery is blocked.
+5. **Authorized domains:** add the GitHub Pages host (`singhalvivek.github.io`) under
+   **Authentication → Settings → Authorized domains** so phone sign-in works in production.
 
-1. **Sign up** at pythonanywhere.com (Beginner plan — free, no card).
-2. Open **Consoles → Bash**, then clone the app repo and install deps in a virtualenv:
-   ```sh
-   git clone https://github.com/singhalvivek/anaj-bahi.git
-   cd anaj-bahi/backend
-   mkvirtualenv --python=/usr/bin/python3.11 anaj
-   pip install fastapi sqlalchemy pydantic-settings
-   ```
-   (Any Python ≥ 3.11 that PythonAnywhere offers is fine; `uvicorn` is not needed under WSGI.)
-3. **Create the SQLite tables** on the persistent disk (run once):
-   ```sh
-   export DATABASE_URL="sqlite:////home/<user>/anaj-bahi/backend/data/anaj.db"
-   export DEVICE_TOKEN="<token>"
-   python -m app.init_db
-   ```
-4. **Web → Add a new web app → Manual configuration** (NOT "Flask") → pick the **same Python version** as the virtualenv (3.11).
-5. On the web-app config page set:
-   - **Source code:** `/home/<user>/anaj-bahi/backend`
-   - **Working directory:** `/home/<user>/anaj-bahi/backend`
-   - **Virtualenv:** `/home/<user>/.virtualenvs/anaj`
-6. Click the **WSGI configuration file** link, delete everything in it, and paste:
-   ```python
-   import os, sys
-   path = "/home/<user>/anaj-bahi/backend"
-   if path not in sys.path:
-       sys.path.insert(0, path)
-   os.environ["DATABASE_URL"] = "sqlite:////home/<user>/anaj-bahi/backend/data/anaj.db"
-   os.environ["DEVICE_TOKEN"] = "<token>"
-   from wsgi import application  # noqa: E402
-   ```
-7. Click the green **Reload** button.
-8. **Verify:** open `https://<user>.pythonanywhere.com/health` → `{"status":"ok"}`.
+The app deploys to GitHub Pages **unchanged** — there is no URL or token to configure in the app;
+sign-in is by phone number and sync is automatic.
 
-**Updating later:** in a Bash console, `cd ~/anaj-bahi && git pull`, then **Reload** the web app. **Renewal:** free web apps must be renewed every ~3 months (PythonAnywhere emails a one-click link).
+### Running the E2E suite against the project (optional)
 
-### Point the app at the backend
+The Playwright suite talks to **real Firebase Auth + Cloud Firestore** — no mocks. To run it:
 
-In the PWA: **Settings → Cloud backup**:
-
-- **Backend URL:** the backend's **HTTPS** URL — `https://<user>.pythonanywhere.com`. HTTPS only — an HTTP URL is blocked by the browser as mixed content.
-- **Device token:** the **same** `DEVICE_TOKEN` you set in the PythonAnywhere WSGI file.
-
-These are stored locally on the device (Dexie `meta`), not baked into the build, so no rebuild is needed to point at a backend. The app keeps working fully offline; sync flushes opportunistically when online.
+1. **Test phone numbers:** under **Authentication → Phone → Phone numbers for testing**, register
+   the two E2E numbers with fixed codes: owner `+919352277260` → `000000` and employee
+   `+919000000002` → `222222` (these short-circuit SMS/reCAPTCHA/region-policy, so the suite is
+   deterministic and free).
+2. **Env:** in `frontend/.env.local`, set the 6 `NEXT_PUBLIC_FIREBASE_*` values and, optionally,
+   `FIREBASE_SERVICE_ACCOUNT` (path to an Admin-SDK JSON key) so global-setup can reset the test
+   users with the privileged Admin SDK; without it, it falls back to the client SDK.
+3. **Rules:** the same published `firestore.rules` (step 3 above) must be live — the suite's
+   owner/employee boundary assertions rely on them.
 
 ---
 
 ## Notes
 
-- `DATABASE_URL` uses **four** slashes for an absolute path (e.g. `sqlite:////home/<user>/anaj-bahi/backend/data/anaj.db`) so the SQLite file lives on PythonAnywhere's persistent home disk. A three-slash relative URL is relative to the process working directory instead.
-- The backend enables permissive CORS (`allow_origins=["*"]`); auth is a Bearer device token (no cookies), so a wildcard origin is safe.
 - The frontend is a pure static export — it needs no server and can also be hosted on any static host under any sub-path by setting `NEXT_PUBLIC_BASE_PATH` accordingly.
+- The `NEXT_PUBLIC_FIREBASE_*` values are inlined at build time, so changing the Firebase project requires a rebuild + redeploy.

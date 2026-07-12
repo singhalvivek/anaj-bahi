@@ -1,8 +1,9 @@
 'use client'
 
+import { useMemo } from 'react'
 import Link from 'next/link'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '@/lib/i18n/context'
+import { useBills } from '@/lib/db/hooks'
 import { listDueBills } from '@/lib/db/queries'
 import type { Bill } from '@/lib/db/repo'
 import { billBalance, todayIso } from '@/lib/calc'
@@ -38,9 +39,13 @@ function DueRow({ bill }: { bill: Bill }) {
 export default function DuePage() {
   const { t } = useI18n()
 
-  // Reactive: any payment/bill write re-runs listDueBills so a settled bill
-  // drops off the list immediately.
-  const buckets = useLiveQuery(() => listDueBills(todayIso()), [])
+  // Reactive: the live Firestore bill list re-renders on any payment/bill write,
+  // and the pure grouping re-runs so a settled bill drops off the list immediately.
+  const allBills = useBills()
+  const buckets = useMemo(
+    () => (allBills ? listDueBills(allBills, todayIso()) : undefined),
+    [allBills],
+  )
 
   if (buckets === undefined) {
     return (

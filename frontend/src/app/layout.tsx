@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { I18nProvider } from '@/lib/i18n/context'
-import { TopBar } from '@/components/TopBar'
-import { BottomNav } from '@/components/BottomNav'
+import { AuthProvider } from '@/lib/auth/context'
+import { AuthGate } from '@/components/auth/AuthGate'
 import { SwRegister } from '@/components/SwRegister'
 
 // Base path for the static export; defaults to `/app` (local dev + E2E). The
@@ -32,12 +32,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="hi">
       <body className="min-h-screen bg-stone-100 text-stone-900 antialiased">
         <I18nProvider>
-          <SwRegister />
-          <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-stone-50 shadow-sm">
-            <TopBar />
-            <main className="flex flex-1 flex-col pb-24">{children}</main>
-            <BottomNav />
-          </div>
+          <AuthProvider>
+            <SwRegister />
+            {/* AuthGate now owns the app chrome (TopBar/BottomNav): it swaps
+                between the login/onboarding screens and the full app shell purely
+                by conditional rendering on useAuth().status — no new routes, so
+                the static export and cross-reload session are unaffected. */}
+            <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-stone-50 shadow-sm">
+              <AuthGate>{children}</AuthGate>
+            </div>
+          </AuthProvider>
         </I18nProvider>
       </body>
     </html>

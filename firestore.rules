@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// Anaj Bahi — Firestore Security Rules
+//
+// PHASE 8 (role boundaries) + PHASE 9 (finalized/hardened). Phase 8 replaced the
+// earlier interim "any signed-in user" rules with real per-role boundaries; Phase 9
+// FINALIZES them — the activity path is append-only (create-only, no update/delete)
+// with OWNER-only reads, and all other boundaries below are the confirmed final pass.
+// Drawn from the frozen model in
+// spec/architecture.md § "Firestore data model — frozen collection-path map":
+//   - users/{uid}                      → only the owner (uid == request.auth.uid)
+//   - memberships/{phoneKey}           → read: any signed-in user (phone→bizId lookup
+//                                         at onboarding, before membership exists);
+//                                         write: self (own uid) or an owner of bizId
+//   - businesses/{bizId}               → read: any member; write: an owner
+//   - businesses/{bizId}/members/{uid} → read: any member; create: self on claim OR
+//                                         owner; update: owner or self; delete: owner
+//   - businesses/{bizId}/bills|farmers|grainTypes → read/write: any member of bizId
+//   - businesses/{bizId}/activity      → read: OWNERS only; create-only for members;
+//                                         no update/delete (Phase 9 — final append-only)
+//
+// These rules are claim-bootstrap-safe: verified against the onboarding writeBatch
+// in lib/tenancy/business.ts (createBusiness / claimEmployeeMembership) — the owner
+// and employee self-create their own membership + member docs before any membership
+// exists to check, so create allows `request.resource.data.uid == request.auth.uid`.
+//
+// NOTE: the activity match block below is UNCHANGED from Phase 8 (it was already the
+// hardened target: create-only for members, owner-only read, update/delete forbidden).
+// Phase 9 slice-a only updated these COMMENTS — the enforced rules are byte-identical,
+// so NO re-publish is required for this change. (These rules must, of course, have been
+// PUBLISHED once — via the Firebase console or `firebase deploy --only firestore:rules`
+// — for the app and the slice-c role E2E (activity-log.spec.ts) to enforce them.)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function memberDoc(bizId) { return /databases/$(database)/documents/businesses/$(bizId)/members/$(request.auth.uid); }
+    function isMember(bizId) { return signedIn() && exists(memberDoc(bizId)); }
+    function isOwner(bizId) { return isMember(bizId) && get(memberDoc(bizId)).data.role == 'owner'; }
+
+    match /users/{uid} {
+      allow read, write: if isSelf(uid);
+    }
+
+    // Phone -> business invite/roster lookup. Read is open to any signed-in user
+    // (findMembershipByPhone runs at onboarding before the user is a member; the doc
+    // is a non-sensitive phone->bizId mapping). Writes: owner of the target business,
+    // OR the person setting their OWN uid (owner self-create at onboarding / employee
+    // self-claim). Delete: owner of the business the membership points at.
+    match /memberships/{phoneKey} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && (
+        request.resource.data.uid == request.auth.uid ||
+        isOwner(request.resource.data.bizId)
+      );
+      allow delete: if signedIn() && isOwner(resource.data.bizId);
+    }
+
+    match /businesses/{bizId} {
+      allow read: if isMember(bizId);
+      allow create: if signedIn() && request.resource.data.createdByUid == request.auth.uid;
+      allow update: if isOwner(bizId);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isMember(bizId);
+        // Self-create on claim/onboarding (not yet a member), or owner manages roster.
+        allow create: if signedIn() && (request.auth.uid == uid || isOwner(bizId));
+        allow update: if isOwner(bizId) || isSelf(uid);
+        allow delete: if isOwner(bizId);
+      }
+      match /bills/{billId}      { allow read, write: if isMember(bizId); }
+      match /farmers/{farmerId}  { allow read, write: if isMember(bizId); }
+      match /grainTypes/{gtId}   { allow read, write: if isMember(bizId); }
+      match /activity/{activityId} {
+        allow read: if isOwner(bizId);
+        allow create: if isMember(bizId);
+        allow update, delete: if false;
+      }
+    }
+  }
+}

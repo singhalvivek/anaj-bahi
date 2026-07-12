@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useI18n } from '@/lib/i18n/context'
-import { listGrainTypes } from '@/lib/db/repo'
+import { useGrainTypes } from '@/lib/db/hooks'
 import type { BillFilter } from '@/lib/db/queries'
 
 /**
@@ -13,7 +12,7 @@ import type { BillFilter } from '@/lib/db/queries'
  */
 export function SearchBar({ onChange }: { onChange: (filter: BillFilter) => void }) {
   const { t, lang } = useI18n()
-  const grainTypes = useLiveQuery(() => listGrainTypes(), [])
+  const grainTypes = useGrainTypes()
 
   const [text, setText] = useState('')
   const [grainTypeId, setGrainTypeId] = useState('')

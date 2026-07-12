@@ -6,7 +6,9 @@
 
 ## System Overview
 
-Anaj Bahi is a single-user, installable **Next.js PWA** that runs entirely on the trader's phone. In Phase 1 there is **no backend and no network dependency**: the browser is the whole runtime. The UI (React 19 client components) reads and writes an **IndexedDB** database via **Dexie**; a pure TypeScript **calc module** computes all weights and money; a **service worker** caches the app shell so it launches offline; a lightweight **i18n context** swaps Hindi/English. Later phases add an optional Python/FastAPI + **SQLite** **sync backend** that the same client talks to only when online — the local IndexedDB store always remains the source of truth on the device.
+Anaj Bahi is an installable **Next.js PWA** that runs on the trader's phone. In Phase 1 there is **no backend and no network dependency**: the browser is the whole runtime. The UI (React 19 client components) reads and writes an **IndexedDB** database via **Dexie**; a pure TypeScript **calc module** computes all weights and money; a **service worker** caches the app shell so it launches offline; a lightweight **i18n context** swaps Hindi/English. Phases 1–5 built this single-user local ledger (with an optional FastAPI + SQLite personal-backup backend in the now-**superseded** Phase 4).
+
+> **Firebase multi-tenant redesign (Phases 6–9).** The app is evolving from single-user-single-device into a **multi-tenant, multi-user** ledger: many independent **businesses**, each with **owners** and **employees** who share one ledger. The FastAPI + SQLite sync backend is **replaced entirely by Firebase** — **Firebase Auth (phone/SMS-OTP)** for identity and **Cloud Firestore (accessed directly from the client, with IndexedDB offline persistence as the store)** for the shared, business-scoped data. There is still **no server we run** (no FastAPI, no container) and — critically — **still no AI/LLM/agent** (see [agent.md](agent.md)). The full frozen contracts for this redesign are in [§ Firebase multi-tenant redesign — frozen contracts](#firebase-multi-tenant-redesign-phases-69--frozen-contracts) at the end of this file.
 
 ## Component Map
 
@@ -66,19 +68,24 @@ No network, no server, no keys anywhere in this flow.
 
 ## Stack
 
-- **Mode:** Greenfield (built by this harness). Extends the existing `frontend/` Next.js skeleton in place.
-- **Language:** TypeScript 5 (frontend). Python 3.12 for the Phase-4 sync backend only.
-- **Agent framework:** **None.** No LLM, no agent orchestration. See [agent.md](agent.md).
+- **Mode:** **Brownfield** for the Firebase redesign (Phases 6–9) — it **extends the already-shipped `frontend/` Next.js app in place**, adopting its stack, layout, and toolchain; it never restructures, renames, or moves existing files. (Phases 1–5 were greenfield-built by this harness.)
+- **Language:** TypeScript 5 (frontend). ~~Python 3.12 for the Phase-4 sync backend~~ — **removed** in Phase 7 (Firebase replaces it).
+- **Agent framework:** **None.** No LLM, no agent orchestration. The Firebase redesign does **not** change this. See [agent.md](agent.md).
 - **LLM provider + model:** **None** — not an AI app.
-- **Frontend:** Next.js 15.3 (App Router) + React 19, **static export** (`output: 'export'`, `basePath: '/app'`, `trailingSlash: true`), Tailwind CSS 4. Installable PWA (manifest + hand-written service worker).
-- **Local store:** **IndexedDB via Dexie 4** (Phase 1 onward). No server DB on device.
-- **Backend (Phase 4 only):** FastAPI + **SQLite** + SQLAlchemy 2.0, managed with `uv`. Lives under a new `backend/` tree; not present in Phases 1–3. **Rationale for SQLite (user stack decision):** this is a single-user, low-concurrency personal-backup app — SQLite needs **no DB server, no Docker, no hosted database**; it runs directly from a local `data/*.db` file, is fully testable on this machine now, and deploys to a cheap single-VM host with a persistent disk. No Alembic: for this schema-light JSON-row model, tables are created via SQLAlchemy `Base.metadata.create_all(...)` driven by an explicit `uv run python -m app.init_db` step (Alembic would be overkill).
-- **Dependency management:** **pnpm** (frontend); `uv` (Phase-4 backend).
-- **Observability:** N/A in the AI sense. Client errors surface as visible UI messages; dev uses browser devtools. (There is no LLM tracing because there is no LLM.)
+- **Frontend:** Next.js 15.3 (App Router) + React 19, **static export** (`output: 'export'`, `basePath: '/app'`, `trailingSlash: true`), Tailwind CSS 4. Installable PWA (manifest + hand-written service worker). Unchanged by the redesign.
+- **Local store (Phases 1–5):** **IndexedDB via Dexie 4**. No server DB on device.
+- **Auth (Phase 6+):** **Firebase Authentication — Phone / SMS-OTP** via the Firebase Web JS SDK (`firebase/auth`): invisible reCAPTCHA + `signInWithPhoneNumber`, **`browserLocalPersistence`** (stays signed in until explicit sign-out). Identity = the phone number in **E.164**. Web config is 6 **public** `NEXT_PUBLIC_FIREBASE_*` values (not secrets); real security is **Firestore Security Rules**.
+- **Cloud data store (Phase 7+):** **Cloud Firestore**, accessed **directly from the client** (`firebase/firestore`) with **no server**. **IndexedDB offline persistence (`persistentLocalCache` + `persistentMultipleTabManager`) is THE store** — writes save + queue locally offline and auto-sync on reconnect; reads are live cross-device via `onSnapshot`. Data is **business-scoped** (see the frozen collection-path map). Free **Spark/Blaze-free-quota** tier; no infra we operate.
+- **~~Backend (Phase 4)~~ — SUPERSEDED / REMOVED (Phase 7):** the FastAPI + SQLite + SQLAlchemy `backend/` tree, its `uv` toolchain, the `frontend/src/lib/sync/*` engine, and the `SyncSettings` UI are **all removed** in Phase 7 and replaced by Firestore. The Phase-4 sync contract below is retained only as historical record, marked SUPERSEDED.
+- **Key new dependency:** **`firebase`** (npm, ^11) — Auth + Firestore Web SDK (frontend `dependencies`). **`firebase-admin`** (^13) is a frontend **devDependency** used only by the Playwright global-setup to reset the test user's cloud docs (never shipped to the client).
+- **Dependency management:** **pnpm** (frontend). (`uv`/Python removed with the backend in Phase 7.)
+- **Observability:** N/A in the AI sense (no LLM tracing because there is no LLM). Client errors surface as visible UI messages; Firebase Auth/Firestore errors are mapped to translated messages; dev uses browser devtools + the Firebase console.
 
 > **Assumed:** unit tests use **Vitest** + **fake-indexeddb** (idiomatic, fast, TS-native) and E2E uses **Playwright** (already available in the repo). No heavy i18n library — a hand-rolled context + typed dictionary covers two languages.
 
 > **Assumed:** the Next.js app keeps its existing home under **`frontend/`** (the real source tree already present); all app code lives there, never loose at repo root. The Phase-4 backend gets its own **`backend/`** tree.
+
+> **Assumed (Firebase redesign):** (1) the canonical E2E test number is **`+911111111111`** / OTP **`123456`** — the user must add this exact pair in the Firebase Console. (2) E2E stays deterministic against **real Cloud Firestore** by resetting the test user's docs in Playwright `global-setup` via the **Firebase Admin SDK**, which needs a gitignored **service-account key** (`FIREBASE_SERVICE_ACCOUNT`) at gate time — the one real secret (the 6 `NEXT_PUBLIC_FIREBASE_*` values are public web config). (3) Firestore uses the modern **`persistentLocalCache`** offline API (not the deprecated `enableIndexedDbPersistence`). (4) `phoneKey` = E.164 without the leading `+`. (5) In Phase 6, the old `backend` **`uvicorn` webServer** and `sync-journey.spec.ts` are removed from the Playwright config so the Phase-6 gate is Firebase-frontend-only; the fuller backend-tree / `lib/sync` / `SyncSettings` removal completes in Phase 7.
 
 ## Commands
 
@@ -102,7 +109,28 @@ No network, no server, no keys anywhere in this flow.
 
 **`package.json` scripts to add (owned by slice-a):** `"test": "vitest run"`, `"test:e2e": "playwright test"`.
 
-### Phase-4 backend commands (cwd `backend/`)
+### Firebase env & commands (Phase 6+, cwd `frontend/`)
+
+> **Phase 6 is the FIRST Firebase-era phase and the first to require `.env` on the frontend.** All commands still run with working directory **`frontend/`**; the dev port, URL, and command shapes are **unchanged** (pnpm, port 3000, URL `http://localhost:3000/app/`).
+
+| Command / setting | Value |
+|-------------------|-------|
+| Firebase Web config (PUBLIC, not secrets) | 6 vars in **`frontend/.env.local`** (gitignored): `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`, `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`. Documented in **`frontend/.env.example`**. Read at build/runtime by `lib/firebase/app.ts` via `process.env.NEXT_PUBLIC_*` (inlined into the static export). |
+| E2E cloud-reset secret | `FIREBASE_SERVICE_ACCOUNT` in `frontend/.env.local` — path to a **gitignored** service-account JSON, used **only** by the Playwright `global-setup` (Firebase Admin SDK) to wipe the test user's Firestore docs before each run. The one real secret; never inlined into the client bundle (no `NEXT_PUBLIC_` prefix). |
+| Canonical E2E test phone | **`+911111111111`** with fixed OTP **`123456`** — a Firebase **test phone number** (Console → Authentication → Sign-in method → Phone → *Phone numbers for testing*). It sends **no real SMS** and **bypasses reCAPTCHA**, so E2E is deterministic and never touches the ~10 free-SMS/day quota. The user must add this exact pair in the Firebase Console (documented in DEPLOY.md, not automated). |
+| Authorized domains | Add `localhost` and `singhalvivek.github.io` in Console → Authentication → Settings → Authorized domains (documented in DEPLOY.md, not automated). |
+| Dev run / port / URL | **Unchanged:** `pnpm dev` (cwd `frontend/`), port `3000`, URL `http://localhost:3000/app/`. `pnpm dev` auto-loads `frontend/.env.local`. |
+| Unit test command | **Unchanged:** `pnpm test` → `vitest run` (cwd `frontend/`) — now also covers the pure membership-decision module. |
+| E2E / UI test command | **Unchanged:** `pnpm test:e2e` → `playwright test` (cwd `frontend/`). The `webServer` runs `pnpm dev` only (the backend `uvicorn` webServer is **removed** in Phase 6); `global-setup` resets the test user's Firestore docs via the Admin SDK. |
+| **Phase-6 gate** | `pnpm install && pnpm test && pnpm build && pnpm test:e2e` (cwd `frontend/`), **with `frontend/.env.local` present** (real `NEXT_PUBLIC_FIREBASE_*` + `FIREBASE_SERVICE_ACCOUNT`) and the `+911111111111`/`123456` test number configured in the Firebase Console. Frontend-only — **no `uv`, no backend**. |
+
+**`package.json` deps to add (owned by Phase-6 slice-a):** `firebase` (^11) in `dependencies`; `firebase-admin` (^13) in `devDependencies` (global-setup only).
+
+### ~~Phase-4 backend commands (cwd `backend/`)~~ — SUPERSEDED / REMOVED (Phase 7)
+
+> **Historical.** The FastAPI + SQLite backend, its `uv` toolchain, and all commands below are **removed in Phase 7** (Firebase replaces cloud sync). Retained only so the shipped-Phases-1–5 record stays readable. Do not build against these for the redesign.
+
+### ~~Original Phase-4 backend commands (cwd `backend/`)~~
 
 > **Phase 4 is the FIRST phase to require `.env`** — backend only. The frontend never gets build-time secrets (see the sync-config note below). All commands below run with working directory **`backend/`**.
 
@@ -134,14 +162,20 @@ No network, no server, no keys anywhere in this flow.
 
 ## Deployment Model
 
-Static export (`frontend/out/`) served as plain files under a `basePath` — installable to the Android home screen and fully functional offline. The Phase-4 backend deploys separately as a small FastAPI service backed by a single **SQLite** file on a persistent disk.
+Static export (`frontend/out/`) served as plain files under a `basePath` — installable to the Android home screen and fully functional offline. **No backend to deploy** — Firebase Auth + Cloud Firestore (operated by Google) are the only cloud; the Phase-4 FastAPI + SQLite backend was removed in Phase 7.
 
 **Concrete targets** (copy-paste steps in [`../DEPLOY.md`](../DEPLOY.md)):
 
-- **Frontend → GitHub Pages** (repo `anaj-bahi`) at `https://singhalvivek.github.io/anaj-bahi/`. The `basePath` is parameterized by `NEXT_PUBLIC_BASE_PATH` (default `/app`; production `/anaj-bahi`). The workflow `.github/workflows/deploy-pages.yml` runs `pnpm build:pages` with `NEXT_PUBLIC_BASE_PATH=/anaj-bahi`, adds `.nojekyll`, and publishes `frontend/out/` via GitHub Pages. The postbuild `scripts/apply-base-path.mjs` rewrites the `/app` literals in the exported `manifest.webmanifest`/`sw.js` (a no-op at the default `/app`, so local dev + E2E are untouched).
-- **Backend → PythonAnywhere** (free tier, no card): a FastAPI + SQLite service. PythonAnywhere serves **WSGI**, so the ASGI app runs through the WSGI adapter in `backend/wsgi.py`, which drives it with a **fresh event loop per request** (a shared-loop wrapper like `a2wsgi` deadlocks under PythonAnywhere's uWSGI after the first request). The SQLite file lives on the **persistent home disk** (`DATABASE_URL=sqlite:////home/<user>/anaj-bahi/backend/data/anaj.db` — four slashes = absolute path). `DEVICE_TOKEN` + `DATABASE_URL` are set in the PythonAnywhere WSGI config file (never committed). `python -m app.init_db` is run once to create the tables.
+- **Frontend → GitHub Pages** (repo `anaj-bahi`) at `https://singhalvivek.github.io/anaj-bahi/`. The `basePath` is parameterized by `NEXT_PUBLIC_BASE_PATH` (default `/app`; production `/anaj-bahi`). The workflow `.github/workflows/deploy-pages.yml` runs `pnpm build:pages` with `NEXT_PUBLIC_BASE_PATH=/anaj-bahi`, adds `.nojekyll`, and publishes `frontend/out/`. The postbuild `scripts/apply-base-path.mjs` rewrites the `/app` literals in the exported `manifest.webmanifest`/`sw.js` (a no-op at the default `/app`, so local dev + E2E are untouched). The 6 `NEXT_PUBLIC_FIREBASE_*` web-config values are supplied as **GitHub repo secrets** at build time; `singhalvivek.github.io` must be a Firebase **authorized domain**.
+- **Firebase (no infra we run):** Auth (Phone/SMS-OTP) + Cloud Firestore, free tier. `firestore.rules` (repo root) is published via the console or `firebase deploy --only firestore:rules`.
 
-The app works fully offline without the backend; the backend is only for optional cloud backup/restore.
+### PWA updates & per-deploy versioning
+
+The app is a long-lived installed PWA that must **auto-update without ever losing data**. Data lives in **IndexedDB** (Firestore `persistentLocalCache`, including offline-unsynced writes); the service worker (`public/sw.js`) only caches the app **shell** and never touches IndexedDB, so updating cannot lose data — synced or not.
+
+- **Service-worker strategy:** page navigations are **network-first** (fetch the latest online; fall back to cache only offline) so a new deploy appears on the next online open; content-hashed static assets are **cache-first**; `activate` deletes only our own older shell caches (prefix `anajbahi-shell-`), with `skipWaiting` + `clients.claim`. The SW is **disabled in `pnpm dev`** (`SwRegister` registers it only in production) so local iteration never serves stale code.
+- **Per-deploy version = the git short hash of the deployed commit.** `build:pages` runs `scripts/gen-version.mjs` (pre → sets `NEXT_PUBLIC_APP_VERSION` = `<shortHash> · <date>`, inlined and shown in **Settings**) and `scripts/stamp-sw.mjs` (post → stamps the exported `out/sw.js` `CACHE_VERSION` to `anajbahi-shell-<shortHash>`). So **every PR/deploy is a new commit → a new version → a byte-different service worker** the browser re-installs (clearing the old shell cache): the app self-updates and the visible version bumps automatically. Plain `pnpm build` (the E2E gate) is left **unstamped/unchanged**.
+- **Manual control:** Settings has an **"Update app"** button (`lib/pwa.ts` `updateApp()`) that checks for a new worker, activates a waiting one, and reloads — data-safe (shell only).
 
 ---
 
@@ -310,9 +344,11 @@ Bill Detail's Edit link branches on `entryMode`: `'summary'` → `/bills/quick?e
 
 ---
 
-## Phase-4 sync contract
+## Phase-4 sync contract — ⚠️ SUPERSEDED (removed in Phase 7)
 
-> **Frozen.** Backend (slice-a) and frontend (slices b/c) build against this in parallel — the wire shapes, auth, storage model, and the frontend `lib/sync` API below do not change during the Phase-4 build. Backend is **FastAPI + SQLite**; the local IndexedDB store always remains the device source of truth.
+> **This entire section is historical.** The FastAPI + SQLite sync backend it describes is **replaced by Firebase** (Auth + Firestore) in Phases 6–9 and its code (`backend/`, `frontend/src/lib/sync/*`, `SyncSettings`) is **removed in Phase 7**. Read the [§ Firebase multi-tenant redesign — frozen contracts](#firebase-multi-tenant-redesign-phases-69--frozen-contracts) instead. Kept only as the record of what shipped in Phases 1–5.
+
+> **Frozen (Phases 1–5 record).** Backend (slice-a) and frontend (slices b/c) built against this — the wire shapes, auth, storage model, and the frontend `lib/sync` API below did not change during the Phase-4 build. Backend was **FastAPI + SQLite**; the local IndexedDB store always remained the device source of truth.
 
 ### Auth
 
@@ -396,3 +432,172 @@ DEVICE_TOKEN=change-me-to-a-long-random-string
 ```
 
 `backend/.env` is **gitignored**; only `backend/.env.example` (with these keys) is committed. `DATABASE_URL` points at the local SQLite file (created by `app.init_db`); `DEVICE_TOKEN` is the bearer token the user also enters in Settings.
+
+---
+
+## Firebase multi-tenant redesign (Phases 6–9) — frozen contracts
+
+> **All contracts in this section are frozen** so the Phase-6 slices build in parallel on disjoint paths (and Phases 7–9 extend them). Identity is a **phone number in E.164**; one person belongs to **exactly one business**; all business data is **business-scoped** in Firestore. There is **no server we run** and **no AI/LLM** — Firebase Auth + client-side Firestore replace the retired FastAPI backend. Product-narrative detail lives in the capability files; the shapes and signatures live here.
+
+### Component map (Firebase era)
+
+```
+                 ┌─────────────────────────────────────────────────────┐
+                 │  Next.js PWA (static export, basePath /app)          │
+  Trader ──tap──►│  React client components (App Router)                │
+                 │        │                     ▲                       │
+                 │        ▼                     │                       │
+                 │  lib/auth (AuthProvider / useAuth) ── phone OTP ─────┼──► Firebase Auth
+                 │        │  status: signed-out│onboarding│ready        │    (SMS-OTP, LOCAL persistence)
+                 │        ▼                     │                       │
+                 │  AuthGate ─ signed-out→Login │ onboarding→Onboarding │
+                 │            │ ready→ the app  │                       │
+                 │            ▼                                         │
+                 │  lib/tenancy (createBusiness / findMembershipByPhone)│
+                 │  lib/db/repo (business-scoped) ── onSnapshot/writes ─┼──► Cloud Firestore
+                 │  lib/calc (pure math, UNCHANGED)                     │    (IndexedDB offline cache = the store)
+                 │  lib/i18n (Hindi/English, UNCHANGED)                 │    Security Rules enforce roles
+                 │  service worker — app shell (UNCHANGED)              │
+                 └─────────────────────────────────────────────────────┘
+```
+
+The `lib/calc`, `lib/i18n`, PWA shell, and all bill-form/receipt UI are **retained unchanged**; only the **data-access layer** (`lib/db/repo`) is re-pointed from Dexie to Firestore, and a new **auth/session** + **tenancy** layer is added in front of the app.
+
+### Firestore data model — frozen collection-path map
+
+phoneKey rule: **E.164 with the leading `+` stripped** (digits only). `+911111111111` → `911111111111`. Used as a safe Firestore document id.
+
+| Path | Doc id | Purpose | Access (Security Rules, finalized Phase 8–9) |
+|------|--------|---------|----------------------------------------------|
+| `users/{uid}` | Firebase Auth uid | The signed-in user's own record; drives fast routing on sign-in. Fields: `{ uid, phone (E.164), displayName, bizId \| null, role \| null, createdAt, updatedAt }` | read/write only when `uid == request.auth.uid` |
+| `memberships/{phoneKey}` | phoneKey | **Top-level phone→business lookup** — the invite/roster keyed by phone; the record an Employee's phone is matched against ("added by an owner?"). Fields: `{ phone (E.164), phoneKey, bizId, role: 'owner'\|'employee', displayName, addedByUid, addedByName, status: 'invited'\|'active', uid \| null, createdAt, claimedAt \| null }` | read: the phone owner (once signed in) or a member of `bizId`; write: an **owner** of `bizId` (add/remove employees) or self-claim on join |
+| `businesses/{bizId}` | uuid | The business + its **business profile**. Fields: `{ id, shopName, traderName, phone, address?, createdByUid, createdByName, createdAt, updatedAt }` | read: any member of `bizId`; write: an **owner** of `bizId` |
+| `businesses/{bizId}/members/{uid}` | member uid | Per-business member (for in-app roster + rule membership checks). Fields: `{ uid, phone, displayName, role, addedByUid, addedByName, addedAt, status }` | read: any member; write: an **owner** (or self on claim) |
+| `businesses/{bizId}/bills/{billId}` | `DDMMYY/xxxxx` | Shared bill ledger (same `Bill` shape as [data.md](data.md); Phase 8 adds `createdBy` attribution snapshot) | read/write: any member of `bizId` (edit-lock still applies) |
+| `businesses/{bizId}/farmers/{farmerId}` | uuid | Shared farmers | read/write: any member of `bizId` |
+| `businesses/{bizId}/grainTypes/{grainTypeId}` | slug/uuid | Shared grain types (seeded + custom) | read/write: any member of `bizId` |
+| `businesses/{bizId}/activity/{activityId}` | uuid | **Append-only** activity log (bill-create, payment, edit/delete) — `{ id, type, billId?, actorUid, actorPhone, actorName (snapshot), at, summary }` | **read: OWNERS only**; write (create-only): any member; no update/delete |
+
+> **Name snapshots (attribution survives renames/removal):** `displayName`/`createdByName`/`actorName`/`addedByName` are **snapshots written at the time of the action**, never a live join to `users`. So an activity entry or a bill's `createdBy` still shows who did it even after that person renames themselves or is removed from the business.
+
+> **One-person-one-business** is enforced by data + rules: a user's `users/{uid}.bizId` and their `memberships/{phoneKey}` both point at a single business; the membership-decision logic refuses to create a second business for a phone that already has a membership.
+
+### Auth / session contract — `lib/auth`
+
+`lib/firebase/app.ts` initializes the SDK from `NEXT_PUBLIC_FIREBASE_*` and exports `app`, `auth`, and `firestore` (Firestore with `persistentLocalCache({ tabManager: persistentMultipleTabManager() })`; auth uses `browserLocalPersistence`).
+
+```ts
+// lib/auth/session.ts (thin wrappers over firebase/auth; no React)
+export interface AppUser {
+  uid: string
+  phone: string                 // E.164
+  displayName: string | null
+  bizId: string | null
+  role: 'owner' | 'employee' | null
+}
+export interface ConfirmationHandle { confirm(code: string): Promise<void> }   // wraps ConfirmationResult
+// sends the OTP (invisible reCAPTCHA mounted in `recaptchaContainerId`); returns a confirm handle
+export function startPhoneSignIn(phoneE164: string, recaptchaContainerId: string): Promise<ConfirmationHandle>
+export function signOutUser(): Promise<void>
+export function onFirebaseAuthChange(cb: (uid: string | null, phone: string | null) => void): () => void
+
+// lib/auth/context.tsx (the surface the UI consumes)
+export type AuthStatus = 'loading' | 'signed-out' | 'onboarding' | 'ready'
+export interface AuthContextValue {
+  status: AuthStatus
+  user: AppUser | null                                   // set while signed-in (onboarding or ready)
+  startPhoneSignIn(phoneE164: string): Promise<void>     // sends OTP (mounts invisible reCAPTCHA)
+  confirmOtp(code: string): Promise<void>                // verifies; loads/creates users/{uid}; sets status
+  setDisplayName(name: string): Promise<void>            // onboarding step 1 (persists to users/{uid})
+  chooseRole(role: 'owner' | 'employee'): Promise<import('./membership').MembershipDecision>
+  createOwnerBusiness(input: import('../tenancy/business').NewBusinessInput): Promise<void> // → status 'ready'
+  joinAsEmployee(bizId: string): Promise<void>           // claim invited membership → status 'ready'
+  signOut(): Promise<void>
+}
+export function AuthProvider(props: { children: React.ReactNode }): JSX.Element
+export function useAuth(): AuthContextValue
+```
+
+Routing rule the `AuthGate` implements from `status`: `loading` → splash; `signed-out` → `<LoginScreen/>`; `onboarding` → `<OnboardingFlow/>` (name → role chooser → owner-create-business | employee-ask-owner); `ready` → the app (`{children}`) with the gated home header. **No new App-Router routes** — the gate swaps surfaces by conditional rendering (static-export-safe). Session persists across reloads (LOCAL persistence); on reload `status` resolves via `users/{uid}` without re-login.
+
+### Membership decision logic — `lib/auth/membership.ts` (pure, unit-tested)
+
+```ts
+export type Role = 'owner' | 'employee'
+export interface MembershipLookup { bizId: string; role: Role; status: 'invited' | 'active' }
+export type MembershipDecision =
+  | { kind: 'owner'; bizId: string }            // phone already has an OWNER membership → enter as owner
+  | { kind: 'employee-joined'; bizId: string }  // phone already has an EMPLOYEE membership → enter as employee
+  | { kind: 'employee-unadded' }                // chose Employee, no membership → "ask your owner"
+  | { kind: 'new' }                             // chose Owner, no membership → create a business
+
+// FROZEN RULES (all four branches unit-tested; an existing membership ALWAYS wins over the fresh choice,
+// which is what enforces one-person-one-business):
+//   lookup && lookup.role === 'owner'      → { kind:'owner', bizId }
+//   lookup && lookup.role === 'employee'   → { kind:'employee-joined', bizId }
+//   !lookup && chosenRole === 'owner'      → { kind:'new' }
+//   !lookup && chosenRole === 'employee'   → { kind:'employee-unadded' }
+export function decideMembership(chosenRole: Role, lookup: MembershipLookup | null): MembershipDecision
+```
+
+### Tenancy write helpers — `lib/tenancy/business.ts`
+
+```ts
+export interface NewBusinessInput { shopName: string; traderName: string; phone?: string; address?: string }
+export interface MembershipRecord {
+  phone: string; phoneKey: string; bizId: string; role: Role; displayName: string
+  addedByUid: string; addedByName: string; status: 'invited' | 'active'
+  uid: string | null; createdAt: number; claimedAt: number | null
+}
+export function phoneKey(phoneE164: string): string     // '+911111111111' → '911111111111'
+export function findMembershipByPhone(phoneE164: string): Promise<MembershipRecord | null>  // reads memberships/{phoneKey}
+// createBusiness writes, in one logical unit: businesses/{bizId}, businesses/{bizId}/members/{uid} (owner,active),
+// memberships/{phoneKey} (owner,active,uid set), and users/{uid} (bizId,role). Returns the new bizId.
+export function createBusiness(owner: AppUser, input: NewBusinessInput): Promise<string>
+// claimEmployeeMembership sets uid + status:'active' + claimedAt on memberships/{phoneKey},
+// writes businesses/{bizId}/members/{uid}, and sets users/{uid}.{bizId,role}.
+export function claimEmployeeMembership(user: AppUser, bizId: string): Promise<void>
+```
+
+### Firestore-backed repo contract — `lib/db/repo` (re-pointed in Phase 7)
+
+> **Preserves the Phase-1 call-site shapes** so `lib/calc` and every bill-form/detail/receipt component survive unchanged. The imperative functions keep their names and (already-`Promise`) signatures; the store is now **business-scoped Firestore** instead of Dexie. Business scope is **ambient** — the `AuthProvider` calls `setActiveBusiness(bizId)` when `status` becomes `ready` (and `setActiveBusiness(null)` on sign-out), so existing callers like `repo.listBills()` need no `bizId` argument.
+
+```ts
+export function setActiveBusiness(bizId: string | null): void   // called by AuthProvider
+
+// SAME NAMES / SHAPES as the Phase-1 contract, now Firestore-backed & business-scoped:
+export function listFarmers(): Promise<Farmer[]>
+export function searchFarmers(prefix: string): Promise<Farmer[]>
+export function getFarmer(id: string): Promise<Farmer | undefined>
+export function upsertFarmer(input: Omit<Farmer,'id'|'createdAt'> & { id?: string }): Promise<Farmer>
+export function listGrainTypes(): Promise<GrainType[]>
+export function addCustomGrainType(nameEn: string, nameHi: string): Promise<GrainType>
+export function ensureSeeded(): Promise<void>                    // seeds businesses/{bizId}/grainTypes once, idempotent
+export function createBill(input: Omit<Bill,'createdAt'|'updatedAt'>): Promise<Bill>
+export function getBill(id: string): Promise<Bill | undefined>
+export function listBills(): Promise<Bill[]>
+export function updateBill(bill: Bill): Promise<Bill>            // edit-lock unchanged (payments.length > 0)
+export function addPayment(billId: string, p: Omit<Payment,'id'|'createdAt'> & { id?: string }): Promise<Bill>
+
+// Reactive reads change engine: dexie-react-hooks `useLiveQuery` is retired for synced entities and
+// replaced by Firestore onSnapshot hooks (business-scoped, live cross-device):
+export function useBills(): Bill[] | undefined
+export function useBill(id: string): Bill | undefined
+export function useFarmers(): Farmer[] | undefined
+export function useGrainTypes(): GrainType[] | undefined
+```
+
+- **Offline persistence IS the store:** an offline `createBill`/`addPayment` resolves from the local Firestore cache and auto-syncs on reconnect; there is **no separate outbox** (`lib/sync/*` is deleted). Multi-user concurrent writes merge last-write-wins per document.
+- **One-time migration (Phase 7):** on the trader's first **owner** sign-in, `migrateLocalToFirestore(bizId)` reads the legacy Dexie `bills`/`farmers`/`grainTypes` and uploads them into `businesses/{bizId}/…`, guarded by a `users/{uid}.migratedAt` flag so it runs **once, idempotently**. The Dexie DB is kept read-only as the migration source; no destructive local wipe.
+- **Attribution (Phase 8):** `createBill`/`addPayment` additionally stamp a `createdBy: { uid, phone, name }` snapshot and append an `businesses/{bizId}/activity/*` entry.
+
+### Sync UI (Phase 7)
+
+Automatic (Firestore handles it) **plus** a visible **online/sync status + "Sync now"** control in Settings (`lib/db` exposes a small `getSyncStatus()`/`waitForPendingWrites()` helper over Firestore). The old `SyncSettings` base-URL/device-token box is **deleted** — there is no URL or token to enter; the user is identified by their phone.
+
+### E2E determinism (frozen)
+
+- Auth is **real Firebase** driven by the **test phone number** `+911111111111` / fixed OTP `123456` (no SMS, no reCAPTCHA challenge). Firestore writes hit **real Cloud Firestore** (free tier).
+- Playwright **`global-setup`** (replacing the old SQLite-wipe) uses the **Firebase Admin SDK** (`FIREBASE_SERVICE_ACCOUNT`) to **reset the test user's cloud footprint** before the run — `recursiveDelete` of the test owner's `businesses/{bizId}`, and delete of `memberships/{testPhoneKey}` + `users/{testUid}` — so onboarding runs fresh and deterministically every time (mirrors how the retired `global-setup` wiped `e2e.db`).
+- A shared helper **`tests/e2e/support/auth.ts` → `signInTestOwner(page, { bizName })`** drives login→(onboarding-if-shown)→app so every retained journey spec authenticates first; the dedicated `auth-onboarding.spec.ts` (which sorts first, `workers: 1`) sees the clean user and asserts the full login→name→owner-creates-business→gated-home path.

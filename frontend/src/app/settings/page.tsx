@@ -1,8 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useI18n } from '@/lib/i18n/context'
-import { SyncSettings } from '@/components/SyncSettings'
+import { useAuth } from '@/lib/auth/context'
+import { SyncStatus } from '@/components/SyncStatus'
+import { PersonalProfile } from '@/components/settings/PersonalProfile'
+import { UpdateAppButton } from '@/components/settings/UpdateAppButton'
 import {
   getProfile,
   saveProfile,
@@ -12,11 +16,19 @@ import {
 
 export default function SettingsPage() {
   const { t } = useI18n()
+  const { user } = useAuth()
   const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_PROFILE)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState(false)
+
+  // The business profile is owner-only editable (Phase 8). Employees see it
+  // read-only, with the Save button hidden and a small note; Security Rules are
+  // the real boundary (owner-only business writes) — this UI gate is the friendly
+  // first line.
+  const isOwner = user?.role === 'owner'
+  const canEditBusiness = isOwner && loaded
 
   useEffect(() => {
     let active = true
@@ -61,14 +73,17 @@ export default function SettingsPage() {
   }
 
   const inputClass =
-    'w-full rounded-xl border-2 border-stone-300 bg-white px-4 py-3 text-base text-stone-800 outline-none focus:border-emerald-500'
+    'w-full rounded-xl border-2 border-stone-300 bg-white px-4 py-3 text-base text-stone-800 outline-none focus:border-emerald-500 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500'
   const labelClass = 'text-sm font-medium text-stone-600'
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-5 py-8">
       <h2 className="text-2xl font-semibold text-stone-800">{t('settings.title')}</h2>
 
-      {/* Business profile — the real Phase-3 form */}
+      {/* Personal profile — the signed-in user's own identity (editable name) */}
+      <PersonalProfile />
+
+      {/* Business profile — owner-only editable; read-only for employees */}
       <section
         data-testid="business-profile"
         className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"
@@ -77,6 +92,15 @@ export default function SettingsPage() {
           <h3 className="text-lg font-semibold text-stone-800">{t('settings.business')}</h3>
           <p className="text-sm text-stone-500">{t('settings.businessHint')}</p>
         </div>
+
+        {!isOwner && (
+          <p
+            data-testid="business-readonly-note"
+            className="rounded-xl bg-stone-50 px-4 py-3 text-sm font-medium text-stone-500"
+          >
+            {t('settings.businessReadonly')}
+          </p>
+        )}
 
         {error && (
           <p role="alert" data-testid="settings-error" className="text-sm font-medium text-red-600">
@@ -91,7 +115,8 @@ export default function SettingsPage() {
             className={inputClass}
             value={profile.shopName}
             onChange={(e) => update('shopName', e.target.value)}
-            disabled={!loaded}
+            disabled={!canEditBusiness}
+            readOnly={!isOwner}
             autoComplete="off"
           />
         </label>
@@ -103,7 +128,8 @@ export default function SettingsPage() {
             className={inputClass}
             value={profile.traderName}
             onChange={(e) => update('traderName', e.target.value)}
-            disabled={!loaded}
+            disabled={!canEditBusiness}
+            readOnly={!isOwner}
             autoComplete="off"
           />
         </label>
@@ -117,7 +143,8 @@ export default function SettingsPage() {
             inputMode="tel"
             value={profile.phone}
             onChange={(e) => update('phone', e.target.value)}
-            disabled={!loaded}
+            disabled={!canEditBusiness}
+            readOnly={!isOwner}
             autoComplete="off"
           />
         </label>
@@ -129,33 +156,79 @@ export default function SettingsPage() {
             className={inputClass}
             value={profile.address ?? ''}
             onChange={(e) => update('address', e.target.value)}
-            disabled={!loaded}
+            disabled={!canEditBusiness}
+            readOnly={!isOwner}
             autoComplete="off"
           />
         </label>
 
-        <button
-          data-testid="settings-save"
-          onClick={onSave}
-          disabled={saving || !loaded}
-          className="min-h-[56px] w-full rounded-xl bg-emerald-600 px-4 text-lg font-semibold text-white transition-colors disabled:opacity-60 active:bg-emerald-700"
-        >
-          {saving ? t('action.saving') : t('settings.save')}
-        </button>
+        {isOwner && (
+          <>
+            <button
+              data-testid="settings-save"
+              onClick={onSave}
+              disabled={saving || !loaded}
+              className="min-h-[56px] w-full rounded-xl bg-emerald-600 px-4 text-lg font-semibold text-white transition-colors disabled:opacity-60 active:bg-emerald-700"
+            >
+              {saving ? t('action.saving') : t('settings.save')}
+            </button>
 
-        {saved && (
-          <p
-            data-testid="settings-saved"
-            role="status"
-            className="text-center text-sm font-medium text-emerald-700"
-          >
-            ✓ {t('settings.saved')}
-          </p>
+            {saved && (
+              <p
+                data-testid="settings-saved"
+                role="status"
+                className="text-center text-sm font-medium text-emerald-700"
+              >
+                ✓ {t('settings.saved')}
+              </p>
+            )}
+          </>
         )}
       </section>
 
-      {/* Cloud backup — the real Phase-4 sync section */}
-      <SyncSettings />
+      {/* Employees entry — owners only (the screen itself is owner-gated too) */}
+      {isOwner && (
+        <Link
+          href="/employees"
+          data-testid="employees-entry"
+          className="flex min-h-[56px] items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-5 py-4 shadow-sm active:bg-stone-50"
+        >
+          <span className="flex items-center gap-3 text-base font-semibold text-stone-800">
+            <span aria-hidden className="text-xl">
+              👥
+            </span>
+            {t('settings.employeesEntry')}
+          </span>
+          <span aria-hidden className="text-stone-400">
+            ›
+          </span>
+        </Link>
+      )}
+
+      {/* Activity log entry — owners only (the screen itself is owner-gated too) */}
+      {isOwner && (
+        <Link
+          href="/activity"
+          data-testid="activity-entry"
+          className="flex min-h-[56px] items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-5 py-4 shadow-sm active:bg-stone-50"
+        >
+          <span className="flex items-center gap-3 text-base font-semibold text-stone-800">
+            <span aria-hidden className="text-xl">
+              📜
+            </span>
+            {t('settings.activityEntry')}
+          </span>
+          <span aria-hidden className="text-stone-400">
+            ›
+          </span>
+        </Link>
+      )}
+
+      {/* Local-first sync status — Phase-7 Firestore offline persistence */}
+      <SyncStatus />
+
+      {/* Update the installed app to the latest version (data-safe: shell only) */}
+      <UpdateAppButton />
     </div>
   )
 }

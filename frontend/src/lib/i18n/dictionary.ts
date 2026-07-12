@@ -83,6 +83,9 @@ export const EN = {
   'detail.farmer': 'Farmer',
   'detail.phone': 'Phone',
 
+  // attribution (Phase 8)
+  'attribution.createdBy': 'Created by',
+
   // validation
   'validation.farmerRequired': 'Choose or add a farmer',
   'validation.lineRequired': 'Add at least one grain line',
@@ -221,6 +224,164 @@ export const EN = {
   // quick-entry validation (in addition to the shared farmer/price rules)
   'validation.totalWeightRequired': 'Enter a total weight greater than 0',
   'validation.amountRequired': 'Enter an amount greater than 0',
+
+  // ---- Phase 6 — phone auth, onboarding, gated home ----
+
+  // login (phone + OTP)
+  'auth.login.title': 'Sign in',
+  'auth.phone.label': 'Phone number',
+  'auth.phone.placeholder': '+91 98765 43210',
+  'auth.sendCode': 'Send code',
+  'auth.sending': 'Sending code…',
+  'auth.changeNumber': 'Change number',
+  'auth.otp.label': 'Enter the code',
+  'auth.otp.placeholder': '6-digit code',
+  'auth.verify': 'Verify',
+  'auth.verifying': 'Verifying…',
+
+  // auth errors (mapped from Firebase error codes)
+  'auth.error.invalidPhone': 'Enter a valid phone number with country code',
+  'auth.error.invalidOtp': 'Wrong code — check it and try again',
+  'auth.error.tooManyRequests': 'Too many attempts — wait a while and try again',
+  'auth.error.network': 'No connection — check your internet and retry',
+  'auth.error.generic': 'Could not sign in — please try again',
+
+  // onboarding — name prompt
+  'onboarding.name.title': 'What is your name?',
+  'onboarding.name.label': 'Your name',
+  'onboarding.name.continue': 'Continue',
+  'onboarding.name.required': 'Please enter your name',
+
+  // onboarding — role chooser
+  'onboarding.role.title': 'How will you use Anaj Bahi?',
+  'onboarding.role.owner': 'I am an Owner',
+  'onboarding.role.employee': 'I am an Employee',
+
+  // onboarding — create business (owner)
+  'onboarding.createBusiness.title': 'Create your business',
+  'onboarding.createBusiness.shopName': 'Shop name',
+  'onboarding.createBusiness.traderName': 'Trader name',
+  'onboarding.createBusiness.phone': 'Business phone (optional)',
+  'onboarding.createBusiness.address': 'Address (optional)',
+  'onboarding.createBusiness.create': 'Create',
+  'onboarding.createBusiness.creating': 'Creating…',
+  'onboarding.createBusiness.shopRequired': 'Enter a shop name',
+
+  // onboarding — employee not yet added ("ask your owner")
+  'onboarding.askOwner.title': 'Ask your owner to add you',
+  'onboarding.askOwner.explain':
+    'Your owner needs to add your phone number to their business before you can join. Share the number below with them, then sign in again.',
+  'onboarding.askOwner.yourPhone': 'Your phone number',
+  'onboarding.askOwner.signOut': 'Sign out',
+
+  // gated home header (name + business + role + sign out)
+  'home.greeting': 'Namaste',
+  'home.role.owner': 'Owner',
+  'home.role.employee': 'Employee',
+  'home.signOut': 'Sign out',
+
+  // "shared cloud & roles — coming soon" banner
+  'home.comingSoon.title': 'Shared cloud & roles — coming soon',
+  'home.comingSoon.body':
+    'Your bills are still saved on this phone for now. Sharing the ledger with your team across devices arrives in the next update.',
+
+  // ---- Phase 6 slice-a — frozen key set consumed by the auth/onboarding UI (slices b/c) ----
+  // ('auth.login.title' is defined above and intentionally not repeated.)
+
+  // login screen
+  'auth.login.phoneLabel': 'Phone number',
+  'auth.login.phonePlaceholder': '+91 98765 43210',
+  'auth.login.sendCode': 'Send code',
+  'auth.login.otpLabel': 'Enter the code',
+  'auth.login.verify': 'Verify',
+  'auth.login.sending': 'Sending code…',
+  'auth.login.verifying': 'Verifying…',
+  'auth.login.error': 'Could not sign in — please try again',
+
+  // onboarding — name + role chooser
+  'auth.onboarding.nameTitle': 'What is your name?',
+  'auth.onboarding.nameLabel': 'Your name',
+  'auth.onboarding.continue': 'Continue',
+  'auth.onboarding.roleTitle': 'How will you use Anaj Bahi?',
+  'auth.role.owner': 'I am an Owner',
+  'auth.role.employee': 'I am an Employee',
+  'auth.role.ownerHint': 'Create and run your own business ledger',
+  'auth.role.employeeHint': 'Join a business your owner added you to',
+
+  // onboarding — owner creates a business
+  'auth.createBiz.title': 'Create your business',
+  'auth.createBiz.shopLabel': 'Shop name',
+  'auth.createBiz.create': 'Create',
+
+  // onboarding — employee not yet added
+  'auth.askOwner.title': 'Ask your owner to add you',
+  'auth.askOwner.body':
+    'Your owner needs to add your phone number to their business before you can join. Share your number with them, then sign in again.',
+
+  // gated home — role badge + sign out + coming-soon banner + splash
+  'auth.gated.role.owner': 'Owner',
+  'auth.gated.role.employee': 'Employee',
+  'auth.signOut': 'Sign out',
+  'auth.comingSoon.cloud': 'Shared cloud & roles — coming soon',
+  'auth.splash': 'Anaj Bahi',
+
+  // ---- Phase 7 — local-first sync status (Firestore offline persistence) ----
+  'syncStatus.title': 'Sync',
+  'syncStatus.hint': 'Your ledger is saved on this phone and syncs automatically when you are online.',
+  'syncStatus.online': 'Online',
+  'syncStatus.offline': 'Offline',
+  'syncStatus.pending': 'Saving your changes…',
+  'syncStatus.synced': 'All changes saved',
+  'syncStatus.syncNow': 'Sync now',
+  'syncStatus.syncing': 'Syncing…',
+  'syncStatus.syncedNow': 'Synced',
+
+  // ---- Phase 8 — employee management (owner-only Employees screen) ----
+  'employees.title': 'Employees',
+  'employees.addTitle': 'Add an employee',
+  'employees.phoneLabel': 'Phone number',
+  'employees.nameLabel': 'Name',
+  'employees.add': 'Add',
+  'employees.adding': 'Adding…',
+  'employees.existsError': 'That phone number already belongs to a business',
+  'employees.rosterTitle': 'Members',
+  'employees.empty': 'No employees yet — add one above',
+  'employees.remove': 'Remove',
+  'employees.removing': 'Removing…',
+  'employees.ownerOnly': 'Only the owner can manage employees',
+  'employees.roleOwner': 'Owner',
+  'employees.roleEmployee': 'Employee',
+  'employees.back': 'Back',
+  'employees.invited': 'Invited',
+  'employees.active': 'Active',
+
+  // ---- Phase 8 slice-c — personal profile + settings split ----
+  'personal.title': 'Your profile',
+  'personal.nameLabel': 'Your name',
+  'personal.phoneLabel': 'Phone',
+  'personal.roleLabel': 'Role',
+  'personal.save': 'Save name',
+  'personal.saving': 'Saving…',
+  'personal.saved': 'Name saved',
+  'personal.roleOwner': 'Owner',
+  'personal.roleEmployee': 'Employee',
+  'settings.employeesEntry': 'Manage employees',
+  'settings.businessReadonly': 'Only owners can edit the business profile',
+  'settings.activityComingSoon': 'Activity log — coming soon',
+
+  // ---- Phase 9 — owner-only activity log ----
+  'activity.title': 'Activity log',
+  'activity.empty': 'No activity yet',
+  'activity.ownerOnly': 'Only the owner can view the activity log',
+  'activity.back': 'Back',
+  'activity.action.billCreate': 'Created a bill',
+  'activity.action.payment': 'Recorded a payment',
+  'activity.action.billEdit': 'Edited a bill',
+  'settings.activityEntry': 'Activity log',
+  'settings.updateApp': 'Update app',
+  'settings.updateAppHint': 'Get the latest version. Your saved bills stay safe.',
+  'settings.updating': 'Updating…',
+  'settings.version': 'Version',
 } as const
 
 export type TKey = keyof typeof EN
@@ -301,6 +462,9 @@ export const HI: Record<TKey, string> = {
   'detail.title': 'बही',
   'detail.farmer': 'किसान',
   'detail.phone': 'फ़ोन',
+
+  // attribution (Phase 8)
+  'attribution.createdBy': 'द्वारा बनाया गया',
 
   // validation
   'validation.farmerRequired': 'किसान चुनें या जोड़ें',
@@ -440,6 +604,163 @@ export const HI: Record<TKey, string> = {
   // quick-entry validation (in addition to the shared farmer/price rules)
   'validation.totalWeightRequired': '0 से बड़ा कुल वज़न भरें',
   'validation.amountRequired': '0 से बड़ी राशि भरें',
+
+  // ---- Phase 6 — phone auth, onboarding, gated home ----
+
+  // login (phone + OTP)
+  'auth.login.title': 'साइन इन करें',
+  'auth.phone.label': 'फ़ोन नंबर',
+  'auth.phone.placeholder': '+91 98765 43210',
+  'auth.sendCode': 'कोड भेजें',
+  'auth.sending': 'कोड भेजा जा रहा है…',
+  'auth.changeNumber': 'नंबर बदलें',
+  'auth.otp.label': 'कोड भरें',
+  'auth.otp.placeholder': '6 अंकों का कोड',
+  'auth.verify': 'पुष्टि करें',
+  'auth.verifying': 'पुष्टि हो रही है…',
+
+  // auth errors (mapped from Firebase error codes)
+  'auth.error.invalidPhone': 'देश कोड के साथ सही फ़ोन नंबर भरें',
+  'auth.error.invalidOtp': 'ग़लत कोड — जाँचें और दोबारा कोशिश करें',
+  'auth.error.tooManyRequests': 'बहुत बार कोशिश — कुछ देर बाद फिर कोशिश करें',
+  'auth.error.network': 'कनेक्शन नहीं — इंटरनेट जाँचें और दोबारा कोशिश करें',
+  'auth.error.generic': 'साइन इन नहीं हो सका — फिर कोशिश करें',
+
+  // onboarding — name prompt
+  'onboarding.name.title': 'आपका नाम क्या है?',
+  'onboarding.name.label': 'आपका नाम',
+  'onboarding.name.continue': 'आगे बढ़ें',
+  'onboarding.name.required': 'कृपया अपना नाम भरें',
+
+  // onboarding — role chooser
+  'onboarding.role.title': 'आप अनाज बही कैसे इस्तेमाल करेंगे?',
+  'onboarding.role.owner': 'मैं मालिक हूँ',
+  'onboarding.role.employee': 'मैं कर्मचारी हूँ',
+
+  // onboarding — create business (owner)
+  'onboarding.createBusiness.title': 'अपना व्यापार बनाएँ',
+  'onboarding.createBusiness.shopName': 'दुकान का नाम',
+  'onboarding.createBusiness.traderName': 'व्यापारी का नाम',
+  'onboarding.createBusiness.phone': 'व्यापार का फ़ोन (वैकल्पिक)',
+  'onboarding.createBusiness.address': 'पता (वैकल्पिक)',
+  'onboarding.createBusiness.create': 'बनाएँ',
+  'onboarding.createBusiness.creating': 'बन रहा है…',
+  'onboarding.createBusiness.shopRequired': 'दुकान का नाम भरें',
+
+  // onboarding — employee not yet added ("ask your owner")
+  'onboarding.askOwner.title': 'अपने मालिक से जोड़ने को कहें',
+  'onboarding.askOwner.explain':
+    'जुड़ने से पहले आपके मालिक को उनके व्यापार में आपका फ़ोन नंबर जोड़ना होगा। नीचे दिया नंबर उन्हें बताएँ, फिर दोबारा साइन इन करें।',
+  'onboarding.askOwner.yourPhone': 'आपका फ़ोन नंबर',
+  'onboarding.askOwner.signOut': 'साइन आउट',
+
+  // gated home header (name + business + role + sign out)
+  'home.greeting': 'नमस्ते',
+  'home.role.owner': 'मालिक',
+  'home.role.employee': 'कर्मचारी',
+  'home.signOut': 'साइन आउट',
+
+  // "shared cloud & roles — coming soon" banner
+  'home.comingSoon.title': 'साझा क्लाउड और भूमिकाएँ — जल्द आ रहा है',
+  'home.comingSoon.body':
+    'अभी आपकी बहियाँ इसी फ़ोन पर सुरक्षित हैं। कई डिवाइस पर अपनी टीम के साथ बही साझा करना अगले अपडेट में आएगा।',
+
+  // ---- Phase 6 slice-a — frozen key set consumed by the auth/onboarding UI (slices b/c) ----
+
+  // login screen
+  'auth.login.phoneLabel': 'फ़ोन नंबर',
+  'auth.login.phonePlaceholder': '+91 98765 43210',
+  'auth.login.sendCode': 'कोड भेजें',
+  'auth.login.otpLabel': 'कोड भरें',
+  'auth.login.verify': 'पुष्टि करें',
+  'auth.login.sending': 'कोड भेजा जा रहा है…',
+  'auth.login.verifying': 'पुष्टि हो रही है…',
+  'auth.login.error': 'साइन इन नहीं हो सका — फिर कोशिश करें',
+
+  // onboarding — name + role chooser
+  'auth.onboarding.nameTitle': 'आपका नाम क्या है?',
+  'auth.onboarding.nameLabel': 'आपका नाम',
+  'auth.onboarding.continue': 'आगे बढ़ें',
+  'auth.onboarding.roleTitle': 'आप अनाज बही कैसे इस्तेमाल करेंगे?',
+  'auth.role.owner': 'मैं मालिक हूँ',
+  'auth.role.employee': 'मैं कर्मचारी हूँ',
+  'auth.role.ownerHint': 'अपनी बही बनाएँ और चलाएँ',
+  'auth.role.employeeHint': 'जिस व्यापार में मालिक ने जोड़ा है उसमें शामिल हों',
+
+  // onboarding — owner creates a business
+  'auth.createBiz.title': 'अपना व्यापार बनाएँ',
+  'auth.createBiz.shopLabel': 'दुकान का नाम',
+  'auth.createBiz.create': 'बनाएँ',
+
+  // onboarding — employee not yet added
+  'auth.askOwner.title': 'अपने मालिक से जोड़ने को कहें',
+  'auth.askOwner.body':
+    'जुड़ने से पहले आपके मालिक को उनके व्यापार में आपका फ़ोन नंबर जोड़ना होगा। अपना नंबर उन्हें बताएँ, फिर दोबारा साइन इन करें।',
+
+  // gated home — role badge + sign out + coming-soon banner + splash
+  'auth.gated.role.owner': 'मालिक',
+  'auth.gated.role.employee': 'कर्मचारी',
+  'auth.signOut': 'साइन आउट',
+  'auth.comingSoon.cloud': 'साझा क्लाउड और भूमिकाएँ — जल्द आ रहा है',
+  'auth.splash': 'अनाज बही',
+
+  // ---- Phase 7 — local-first sync status (Firestore offline persistence) ----
+  'syncStatus.title': 'सिंक',
+  'syncStatus.hint': 'आपकी बही इसी फ़ोन पर सुरक्षित है और ऑनलाइन होने पर अपने-आप सिंक होती है।',
+  'syncStatus.online': 'ऑनलाइन',
+  'syncStatus.offline': 'ऑफ़लाइन',
+  'syncStatus.pending': 'आपके बदलाव सहेजे जा रहे हैं…',
+  'syncStatus.synced': 'सभी बदलाव सहेजे गए',
+  'syncStatus.syncNow': 'अभी सिंक करें',
+  'syncStatus.syncing': 'सिंक हो रहा है…',
+  'syncStatus.syncedNow': 'सिंक हो गया',
+
+  // ---- Phase 8 — employee management (owner-only Employees screen) ----
+  'employees.title': 'कर्मचारी',
+  'employees.addTitle': 'कर्मचारी जोड़ें',
+  'employees.phoneLabel': 'फ़ोन नंबर',
+  'employees.nameLabel': 'नाम',
+  'employees.add': 'जोड़ें',
+  'employees.adding': 'जोड़ा जा रहा है…',
+  'employees.existsError': 'यह फ़ोन नंबर पहले से किसी व्यापार से जुड़ा है',
+  'employees.rosterTitle': 'सदस्य',
+  'employees.empty': 'अभी कोई कर्मचारी नहीं — ऊपर से जोड़ें',
+  'employees.remove': 'हटाएँ',
+  'employees.removing': 'हटाया जा रहा है…',
+  'employees.ownerOnly': 'केवल मालिक ही कर्मचारी प्रबंधित कर सकते हैं',
+  'employees.roleOwner': 'मालिक',
+  'employees.roleEmployee': 'कर्मचारी',
+  'employees.back': 'वापस',
+  'employees.invited': 'आमंत्रित',
+  'employees.active': 'सक्रिय',
+
+  // ---- Phase 8 slice-c — personal profile + settings split ----
+  'personal.title': 'आपकी जानकारी',
+  'personal.nameLabel': 'आपका नाम',
+  'personal.phoneLabel': 'फ़ोन',
+  'personal.roleLabel': 'भूमिका',
+  'personal.save': 'नाम सहेजें',
+  'personal.saving': 'सहेजा जा रहा है…',
+  'personal.saved': 'नाम सहेजा गया',
+  'personal.roleOwner': 'मालिक',
+  'personal.roleEmployee': 'कर्मचारी',
+  'settings.employeesEntry': 'कर्मचारी प्रबंधित करें',
+  'settings.businessReadonly': 'केवल मालिक ही व्यापार की जानकारी बदल सकते हैं',
+  'settings.activityComingSoon': 'गतिविधि लॉग — जल्द आ रहा है',
+
+  // ---- Phase 9 — owner-only activity log ----
+  'activity.title': 'गतिविधि लॉग',
+  'activity.empty': 'अभी कोई गतिविधि नहीं',
+  'activity.ownerOnly': 'केवल मालिक ही गतिविधि लॉग देख सकते हैं',
+  'activity.back': 'वापस',
+  'activity.action.billCreate': 'बही बनाई',
+  'activity.action.payment': 'भुगतान दर्ज किया',
+  'activity.action.billEdit': 'बही बदली',
+  'settings.activityEntry': 'गतिविधि लॉग',
+  'settings.updateApp': 'ऐप अपडेट करें',
+  'settings.updateAppHint': 'नवीनतम संस्करण पाएँ। आपकी सहेजी बहियाँ सुरक्षित रहेंगी।',
+  'settings.updating': 'अपडेट हो रहा है…',
+  'settings.version': 'संस्करण',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

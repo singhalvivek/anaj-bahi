@@ -8,9 +8,20 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: 'tests/e2e',
   globalSetup: './tests/e2e/global-setup.ts',
+  // Serial, single-worker execution. Combined with Playwright's default
+  // alphabetical spec-file ordering this makes `auth-onboarding.spec.ts` run
+  // FIRST (it sorts before ledger-/purchase-/quick-bill-/receipt-share specs),
+  // so the dedicated gate spec sees the CLEAN test user that global-setup just
+  // reset (before any journey spec signs the test owner in and creates the
+  // business). One worker also keeps the shared real-Firebase test user free of
+  // cross-test races.
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // One retry absorbs transient flakiness inherent to this setup — the Next dev
+  // server compiles routes on-demand (first hit of a route under full-suite load can
+  // lag past the nav timeout) and the E2E talks to REAL Firebase/Firestore over the
+  // network. App-logic failures still fail deterministically on the retry too.
+  retries: 1,
   workers: 1,
   reporter: [['list']],
   timeout: 90_000,
@@ -28,24 +39,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 } },
     },
   ],
-  // Two servers boot for the E2E run: the Next.js PWA (frontend) and the Phase-4
-  // FastAPI + SQLite sync backend. The sync-journey spec drives both; the other
-  // specs are fully offline and simply ignore the backend.
+  // Firebase-only from Phase 6 on: the retired Phase-4 FastAPI + SQLite sync
+  // backend `uvicorn` webServer is removed — the sole server the E2E run boots is
+  // the Next.js PWA. Identity/data come from real Firebase Auth + Cloud Firestore
+  // (the test number + global-setup reset make it deterministic).
   webServer: [
     {
       command: 'pnpm dev',
       url: 'http://localhost:3000/app/',
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
-    },
-    {
-      command: 'uv run uvicorn app.main:app --port 8000',
-      cwd: '../backend',
-      url: 'http://localhost:8000/health',
-      env: {
-        DEVICE_TOKEN: 'test-device-token',
-        DATABASE_URL: 'sqlite:///./data/e2e.db',
-      },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
