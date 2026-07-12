@@ -29,7 +29,16 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase/app'
-import { type Farmer, type GrainType, type Bill, type Payment, type Attribution } from './schema'
+import { computeBillTotal } from '@/lib/calc'
+import {
+  type Farmer,
+  type GrainType,
+  type Bill,
+  type Payment,
+  type Attribution,
+  type ActivityEntry,
+  type ActivityType,
+} from './schema'
 import { buildSeedGrainTypes, GRAIN_SEEDS } from './seed'
 
 export type {
@@ -40,6 +49,8 @@ export type {
   StoredDeduction,
   Payment,
   Attribution,
+  ActivityEntry,
+  ActivityType,
 } from './schema'
 
 /**
@@ -168,6 +179,9 @@ function grainTypesCol(bizId: string) {
 function billsCol(bizId: string) {
   return collection(dbRef, 'businesses', bizId, 'bills')
 }
+function activityCol(bizId: string) {
+  return collection(dbRef, 'businesses', bizId, 'activity')
+}
 
 // The bill id is `DDMMYY/xxxxx`, which contains a `/` — illegal in a single
 // Firestore doc-id path segment (a `/` would split it into a subcollection path).
@@ -179,6 +193,42 @@ function billDocId(billId: string): string {
 }
 function billDoc(bizId: string, billId: string) {
   return doc(dbRef, 'businesses', bizId, 'bills', billDocId(billId))
+}
+
+// ---------- activity log (Phase 9 — best-effort, non-blocking) ----------
+
+/**
+ * Append one append-only activity entry for a ledger mutation. BEST-EFFORT: it
+ * NEVER throws into (or blocks) the calling mutation. When no actor is set it is a
+ * no-op (nothing to attribute). The entry stamps an actor SNAPSHOT (uid/phone/name)
+ * from `activeActor` at action time, so the trail stays truthful after renames.
+ * `fireWrite` already swallows a server rejection; we also guard the entry build.
+ * Owner-only READ is enforced by Rules — writes (create) are allowed for any member.
+ */
+function logActivity(
+  bizId: string,
+  entry: Omit<ActivityEntry, 'id' | 'actorUid' | 'actorPhone' | 'actorName' | 'at'>,
+): void {
+  try {
+    const actor = activeActor
+    if (!actor) return // no active actor → nothing to attribute
+    const id = newId()
+    const full: ActivityEntry = {
+      id,
+      type: entry.type,
+      ...(entry.billId !== undefined ? { billId: entry.billId } : {}),
+      actorUid: actor.uid,
+      actorPhone: actor.phone,
+      actorName: actor.name,
+      at: now(),
+      summary: entry.summary,
+    }
+    fireWrite(setDoc(doc(activityCol(bizId), id), full))
+  } catch (err) {
+    // Logging is additive: a failure here must never surface to the caller.
+    // eslint-disable-next-line no-console
+    console.error('[activity] failed to append entry', err)
+  }
 }
 
 // ---------- farmers ----------
@@ -286,6 +336,12 @@ export async function createBill(input: Omit<Bill, 'createdAt' | 'updatedAt'>): 
   }
   // Sanitized doc id; ORIGINAL bill.id kept verbatim in the doc data. Local-first.
   fireWrite(setDoc(billDoc(bizId, bill.id), bill))
+  // Phase 9 — best-effort activity append (never blocks the bill write).
+  logActivity(bizId, {
+    type: 'bill-create',
+    billId: bill.id,
+    summary: `${bill.farmerName} · ₹${computeBillTotal(bill.lines)}`,
+  })
   return bill
 }
 
@@ -321,6 +377,8 @@ export async function updateBill(bill: Bill): Promise<Bill> {
   }
   const updated: Bill = { ...bill, updatedAt: now() }
   fireWrite(setDoc(billDoc(bizId, updated.id), updated))
+  // Phase 9 — best-effort activity append (never blocks the edit).
+  logActivity(bizId, { type: 'bill-edit', billId: updated.id, summary: updated.farmerName })
   return updated
 }
 
@@ -356,5 +414,7 @@ export async function addPayment(
       updatedAt: updated.updatedAt,
     }),
   )
+  // Phase 9 — best-effort activity append (never blocks the payment write).
+  logActivity(bizId, { type: 'payment', billId, summary: `₹${record.amount}` })
   return updated
 }

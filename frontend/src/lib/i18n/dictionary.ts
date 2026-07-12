@@ -368,6 +368,16 @@ export const EN = {
   'settings.employeesEntry': 'Manage employees',
   'settings.businessReadonly': 'Only owners can edit the business profile',
   'settings.activityComingSoon': 'Activity log — coming soon',
+
+  // ---- Phase 9 — owner-only activity log ----
+  'activity.title': 'Activity log',
+  'activity.empty': 'No activity yet',
+  'activity.ownerOnly': 'Only the owner can view the activity log',
+  'activity.back': 'Back',
+  'activity.action.billCreate': 'Created a bill',
+  'activity.action.payment': 'Recorded a payment',
+  'activity.action.billEdit': 'Edited a bill',
+  'settings.activityEntry': 'Activity log',
 } as const
 
 export type TKey = keyof typeof EN
@@ -733,6 +743,16 @@ export const HI: Record<TKey, string> = {
   'settings.employeesEntry': 'कर्मचारी प्रबंधित करें',
   'settings.businessReadonly': 'केवल मालिक ही व्यापार की जानकारी बदल सकते हैं',
   'settings.activityComingSoon': 'गतिविधि लॉग — जल्द आ रहा है',
+
+  // ---- Phase 9 — owner-only activity log ----
+  'activity.title': 'गतिविधि लॉग',
+  'activity.empty': 'अभी कोई गतिविधि नहीं',
+  'activity.ownerOnly': 'केवल मालिक ही गतिविधि लॉग देख सकते हैं',
+  'activity.back': 'वापस',
+  'activity.action.billCreate': 'बही बनाई',
+  'activity.action.payment': 'भुगतान दर्ज किया',
+  'activity.action.billEdit': 'बही बदली',
+  'settings.activityEntry': 'गतिविधि लॉग',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

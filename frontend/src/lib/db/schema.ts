@@ -82,6 +82,24 @@ export interface Bill {
   updatedAt: number
 }
 
+// Phase 9 — append-only owner-only activity log. One entry per ledger mutation
+// (bill-create / payment / bill-edit), each stamped with an actor snapshot (uid +
+// phone + name) taken at action time so the trail stays truthful after renames or
+// removals. Written best-effort by the repo; read (OWNERS only) is enforced by Rules.
+// No `bill-delete` type: the repo has no delete-bill mutation.
+export type ActivityType = 'bill-create' | 'payment' | 'bill-edit'
+
+export interface ActivityEntry {
+  id: string
+  type: ActivityType
+  billId?: string
+  actorUid: string
+  actorPhone: string
+  actorName: string // snapshot at action time (never a live join)
+  at: number
+  summary: string
+}
+
 export interface MetaRow {
   key: string
   value: unknown

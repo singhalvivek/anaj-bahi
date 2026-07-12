@@ -96,17 +96,29 @@ manual **Sync now**; there is no URL or token to enter.
    types), enter sack weights one-by-one with a live running list/count/total, configure
    deductions (per-sack kg / per-quintal kg / % of gross / flat kg), watch net weight / line
    amount / bill total compute live and exactly (quintal = 100 kg). Saved to Cloud Firestore.
-2. **Payments & finding bills** — partial payments + outstanding balance + payment history; a
+2. **Quick-entry (summary) bills** — capture a purchase already written on paper without the
+   sack-by-sack breakdown: farmer, grain, price, total weight, and amount straight in.
+3. **Payments & finding bills** — partial payments + outstanding balance + payment history; a
    due/overdue list; the edit-lock rule (a bill locks once a payment is recorded); and
    search/filter by farmer name, place, date, and grain type.
-3. **Shareable image receipt** — a business profile in Settings populates a clean bilingual
+4. **Shareable image receipt** — a business profile in Settings populates a clean bilingual
    receipt (business header, full sack-by-sack breakdown, per-grain amounts, total) that is
    rasterized client-side and shared via the phone's native share sheet, with a download fallback.
-4. **Phone auth & shared cloud ledger** — sign in with **Firebase Phone (SMS-OTP)**; the ledger is
-   stored in **Cloud Firestore** with offline persistence, so writes always work offline and sync
-   automatically to the shared business ledger across devices when signal returns.
+5. **Phone auth & shared cloud ledger** — sign in with **Firebase Phone (SMS-OTP)** — the trader
+   is identified by their phone number; the ledger lives in **Cloud Firestore** with offline
+   persistence, so writes always work offline and sync automatically to the shared business ledger
+   across devices when signal returns.
+6. **Multi-user with roles (owner / employee)** — an owner creates a business and invites
+   employees by phone number; everyone shares one ledger. The owner manages the employee roster
+   and the business profile; employees record bills and payments but cannot edit the business or
+   manage staff. Boundaries are enforced by **Firestore Security Rules** (`firestore.rules`), not
+   just the UI.
+7. **Per-action attribution & owner-only activity log** — every bill-create, edit, and payment is
+   stamped with the actor who did it; the owner sees a live, newest-first **activity log** of who
+   did what. The log is owner-only (Rules-enforced); employees are refused it.
 
-Everything is bilingual Hindi/English and mobile-first.
+Everything is bilingual Hindi/English, mobile-first, an installable **PWA**, and runs with **no
+backend to operate** (identity and data are hosted Firebase).
 
 ## Deployment
 

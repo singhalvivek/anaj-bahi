@@ -65,7 +65,9 @@ configured and its config baked into the production build.
    consumed by `.github/workflows/deploy-pages.yml`; for a local production build, set them in
    `frontend/.env.local`.
 3. **Security Rules:** publish [`firestore.rules`](firestore.rules) to the project
-   (Firebase console → Firestore → Rules, or `firebase deploy --only firestore:rules`).
+   (Firebase console → Firestore → Rules, or `firebase deploy --only firestore:rules`). These
+   enforce the real boundaries — a shared per-business ledger, owner-only business/employee/activity
+   writes-and-reads — so publishing them is required, not optional.
 4. **SMS region policy:** in **Authentication → Settings → SMS region policy**, make sure the
    **user's country is allowed**, or OTP delivery is blocked.
 5. **Authorized domains:** add the GitHub Pages host (`singhalvivek.github.io`) under
@@ -73,6 +75,20 @@ configured and its config baked into the production build.
 
 The app deploys to GitHub Pages **unchanged** — there is no URL or token to configure in the app;
 sign-in is by phone number and sync is automatic.
+
+### Running the E2E suite against the project (optional)
+
+The Playwright suite talks to **real Firebase Auth + Cloud Firestore** — no mocks. To run it:
+
+1. **Test phone numbers:** under **Authentication → Phone → Phone numbers for testing**, register
+   the two E2E numbers with fixed codes: owner `+919352277260` → `000000` and employee
+   `+919000000002` → `222222` (these short-circuit SMS/reCAPTCHA/region-policy, so the suite is
+   deterministic and free).
+2. **Env:** in `frontend/.env.local`, set the 6 `NEXT_PUBLIC_FIREBASE_*` values and, optionally,
+   `FIREBASE_SERVICE_ACCOUNT` (path to an Admin-SDK JSON key) so global-setup can reset the test
+   users with the privileged Admin SDK; without it, it falls back to the client SDK.
+3. **Rules:** the same published `firestore.rules` (step 3 above) must be live — the suite's
+   owner/employee boundary assertions rely on them.
 
 ---
 

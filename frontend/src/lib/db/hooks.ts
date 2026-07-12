@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react'
 import { collection, doc, onSnapshot } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase/app'
 import { useAuth } from '@/lib/auth/context'
-import type { Bill, Farmer, GrainType } from './schema'
+import type { ActivityEntry, Bill, Farmer, GrainType } from './schema'
 
 // Mirror the repo's bill-id sanitize: `DDMMYY/xxxxx` → doc id with `/` → `_`.
 function billDocId(billId: string): string {
@@ -98,6 +98,44 @@ export function useFarmers(): Farmer[] | undefined {
   }, [bizId])
 
   return farmers
+}
+
+/**
+ * Live, newest-first owner-only activity log (Phase 9). `undefined` until the first
+ * snapshot; an array once loaded (possibly empty).
+ *
+ * FAIL-SAFE FOR EMPLOYEES: reading `activity` is OWNERS-only in Security Rules, so an
+ * employee's `onSnapshot` listener errors with permission-denied. The error handler
+ * treats that as an empty log (`setActivity([])`) and NEVER throws — the owner-only
+ * Activity screen (slice-b) is the sole caller and is hidden from employees, but this
+ * hook must degrade gracefully if ever mounted by a non-owner.
+ */
+export function useActivity(): ActivityEntry[] | undefined {
+  const { user } = useAuth()
+  const bizId = user?.bizId ?? null
+  const [activity, setActivity] = useState<ActivityEntry[] | undefined>(undefined)
+
+  useEffect(() => {
+    if (!bizId) {
+      setActivity(undefined)
+      return
+    }
+    setActivity(undefined)
+    const col = collection(firestore, 'businesses', bizId, 'activity')
+    const unsub = onSnapshot(
+      col,
+      (snap) => {
+        const rows = snap.docs.map((d) => d.data() as ActivityEntry)
+        rows.sort((a, b) => b.at - a.at) // newest-first
+        setActivity(rows)
+      },
+      // Permission-denied (employee) or any listen error → fail safe to empty log.
+      () => setActivity([]),
+    )
+    return unsub
+  }, [bizId])
+
+  return activity
 }
 
 /** Live list of grain types, createdAt-ascending. `undefined` until first snapshot. */

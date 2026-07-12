@@ -2,8 +2,11 @@ rules_version = '2';
 
 // Anaj Bahi — Firestore Security Rules
 //
-// PHASE 8 (role boundaries). These replace the earlier interim "any signed-in user"
-// rules with real per-role boundaries drawn from the frozen model in
+// PHASE 8 (role boundaries) + PHASE 9 (finalized/hardened). Phase 8 replaced the
+// earlier interim "any signed-in user" rules with real per-role boundaries; Phase 9
+// FINALIZES them — the activity path is append-only (create-only, no update/delete)
+// with OWNER-only reads, and all other boundaries below are the confirmed final pass.
+// Drawn from the frozen model in
 // spec/architecture.md § "Firestore data model — frozen collection-path map":
 //   - users/{uid}                      → only the owner (uid == request.auth.uid)
 //   - memberships/{phoneKey}           → read: any signed-in user (phone→bizId lookup
@@ -14,16 +17,19 @@ rules_version = '2';
 //                                         owner; update: owner or self; delete: owner
 //   - businesses/{bizId}/bills|farmers|grainTypes → read/write: any member of bizId
 //   - businesses/{bizId}/activity      → read: OWNERS only; create-only for members;
-//                                         no update/delete (Phase 9 hardens further)
+//                                         no update/delete (Phase 9 — final append-only)
 //
 // These rules are claim-bootstrap-safe: verified against the onboarding writeBatch
 // in lib/tenancy/business.ts (createBusiness / claimEmployeeMembership) — the owner
 // and employee self-create their own membership + member docs before any membership
 // exists to check, so create allows `request.resource.data.uid == request.auth.uid`.
 //
-// Phase 9 will further harden the activity path. These rules MUST be PUBLISHED to
-// take effect — via the Firebase console, or `firebase deploy --only firestore:rules`
-// — for the app and the slice-c role E2E (roles.spec.ts) to enforce them.
+// NOTE: the activity match block below is UNCHANGED from Phase 8 (it was already the
+// hardened target: create-only for members, owner-only read, update/delete forbidden).
+// Phase 9 slice-a only updated these COMMENTS — the enforced rules are byte-identical,
+// so NO re-publish is required for this change. (These rules must, of course, have been
+// PUBLISHED once — via the Firebase console or `firebase deploy --only firestore:rules`
+// — for the app and the slice-c role E2E (activity-log.spec.ts) to enforce them.)
 
 service cloud.firestore {
   match /databases/{database}/documents {

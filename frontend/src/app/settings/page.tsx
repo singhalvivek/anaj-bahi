@@ -204,22 +204,24 @@ export default function SettingsPage() {
         </Link>
       )}
 
-      {/* Activity log — labelled Phase-9 stub (clearly not a link) */}
-      <div
-        data-testid="activity-stub"
-        aria-disabled="true"
-        className="flex select-none items-center justify-between gap-3 rounded-2xl border-2 border-dashed border-stone-300 bg-stone-50/70 px-5 py-4"
-      >
-        <span className="flex items-center gap-3 text-base font-medium text-stone-500">
-          <span aria-hidden className="text-xl">
-            📜
+      {/* Activity log entry — owners only (the screen itself is owner-gated too) */}
+      {isOwner && (
+        <Link
+          href="/activity"
+          data-testid="activity-entry"
+          className="flex min-h-[56px] items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-5 py-4 shadow-sm active:bg-stone-50"
+        >
+          <span className="flex items-center gap-3 text-base font-semibold text-stone-800">
+            <span aria-hidden className="text-xl">
+              📜
+            </span>
+            {t('settings.activityEntry')}
           </span>
-          {t('settings.activityComingSoon')}
-        </span>
-        <span className="shrink-0 rounded-full bg-stone-200 px-2 py-0.5 text-xs font-semibold text-stone-500">
-          {t('stub.comingSoon')}
-        </span>
-      </div>
+          <span aria-hidden className="text-stone-400">
+            ›
+          </span>
+        </Link>
+      )}
 
       {/* Local-first sync status — Phase-7 Firestore offline persistence */}
       <SyncStatus />
