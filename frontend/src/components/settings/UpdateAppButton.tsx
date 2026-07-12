@@ -9,6 +9,9 @@ import { updateApp } from '@/lib/pwa'
  * reloads. Data-safe: only the app shell is refreshed — saved bills and any
  * offline-unsynced writes live in IndexedDB and are never touched.
  */
+// Inlined at build time by `build:pages` (git short hash + date); 'dev' locally.
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || 'dev'
+
 export function UpdateAppButton() {
   const { t } = useI18n()
   const [updating, setUpdating] = useState(false)
@@ -37,6 +40,9 @@ export function UpdateAppButton() {
       >
         {updating ? t('settings.updating') : t('settings.updateApp')}
       </button>
+      <p data-testid="app-version" className="text-center text-xs text-stone-400">
+        {t('settings.version')}: {APP_VERSION}
+      </p>
     </section>
   )
 }

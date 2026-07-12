@@ -162,14 +162,20 @@ No network, no server, no keys anywhere in this flow.
 
 ## Deployment Model
 
-Static export (`frontend/out/`) served as plain files under a `basePath` — installable to the Android home screen and fully functional offline. The Phase-4 backend deploys separately as a small FastAPI service backed by a single **SQLite** file on a persistent disk.
+Static export (`frontend/out/`) served as plain files under a `basePath` — installable to the Android home screen and fully functional offline. **No backend to deploy** — Firebase Auth + Cloud Firestore (operated by Google) are the only cloud; the Phase-4 FastAPI + SQLite backend was removed in Phase 7.
 
 **Concrete targets** (copy-paste steps in [`../DEPLOY.md`](../DEPLOY.md)):
 
-- **Frontend → GitHub Pages** (repo `anaj-bahi`) at `https://singhalvivek.github.io/anaj-bahi/`. The `basePath` is parameterized by `NEXT_PUBLIC_BASE_PATH` (default `/app`; production `/anaj-bahi`). The workflow `.github/workflows/deploy-pages.yml` runs `pnpm build:pages` with `NEXT_PUBLIC_BASE_PATH=/anaj-bahi`, adds `.nojekyll`, and publishes `frontend/out/` via GitHub Pages. The postbuild `scripts/apply-base-path.mjs` rewrites the `/app` literals in the exported `manifest.webmanifest`/`sw.js` (a no-op at the default `/app`, so local dev + E2E are untouched).
-- **Backend → PythonAnywhere** (free tier, no card): a FastAPI + SQLite service. PythonAnywhere serves **WSGI**, so the ASGI app runs through the WSGI adapter in `backend/wsgi.py`, which drives it with a **fresh event loop per request** (a shared-loop wrapper like `a2wsgi` deadlocks under PythonAnywhere's uWSGI after the first request). The SQLite file lives on the **persistent home disk** (`DATABASE_URL=sqlite:////home/<user>/anaj-bahi/backend/data/anaj.db` — four slashes = absolute path). `DEVICE_TOKEN` + `DATABASE_URL` are set in the PythonAnywhere WSGI config file (never committed). `python -m app.init_db` is run once to create the tables.
+- **Frontend → GitHub Pages** (repo `anaj-bahi`) at `https://singhalvivek.github.io/anaj-bahi/`. The `basePath` is parameterized by `NEXT_PUBLIC_BASE_PATH` (default `/app`; production `/anaj-bahi`). The workflow `.github/workflows/deploy-pages.yml` runs `pnpm build:pages` with `NEXT_PUBLIC_BASE_PATH=/anaj-bahi`, adds `.nojekyll`, and publishes `frontend/out/`. The postbuild `scripts/apply-base-path.mjs` rewrites the `/app` literals in the exported `manifest.webmanifest`/`sw.js` (a no-op at the default `/app`, so local dev + E2E are untouched). The 6 `NEXT_PUBLIC_FIREBASE_*` web-config values are supplied as **GitHub repo secrets** at build time; `singhalvivek.github.io` must be a Firebase **authorized domain**.
+- **Firebase (no infra we run):** Auth (Phone/SMS-OTP) + Cloud Firestore, free tier. `firestore.rules` (repo root) is published via the console or `firebase deploy --only firestore:rules`.
 
-The app works fully offline without the backend; the backend is only for optional cloud backup/restore.
+### PWA updates & per-deploy versioning
+
+The app is a long-lived installed PWA that must **auto-update without ever losing data**. Data lives in **IndexedDB** (Firestore `persistentLocalCache`, including offline-unsynced writes); the service worker (`public/sw.js`) only caches the app **shell** and never touches IndexedDB, so updating cannot lose data — synced or not.
+
+- **Service-worker strategy:** page navigations are **network-first** (fetch the latest online; fall back to cache only offline) so a new deploy appears on the next online open; content-hashed static assets are **cache-first**; `activate` deletes only our own older shell caches (prefix `anajbahi-shell-`), with `skipWaiting` + `clients.claim`. The SW is **disabled in `pnpm dev`** (`SwRegister` registers it only in production) so local iteration never serves stale code.
+- **Per-deploy version = the git short hash of the deployed commit.** `build:pages` runs `scripts/gen-version.mjs` (pre → sets `NEXT_PUBLIC_APP_VERSION` = `<shortHash> · <date>`, inlined and shown in **Settings**) and `scripts/stamp-sw.mjs` (post → stamps the exported `out/sw.js` `CACHE_VERSION` to `anajbahi-shell-<shortHash>`). So **every PR/deploy is a new commit → a new version → a byte-different service worker** the browser re-installs (clearing the old shell cache): the app self-updates and the visible version bumps automatically. Plain `pnpm build` (the E2E gate) is left **unstamped/unchanged**.
+- **Manual control:** Settings has an **"Update app"** button (`lib/pwa.ts` `updateApp()`) that checks for a new worker, activates a waiting one, and reloads — data-safe (shell only).
 
 ---
 

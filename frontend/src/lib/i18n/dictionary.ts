@@ -381,6 +381,7 @@ export const EN = {
   'settings.updateApp': 'Update app',
   'settings.updateAppHint': 'Get the latest version. Your saved bills stay safe.',
   'settings.updating': 'Updating…',
+  'settings.version': 'Version',
 } as const
 
 export type TKey = keyof typeof EN
@@ -759,6 +760,7 @@ export const HI: Record<TKey, string> = {
   'settings.updateApp': 'ऐप अपडेट करें',
   'settings.updateAppHint': 'नवीनतम संस्करण पाएँ। आपकी सहेजी बहियाँ सुरक्षित रहेंगी।',
   'settings.updating': 'अपडेट हो रहा है…',
+  'settings.version': 'संस्करण',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {
