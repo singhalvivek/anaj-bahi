@@ -1,21 +1,38 @@
-/* Anaj Bahi — hand-written cache-first app-shell service worker.
- * Static export lives under basePath /app. We cache the app shell so a repeat
- * launch works offline. IndexedDB (the trader's data) is NEVER in this cache —
- * it persists independently in the browser's storage.
+/* Anaj Bahi — hand-written app-shell service worker.
+ * Static export lives under basePath /app.
  *
- * Bump CACHE_VERSION whenever the shell changes to invalidate old caches.
+ * DATA SAFETY: this worker only ever touches the Cache API (the app SHELL —
+ * HTML/JS/CSS/icons). The trader's data — bills, farmers, and any offline-queued
+ * writes not yet synced — lives in IndexedDB (Firestore's persistentLocalCache),
+ * which this file NEVER reads, writes, or clears. Updating the app cannot lose data.
+ *
+ * UPDATE STRATEGY:
+ *  - Page navigations are NETWORK-FIRST: when online we always fetch the latest
+ *    HTML (which references the latest hashed JS), so a new deploy shows up on the
+ *    next online open. We fall back to the cached shell only when offline.
+ *  - Static assets are CACHE-FIRST: Next emits content-hashed filenames, so a cached
+ *    asset is immutable and safe to serve instantly; a new deploy has new filenames
+ *    that miss the cache and are fetched fresh.
+ *  - On activate we delete ONLY our own older shell caches (prefix-scoped) and take
+ *    control immediately (skipWaiting + clients.claim).
+ *
+ * Bump CACHE_VERSION whenever the shell changes to retire the previous cache.
  */
-const CACHE_VERSION = 'anajbahi-shell-v1'
+const CACHE_PREFIX = 'anajbahi-shell-'
+const CACHE_VERSION = `${CACHE_PREFIX}v2`
 const BASE = '/app'
 
-// Core shell URLs to precache. Next static export emits per-route index.html
-// files under /app/... ; we precache the navigable entry points plus PWA assets.
+// Core shell URLs to precache (navigable entry points + PWA assets). Best-effort.
 const SHELL_URLS = [
   `${BASE}/`,
   `${BASE}/bill/`,
   `${BASE}/bills/new/`,
+  `${BASE}/bills/quick/`,
+  `${BASE}/bills/choose/`,
   `${BASE}/due/`,
   `${BASE}/settings/`,
+  `${BASE}/employees/`,
+  `${BASE}/activity/`,
   `${BASE}/manifest.webmanifest`,
   `${BASE}/icons/icon-192.png`,
   `${BASE}/icons/icon-512.png`,
@@ -24,10 +41,11 @@ const SHELL_URLS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION).then((cache) =>
-      // Precache best-effort: a single missing URL must not fail the whole install.
+      // A single missing URL must not fail the whole install.
       Promise.allSettled(SHELL_URLS.map((url) => cache.add(url))),
     ),
   )
+  // Activate this worker as soon as it finishes installing.
   self.skipWaiting()
 })
 
@@ -36,37 +54,63 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))),
+        // Delete ONLY our own older shell caches — never any other storage.
+        Promise.all(
+          keys
+            .filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_VERSION)
+            .map((k) => caches.delete(k)),
+        ),
       )
       .then(() => self.clients.claim()),
   )
 })
 
+// Allow the page's "Update app" button to activate a waiting worker immediately.
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting()
+})
+
 self.addEventListener('fetch', (event) => {
   const req = event.request
-  // Only handle same-origin GET navigations/assets for the app shell.
   if (req.method !== 'GET') return
   const url = new URL(req.url)
   if (url.origin !== self.location.origin || !url.pathname.startsWith(`${BASE}/`)) return
 
-  // Cache-first for the shell; fall back to network and cache the result.
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached
-      return fetch(req)
+  const isNavigation =
+    req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')
+
+  if (isNavigation) {
+    // NETWORK-FIRST: always try the network so a new deploy is picked up; cache the
+    // fresh page for offline; fall back to the cached page (or the home shell) offline.
+    event.respondWith(
+      fetch(req)
         .then((res) => {
-          // Cache successful basic responses for next time (best-effort).
           if (res && res.status === 200 && res.type === 'basic') {
             const copy = res.clone()
             caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy))
           }
           return res
         })
-        .catch(() => {
-          // Offline & uncached: for navigations, serve the app home shell.
-          if (req.mode === 'navigate') return caches.match(`${BASE}/`)
-          return Response.error()
+        .catch(() =>
+          caches.match(req).then((cached) => cached || caches.match(`${BASE}/`)),
+        ),
+    )
+    return
+  }
+
+  // CACHE-FIRST for content-hashed static assets (immutable → safe to serve cached).
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached
+      return fetch(req)
+        .then((res) => {
+          if (res && res.status === 200 && res.type === 'basic') {
+            const copy = res.clone()
+            caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy))
+          }
+          return res
         })
+        .catch(() => Response.error())
     }),
   )
 })

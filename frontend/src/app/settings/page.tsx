@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/lib/auth/context'
 import { SyncStatus } from '@/components/SyncStatus'
 import { PersonalProfile } from '@/components/settings/PersonalProfile'
+import { UpdateAppButton } from '@/components/settings/UpdateAppButton'
 import {
   getProfile,
   saveProfile,
@@ -225,6 +226,9 @@ export default function SettingsPage() {
 
       {/* Local-first sync status — Phase-7 Firestore offline persistence */}
       <SyncStatus />
+
+      {/* Update the installed app to the latest version (data-safe: shell only) */}
+      <UpdateAppButton />
     </div>
   )
 }

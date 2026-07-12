@@ -378,6 +378,9 @@ export const EN = {
   'activity.action.payment': 'Recorded a payment',
   'activity.action.billEdit': 'Edited a bill',
   'settings.activityEntry': 'Activity log',
+  'settings.updateApp': 'Update app',
+  'settings.updateAppHint': 'Get the latest version. Your saved bills stay safe.',
+  'settings.updating': 'Updating…',
 } as const
 
 export type TKey = keyof typeof EN
@@ -753,6 +756,9 @@ export const HI: Record<TKey, string> = {
   'activity.action.payment': 'भुगतान दर्ज किया',
   'activity.action.billEdit': 'बही बदली',
   'settings.activityEntry': 'गतिविधि लॉग',
+  'settings.updateApp': 'ऐप अपडेट करें',
+  'settings.updateAppHint': 'नवीनतम संस्करण पाएँ। आपकी सहेजी बहियाँ सुरक्षित रहेंगी।',
+  'settings.updating': 'अपडेट हो रहा है…',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {
