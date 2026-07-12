@@ -22,6 +22,7 @@ import { generateBillId } from '@/lib/db/id'
 import {
   computeGrainLine,
   computeBillTotal,
+  roundRupees,
   type DeductionBasis,
   type GrainLineInput,
 } from '@/lib/calc'
@@ -53,6 +54,16 @@ export interface FarmerValue {
 }
 
 // ---- helpers ----
+
+/** Keep digits and at most one decimal point; strip everything else. */
+function sanitizeDecimal(raw: string): string {
+  let s = raw.replace(/[^0-9.]/g, '')
+  const firstDot = s.indexOf('.')
+  if (firstDot !== -1) {
+    s = s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, '')
+  }
+  return s
+}
 
 function todayIso(): string {
   const d = new Date()
@@ -122,6 +133,7 @@ function NewBillForm() {
   const [dueDate, setDueDate] = useState<string>('')
   const [billId, setBillId] = useState<string>('')
   const [lines, setLines] = useState<GrainLineDraft[]>([newLineDraft('')])
+  const [paldari, setPaldari] = useState('') // Phase 10 — bill-level labor charge (₹)
 
   // Seed + load grain types on mount; in edit mode also load and pre-fill the bill.
   useEffect(() => {
@@ -150,6 +162,7 @@ function NewBillForm() {
             setDueDate(bill.dueDate ?? '')
             setBillId(bill.id)
             setLines(bill.lines.map(storedLineToDraft))
+            setPaldari(bill.paldari != null ? String(bill.paldari) : '')
           }
         } else {
           // Default any empty grain line to the first available type.
@@ -196,10 +209,12 @@ function NewBillForm() {
     () => lines.map((l) => computeGrainLine(draftToInput(l))),
     [lines],
   )
-  const billTotal = useMemo(
+  const linesTotal = useMemo(
     () => computeBillTotal(lines.map(draftToInput)),
     [lines],
   )
+  const paldariNum = Number(paldari) || 0
+  const netTotal = roundRupees(linesTotal - paldariNum)
 
   // ---- validation ----
   const farmerReady = !!farmer && !!farmer.name.trim() && !!farmer.place.trim()
@@ -288,6 +303,7 @@ function NewBillForm() {
           dueDate: dueDate || undefined,
           grainTypeIds,
           lines: storedLines,
+          paldari: paldariNum > 0 ? paldariNum : undefined,
         }
         await updateBill(updated)
         router.push(`/bill?id=${encodeURIComponent(original.id)}`)
@@ -313,6 +329,7 @@ function NewBillForm() {
         grainTypeIds,
         lines: storedLines,
         payments: [],
+        paldari: paldariNum > 0 ? paldariNum : undefined,
       })
 
       router.push('/')
@@ -440,7 +457,22 @@ function NewBillForm() {
           <main>'s pb-24 clears the fixed global BottomNav below it. */}
       {!loading && (
         <footer className="mt-2 space-y-2 border-t border-stone-200 bg-white p-4">
-          <LiveTotals billTotal={billTotal} />
+          {/* Paldari (labor charge) — bill-level ₹ borne by the farmer; reduces the total */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-stone-700">{t('paldari.label')}</label>
+            <input
+              data-testid="paldari-input"
+              type="text"
+              inputMode="decimal"
+              value={paldari}
+              onChange={(e) => setPaldari(sanitizeDecimal(e.target.value))}
+              placeholder={t('paldari.label')}
+              className="h-14 w-full rounded-lg border border-stone-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <p className="text-xs text-stone-500">{t('paldari.hint')}</p>
+          </div>
+
+          <LiveTotals billTotal={netTotal} paldari={paldariNum} />
           {!valid && hint && (
             <p className="text-center text-sm text-amber-700">{hint}</p>
           )}

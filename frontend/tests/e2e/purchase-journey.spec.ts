@@ -102,3 +102,56 @@ test('trader creates a bill, reopens it, and toggles language', async ({ page })
   await page.reload()
   await expect(page.getByTestId('new-bill-btn')).toContainText('नई बही')
 })
+
+/**
+ * Phase 10 — a sacks (fresh) bill also carries a bill-level Paldari (labour charge)
+ * that is subtracted from the total. Line amount ₹3741.72, paldari ₹741.72 → net
+ * payable ₹3000.00, asserted live and again on the reopened detail.
+ */
+test('sacks bill: paldari nets the bill total end-to-end', async ({ page }) => {
+  await page.goto('./')
+  await page.getByTestId('lang-toggle-en').click()
+
+  await page.getByTestId('new-bill-btn').click()
+  await page.waitForURL('**/app/bills/choose/**')
+  await page.getByTestId('choice-fresh').click()
+  await page.waitForURL('**/app/bills/new/**')
+
+  await page.getByTestId('farmer-input').fill('Paldari Ramesh')
+  await page.getByLabel('Place / Village').fill('Sadar')
+
+  await page.getByTestId('grain-type-select').selectOption({ label: 'Wheat' })
+  await page.getByTestId('price-input').fill('2400')
+  await addSack(page, '40')
+  await addSack(page, '40')
+  await addSack(page, '40.5')
+  await addSack(page, '39')
+
+  await page.getByTestId('add-deduction').click()
+  const d0 = page.getByTestId('deduction-row').nth(0)
+  await d0.locator('select').selectOption({ label: 'kg per sack' })
+  await d0.locator('input').fill('0.5')
+  await page.getByTestId('add-deduction').click()
+  const d1 = page.getByTestId('deduction-row').nth(1)
+  await d1.locator('select').selectOption({ label: '% of gross' })
+  await d1.locator('input').fill('1')
+
+  // line amount ₹3741.72 (same figures as the golden path)
+  await expect(page.getByTestId('bill-total')).toContainText('3741.72')
+
+  // --- Paldari 741.72 → net payable 3000.00 ---
+  await page.getByTestId('paldari-input').fill('741.72')
+  await expect(page.getByTestId('paldari-line')).toContainText('741.72')
+  await expect(page.getByTestId('bill-total')).toContainText('3000.00')
+
+  await page.getByTestId('save-bill').click()
+  await page.waitForURL(/\/app\/(\?.*)?$/)
+  const card = page.getByTestId('bill-card').first()
+  await expect(card).toContainText('Paldari Ramesh')
+  await expect(card).toContainText('3000.00')
+  await card.click()
+  await page.waitForURL('**/app/bill/**')
+
+  await expect(page.getByTestId('detail-bill-total')).toContainText('3000.00')
+  await expect(page.getByTestId('detail-paldari')).toContainText('741.72')
+})

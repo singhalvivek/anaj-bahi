@@ -382,6 +382,15 @@ export const EN = {
   'settings.updateAppHint': 'Get the latest version. Your saved bills stay safe.',
   'settings.updating': 'Updating…',
   'settings.version': 'Version',
+
+  // ---- Phase 10 — paldari (labor charge) ----
+  'paldari.label': 'Paldari (labour charge)',
+  'paldari.short': 'Paldari',
+  'paldari.hint': 'Loading/unloading charge borne by the farmer — reduces the bill total',
+  'totals.subtotal': 'Subtotal',
+  'quick.amountAuto': 'Auto-calculated — edit or cross-check',
+  'receipt.subtotal': 'Subtotal',
+  'receipt.paldari': 'Paldari',
 } as const
 
 export type TKey = keyof typeof EN
@@ -761,6 +770,15 @@ export const HI: Record<TKey, string> = {
   'settings.updateAppHint': 'नवीनतम संस्करण पाएँ। आपकी सहेजी बहियाँ सुरक्षित रहेंगी।',
   'settings.updating': 'अपडेट हो रहा है…',
   'settings.version': 'संस्करण',
+
+  // ---- Phase 10 — paldari (labor charge) ----
+  'paldari.label': 'पल्लेदारी (मज़दूरी)',
+  'paldari.short': 'पल्लेदारी',
+  'paldari.hint': 'किसान द्वारा वहन की गई चढ़ाई-उतराई मज़दूरी — बिल की राशि से घटती है',
+  'totals.subtotal': 'उप-योग',
+  'quick.amountAuto': 'अपने-आप जुड़ा — जाँचें या बदलें',
+  'receipt.subtotal': 'उप-योग',
+  'receipt.paldari': 'पल्लेदारी',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

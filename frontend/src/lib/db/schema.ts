@@ -77,6 +77,7 @@ export interface Bill {
   dueDate?: string // Phase 2
   payments: Payment[] // Phase 2 (empty [] in Phase 1)
   entryMode?: BillEntryMode // Phase 5 — absent ⇒ 'sacks' (back-compat)
+  paldari?: number // Phase 10 — bill-level labor (loading/unloading) charge in ₹, borne by the farmer; subtracted from the bill total. Absent ⇒ 0.
   createdBy?: Attribution // Phase 8 — who created this bill (snapshot); absent on legacy bills
   createdAt: number
   updatedAt: number

@@ -8,7 +8,7 @@ import { useI18n } from '@/lib/i18n/context'
 import * as repo from '@/lib/db/repo'
 import { useBill } from '@/lib/db/hooks'
 import type { Bill } from '@/lib/db/repo'
-import { computeGrainLine, computeBillTotal, billBalance, todayIso } from '@/lib/calc'
+import { computeGrainLine, billBalance, todayIso } from '@/lib/calc'
 import type { StoredGrainLine } from '@/lib/db/schema'
 import { formatRupees, formatDate } from '@/components/format'
 import Receipt from '@/components/receipt/Receipt'
@@ -588,13 +588,38 @@ function DetailBody() {
         )
       })}
 
-      {/* Bill total */}
-      <section className="flex items-center justify-between rounded-xl bg-green-700 px-4 py-4 text-white shadow-sm">
-        <span className="text-sm font-medium">{t('totals.billTotal')}</span>
-        <span data-testid="detail-bill-total" className="text-2xl font-bold">
-          {formatRupees(computeBillTotal(bill.lines))}
-        </span>
-      </section>
+      {/* Bill total — net of paldari (Phase 10). When a paldari charge is present, a
+          subtotal + paldari-deduction breakdown renders just above the green total box;
+          with no paldari the section is byte-for-byte as before (net === subtotal). */}
+      {(() => {
+        const balance = billBalance(bill)
+        return (
+          <>
+            {balance.paldari > 0 && (
+              <section className="space-y-1 rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm shadow-sm">
+                <div className="flex items-center justify-between text-stone-600">
+                  <span>{t('totals.subtotal')}</span>
+                  <span className="font-medium text-stone-800">
+                    {formatRupees(balance.linesTotal)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-stone-600">
+                  <span>{t('paldari.short')}</span>
+                  <span data-testid="detail-paldari" className="font-medium text-amber-700">
+                    −{formatRupees(balance.paldari)}
+                  </span>
+                </div>
+              </section>
+            )}
+            <section className="flex items-center justify-between rounded-xl bg-green-700 px-4 py-4 text-white shadow-sm">
+              <span className="text-sm font-medium">{t('totals.billTotal')}</span>
+              <span data-testid="detail-bill-total" className="text-2xl font-bold">
+                {formatRupees(balance.total)}
+              </span>
+            </section>
+          </>
+        )
+      })()}
 
       {/* Payments + outstanding balance (Phase 2) */}
       <PaymentsPanel bill={bill} />
