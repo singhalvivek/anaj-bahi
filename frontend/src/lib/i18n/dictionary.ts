@@ -391,6 +391,59 @@ export const EN = {
   'quick.amountAuto': 'Auto-calculated — edit or cross-check',
   'receipt.subtotal': 'Subtotal',
   'receipt.paldari': 'Paldari',
+
+  // ---- Google sign-in redesign — login + onboarding + invites + personal profile ----
+
+  // login — Continue with Google
+  'auth.google.button': 'Continue with Google',
+  'auth.google.signingIn': 'Signing in…',
+  'auth.error.popupClosed': 'Sign-in was cancelled — tap Continue with Google to try again',
+  'auth.error.unauthorizedDomain': 'This site is not authorized for sign-in — contact support',
+
+  // onboarding — name (prefilled from Google)
+  'onboarding.name.fromGoogleHint': 'From your Google account — edit if you like',
+
+  // onboarding — create business (owner): name + mobile
+  'onboarding.createBusiness.nameLabel': 'Your name',
+  'onboarding.createBusiness.nameRequired': 'Please enter your name',
+  'onboarding.createBusiness.mobile': 'Mobile number',
+  'onboarding.createBusiness.mobileRequired': 'Enter your mobile number',
+
+  // onboarding — join by code (employee)
+  'onboarding.join.title': 'Join your business',
+  'onboarding.join.codeLabel': 'Invite code',
+  'onboarding.join.codePlaceholder': '6-character code',
+  'onboarding.join.codeHint': 'Ask your owner for the invite code they generated for you',
+  'onboarding.join.next': 'Next',
+  'onboarding.join.mobileLabel': 'Your mobile number',
+  'onboarding.join.mobileHint': 'The same number your owner used on the invite',
+  'onboarding.join.nameLabel': 'Your name',
+  'onboarding.join.submit': 'Join',
+  'onboarding.join.verifying': 'Checking…',
+  'onboarding.join.joining': 'Joining…',
+  'onboarding.join.notFound': 'Invalid or already-used code — check it and try again',
+  'onboarding.join.phoneMismatch': "This number doesn't match the invite — check it with your owner",
+  'onboarding.join.back': 'Back',
+  'onboarding.join.signOut': 'Sign out',
+
+  // employees — generate invite code + pending invites
+  'employees.generateCode': 'Generate invite code',
+  'employees.generating': 'Generating…',
+  'employees.codeTitle': 'Share this invite code',
+  'employees.codeShareHint': 'Share this code and the mobile number with your employee. They enter both to join.',
+  'employees.copyCode': 'Copy code',
+  'employees.copied': 'Copied',
+  'employees.inviteMobile': 'Mobile number',
+  'employees.pendingTitle': 'Pending invites',
+  'employees.pendingEmpty': 'No pending invites',
+  'employees.cancelInvite': 'Cancel',
+  'employees.cancelling': 'Cancelling…',
+
+  // personal profile — mobile + email
+  'personal.mobileLabel': 'Mobile number',
+  'personal.mobileHint': 'Profile information — not used to sign in',
+  'personal.emailLabel': 'Email',
+  'personal.emailReadonly': 'Your Google account — used to sign in',
 } as const
 
 export type TKey = keyof typeof EN
@@ -779,6 +832,59 @@ export const HI: Record<TKey, string> = {
   'quick.amountAuto': 'अपने-आप जुड़ा — जाँचें या बदलें',
   'receipt.subtotal': 'उप-योग',
   'receipt.paldari': 'पल्लेदारी',
+
+  // ---- Google sign-in redesign — login + onboarding + invites + personal profile ----
+
+  // login — Continue with Google
+  'auth.google.button': 'Google से जारी रखें',
+  'auth.google.signingIn': 'साइन इन हो रहा है…',
+  'auth.error.popupClosed': 'साइन इन रद्द हुआ — दोबारा कोशिश के लिए Google से जारी रखें दबाएँ',
+  'auth.error.unauthorizedDomain': 'यह साइट साइन इन के लिए अधिकृत नहीं है — सहायता से संपर्क करें',
+
+  // onboarding — name (prefilled from Google)
+  'onboarding.name.fromGoogleHint': 'आपके Google खाते से — चाहें तो बदलें',
+
+  // onboarding — create business (owner): name + mobile
+  'onboarding.createBusiness.nameLabel': 'आपका नाम',
+  'onboarding.createBusiness.nameRequired': 'कृपया अपना नाम भरें',
+  'onboarding.createBusiness.mobile': 'मोबाइल नंबर',
+  'onboarding.createBusiness.mobileRequired': 'अपना मोबाइल नंबर भरें',
+
+  // onboarding — join by code (employee)
+  'onboarding.join.title': 'अपने व्यापार में शामिल हों',
+  'onboarding.join.codeLabel': 'आमंत्रण कोड',
+  'onboarding.join.codePlaceholder': '6 अक्षरों का कोड',
+  'onboarding.join.codeHint': 'अपने मालिक से वह आमंत्रण कोड लें जो उन्होंने आपके लिए बनाया है',
+  'onboarding.join.next': 'आगे',
+  'onboarding.join.mobileLabel': 'आपका मोबाइल नंबर',
+  'onboarding.join.mobileHint': 'वही नंबर जो मालिक ने आमंत्रण पर डाला था',
+  'onboarding.join.nameLabel': 'आपका नाम',
+  'onboarding.join.submit': 'शामिल हों',
+  'onboarding.join.verifying': 'जाँच हो रही है…',
+  'onboarding.join.joining': 'शामिल हो रहे हैं…',
+  'onboarding.join.notFound': 'ग़लत या पहले से इस्तेमाल हुआ कोड — जाँचें और दोबारा कोशिश करें',
+  'onboarding.join.phoneMismatch': 'यह नंबर आमंत्रण से मेल नहीं खाता — अपने मालिक से जाँचें',
+  'onboarding.join.back': 'वापस',
+  'onboarding.join.signOut': 'साइन आउट',
+
+  // employees — generate invite code + pending invites
+  'employees.generateCode': 'आमंत्रण कोड बनाएँ',
+  'employees.generating': 'बन रहा है…',
+  'employees.codeTitle': 'यह आमंत्रण कोड साझा करें',
+  'employees.codeShareHint': 'यह कोड और मोबाइल नंबर अपने कर्मचारी को दें। शामिल होने के लिए वे दोनों भरेंगे।',
+  'employees.copyCode': 'कोड कॉपी करें',
+  'employees.copied': 'कॉपी हुआ',
+  'employees.inviteMobile': 'मोबाइल नंबर',
+  'employees.pendingTitle': 'बाकी आमंत्रण',
+  'employees.pendingEmpty': 'कोई बाकी आमंत्रण नहीं',
+  'employees.cancelInvite': 'रद्द करें',
+  'employees.cancelling': 'रद्द हो रहा है…',
+
+  // personal profile — mobile + email
+  'personal.mobileLabel': 'मोबाइल नंबर',
+  'personal.mobileHint': 'प्रोफ़ाइल जानकारी — साइन इन के लिए इस्तेमाल नहीं होती',
+  'personal.emailLabel': 'ईमेल',
+  'personal.emailReadonly': 'आपका Google खाता — साइन इन के लिए इस्तेमाल होता है',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

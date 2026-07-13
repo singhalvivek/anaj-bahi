@@ -1,4 +1,4 @@
-// Firebase Web SDK singletons for Anaj Bahi (Phase 6+).
+// Firebase Web SDK singletons for Anaj Bahi (Phase 6+ — Google sign-in).
 //
 // Initializes the app from the 6 PUBLIC `NEXT_PUBLIC_FIREBASE_*` values (these are
 // build-time-inlined web config, NOT secrets — real security is Firestore Rules).
@@ -8,17 +8,26 @@
 // persistence and Firestore `persistentLocalCache` are therefore applied ONLY in
 // the browser; on the server we fall back to a plain instance so the build never
 // crashes. All real usage happens client-side.
+//
+// Emulators (E2E / optional dev): when NEXT_PUBLIC_FIREBASE_USE_EMULATORS is on
+// and we are in the browser, Auth and Firestore are pointed at the local Firebase
+// emulators (Auth 9099, Firestore 8080) so tests run deterministically with no
+// real Google account and no external network. Google sign-in is simulated by the
+// Auth emulator's built-in test-IdP popup. No reCAPTCHA / SMS / service-account.
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app'
 import {
   getAuth,
   initializeAuth,
   browserLocalPersistence,
+  browserPopupRedirectResolver,
+  connectAuthEmulator,
   type Auth,
 } from 'firebase/auth'
 import {
   getFirestore,
   initializeFirestore,
+  connectFirestoreEmulator,
   persistentLocalCache,
   persistentMultipleTabManager,
   type Firestore,
@@ -57,6 +66,14 @@ function readConfig(): FirebaseWebConfig {
 
 const isBrowser = typeof window !== 'undefined'
 
+// Connect to the local emulators when the flag is on. Accept `'true'` (the
+// .env.example default form) or `'1'` (the shorthand used by the Playwright
+// webServer), so both dev and E2E wiring resolve the same way.
+const useEmulators =
+  isBrowser &&
+  (process.env.NEXT_PUBLIC_FIREBASE_USE_EMULATORS === 'true' ||
+    process.env.NEXT_PUBLIC_FIREBASE_USE_EMULATORS === '1')
+
 // Single app instance across HMR / multiple imports.
 export const app: FirebaseApp = getApps().length ? getApp() : initializeApp(readConfig())
 
@@ -66,25 +83,51 @@ function makeAuth(): Auth {
   // `initializeAuth` throws if auth was already initialized (HMR) — fall back.
   let instance: Auth
   try {
-    instance = initializeAuth(app, { persistence: browserLocalPersistence })
+    // `popupRedirectResolver` is REQUIRED for signInWithPopup to work: unlike
+    // getAuth (which registers it by default), initializeAuth only wires a popup/
+    // redirect resolver when one is passed here. Without it signInWithPopup rejects
+    // with `auth/argument-error` before a popup ever opens — in production AND under
+    // the emulator. (browserPopupRedirectResolver is DOM-only, so this branch is
+    // browser-only; the SSR/build path above uses getAuth.)
+    instance = initializeAuth(app, {
+      persistence: browserLocalPersistence,
+      popupRedirectResolver: browserPopupRedirectResolver,
+    })
   } catch {
     instance = getAuth(app)
   }
-  // Disable reCAPTCHA app verification ONLY under browser AUTOMATION (Playwright sets
-  // `navigator.webdriver = true`), so the E2E can drive phone sign-in without a
-  // reCAPTCHA challenge an automated browser can't solve. A REAL browser — including
-  // local `pnpm dev` — gets the full invisible reCAPTCHA, so dev behaves exactly like
-  // production. (Firebase TEST phone numbers still bypass reCAPTCHA + SMS regardless;
-  // sign in with a REAL number on dev to watch the invisible reCAPTCHA actually run.)
-  if (typeof navigator !== 'undefined' && navigator.webdriver === true) {
-    instance.settings.appVerificationDisabledForTesting = true
+  if (useEmulators) {
+    // Idempotent-safe: connecting an already-connected emulator is a no-op; wrap
+    // to survive HMR re-runs. Google sign-in resolves through the Auth emulator's
+    // test-IdP popup — no reCAPTCHA, no SMS.
+    try {
+      connectAuthEmulator(instance, 'http://127.0.0.1:9099', { disableWarnings: true })
+    } catch {
+      // already connected — ignore
+    }
   }
   return instance
 }
 
 function makeFirestore(): Firestore {
-  // In the browser, IndexedDB offline persistence IS the store. On the server
-  // (build prerender) use a plain instance — no persistence, never touched at runtime.
+  if (useEmulators) {
+    // E2E path: no persistent offline cache (deterministic reads straight from the
+    // emulator, cleared before each run), then point at the Firestore emulator.
+    let db: Firestore
+    try {
+      db = initializeFirestore(app, { ignoreUndefinedProperties: true })
+    } catch {
+      db = getFirestore(app)
+    }
+    try {
+      connectFirestoreEmulator(db, '127.0.0.1', 8080)
+    } catch {
+      // already connected — ignore
+    }
+    return db
+  }
+  // In the (real) browser, IndexedDB offline persistence IS the store. On the
+  // server (build prerender) use a plain instance — never touched at runtime.
   try {
     return initializeFirestore(
       app,

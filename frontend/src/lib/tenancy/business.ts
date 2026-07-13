@@ -1,15 +1,24 @@
-// Tenancy write helpers — create a business, look up a membership by phone, and
-// claim an employee membership. All writes use the modular Firestore SDK and hit
-// the exact frozen collection paths in architecture.md § Firestore data model.
+// Tenancy write helpers — create a business and manage its claimed roster. All
+// writes use the modular Firestore SDK and hit the exact frozen collection paths in
+// architecture.md § Firestore data model + § Tenancy write helpers.
 //
-// Name snapshots (`displayName` / `addedByName` / `createdByName`) are written at
+// Identity is the Firebase `uid`: creating a business writes only the business, the
+// owner's member doc, and users/{uid} — there is NO owner invite/membership doc.
+// Employee onboarding is the invites/{code} flow in ./invite.ts.
+//
+// Name snapshots (`displayName` / `createdByName` / `addedByName`) are written at
 // action time — never a live join — so attribution survives renames/removal.
-// `createdAt` / `updatedAt` / `addedAt` / `claimedAt` are numeric (`Date.now()`).
+// `createdAt` / `updatedAt` / `addedAt` are numeric (`Date.now()`).
 
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDocs, writeBatch } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase/app'
 import type { AppUser } from '@/lib/auth/session'
-import type { Role } from '@/lib/auth/membership'
+import { phoneKey, type Role } from '@/lib/auth/membership'
+
+// phoneKey lives in the firebase-free ./auth/membership module (so the pure invite
+// check + its unit tests never pull in the SDK); re-exported here to preserve the
+// frozen `business.phoneKey` export in architecture.md § Tenancy write helpers.
+export { phoneKey }
 
 export interface NewBusinessInput {
   shopName: string
@@ -18,45 +27,20 @@ export interface NewBusinessInput {
   address?: string
 }
 
-export interface MembershipRecord {
-  phone: string
-  phoneKey: string
-  bizId: string
-  role: Role
-  displayName: string
-  addedByUid: string
-  addedByName: string
-  status: 'invited' | 'active'
-  uid: string | null
-  createdAt: number
-  claimedAt: number | null
-}
-
-/** E.164 → digits-only doc id. `'+911111111111'` → `'911111111111'`. */
-export function phoneKey(phoneE164: string): string {
-  return phoneE164.replace(/^\+/, '').replace(/\D/g, '')
-}
-
-/** Read the top-level phone→business lookup at `memberships/{phoneKey}`. */
-export async function findMembershipByPhone(
-  phoneE164: string,
-): Promise<MembershipRecord | null> {
-  const snap = await getDoc(doc(firestore, 'memberships', phoneKey(phoneE164)))
-  return snap.exists() ? (snap.data() as MembershipRecord) : null
-}
-
 /**
- * Create a new business owned by `owner`. All four docs — the business profile,
- * the owner's per-business member doc, the top-level membership lookup, and the
- * owner's `users/{uid}` record — are written in a single **atomic `writeBatch`**
- * so onboarding never leaves a half-created business (offline the batch queues
- * and syncs together). Returns the new bizId.
+ * Create a new business owned by `owner`. Three docs — the business profile, the
+ * owner's per-business member doc (`owner`, `active`), and the owner's `users/{uid}`
+ * record ({ bizId, role:'owner', phone, email }) — are written in a single **atomic
+ * `writeBatch`** so onboarding never leaves a half-created business (offline the
+ * batch queues and syncs together). There is NO owner invite/membership doc — the
+ * owner's own `uid` recognises them on any device via `users/{uid}.bizId`. Returns
+ * the new bizId.
  */
 export async function createBusiness(owner: AppUser, input: NewBusinessInput): Promise<string> {
   const bizId = crypto.randomUUID()
   const ts = Date.now()
-  const key = phoneKey(owner.phone)
   const ownerName = owner.displayName ?? ''
+  const ownerPhone = input.phone ?? owner.phone ?? ''
   const batch = writeBatch(firestore)
 
   // businesses/{bizId} — the business + its profile
@@ -64,7 +48,7 @@ export async function createBusiness(owner: AppUser, input: NewBusinessInput): P
     id: bizId,
     shopName: input.shopName,
     traderName: input.traderName,
-    phone: input.phone ?? '',
+    phone: ownerPhone,
     ...(input.address !== undefined ? { address: input.address } : {}),
     createdByUid: owner.uid,
     createdByName: ownerName,
@@ -72,38 +56,34 @@ export async function createBusiness(owner: AppUser, input: NewBusinessInput): P
     updatedAt: ts,
   })
 
-  // businesses/{bizId}/members/{uid} — owner, active
+  // businesses/{bizId}/members/{uid} — owner, active. `inviteCode: null` + `phoneKey`
+  // are REQUIRED by the hardened members-create rule: this doc passes the
+  // owner-bootstrap arm because businesses/{bizId} does not yet exist in committed
+  // state while this create batch is evaluated.
   batch.set(doc(firestore, 'businesses', bizId, 'members', owner.uid), {
     uid: owner.uid,
-    phone: owner.phone,
+    phone: ownerPhone,
     displayName: ownerName,
     role: 'owner',
     addedByUid: owner.uid,
     addedByName: ownerName,
     addedAt: ts,
     status: 'active',
+    inviteCode: null,
+    phoneKey: phoneKey(ownerPhone),
   })
-
-  // memberships/{phoneKey} — owner, active, uid set (recognises the owner on any device)
-  const membership: MembershipRecord = {
-    phone: owner.phone,
-    phoneKey: key,
-    bizId,
-    role: 'owner',
-    displayName: ownerName,
-    addedByUid: owner.uid,
-    addedByName: ownerName,
-    status: 'active',
-    uid: owner.uid,
-    createdAt: ts,
-    claimedAt: ts,
-  }
-  batch.set(doc(firestore, 'memberships', key), membership)
 
   // users/{uid} — {bizId, role} is what routes the user into the app
   batch.set(
     doc(firestore, 'users', owner.uid),
-    { uid: owner.uid, phone: owner.phone, bizId, role: 'owner', updatedAt: ts },
+    {
+      uid: owner.uid,
+      bizId,
+      role: 'owner',
+      phone: ownerPhone,
+      email: owner.email ?? null,
+      updatedAt: ts,
+    },
     { merge: true },
   )
 
@@ -111,40 +91,32 @@ export async function createBusiness(owner: AppUser, input: NewBusinessInput): P
   return bizId
 }
 
-// ---- Phase 8 — employee management (owner-only roster + add/remove) ----
+// ---- Employee management (owner-only roster) ----
 
 /**
  * A claimed row of the in-business roster, read from `businesses/{bizId}/members`.
  * These are the members who have actually signed in and joined (the owner on
- * create; employees once they claim their invited membership).
+ * create; employees once they redeem an invite code).
  */
 export interface MemberRecord {
   uid: string
   phone: string
   displayName: string
   role: Role
-  status: 'invited' | 'active'
+  status: 'active'
   addedByUid: string
   addedByName: string
   addedAt: number
-}
-
-/**
- * Thrown by `addEmployee` when the phone already belongs to a business — the
- * one-person-one-business rule. The UI catches this to show a translated inline
- * error (`employees.existsError`).
- */
-export class EmployeeExistsError extends Error {
-  constructor(message = 'That phone number already belongs to a business.') {
-    super(message)
-    this.name = 'EmployeeExistsError'
-  }
+  // Required by the hardened members-create Security Rule (§ Security Rules): the
+  // code used at claim (null/omitted for the owner's own doc) + the normalized digits
+  // of the claimed mobile (owner: from their own onboarding mobile).
+  inviteCode: string | null
+  phoneKey: string
 }
 
 /**
  * The roster of CLAIMED members for a business: read `businesses/{bizId}/members`
- * and sort owners first, then by `addedAt` ascending. Newly-invited employees
- * appear here once they sign in and claim their membership.
+ * and sort owners first, then by `addedAt` ascending.
  */
 export async function listMembers(bizId: string): Promise<MemberRecord[]> {
   const snap = await getDocs(collection(firestore, 'businesses', bizId, 'members'))
@@ -155,10 +127,12 @@ export async function listMembers(bizId: string): Promise<MemberRecord[]> {
       phone: data.phone ?? '',
       displayName: data.displayName ?? '',
       role: (data.role ?? 'employee') as Role,
-      status: (data.status ?? 'active') as 'invited' | 'active',
+      status: 'active',
       addedByUid: data.addedByUid ?? '',
       addedByName: data.addedByName ?? '',
       addedAt: data.addedAt ?? 0,
+      inviteCode: data.inviteCode ?? null,
+      phoneKey: data.phoneKey ?? '',
     }
   })
   members.sort((a, b) => {
@@ -169,102 +143,15 @@ export async function listMembers(bizId: string): Promise<MemberRecord[]> {
 }
 
 /**
- * Owner adds an employee by phone + name label. Enforces one-person-one-business:
- * if the phone already has ANY membership, throws `EmployeeExistsError`. Otherwise
- * writes an `invited` employee membership at `memberships/{phoneKey}` matching the
- * frozen `MembershipRecord` shape, so the Phase-6 claim flow resolves it to
- * `employee-joined` when that phone signs in and picks Employee. The `displayName`
- * is a snapshot label; the employee's own name replaces it once they sign in.
- */
-export async function addEmployee(
-  owner: AppUser,
-  bizId: string,
-  employeePhoneE164: string,
-  employeeName: string,
-): Promise<void> {
-  const existing = await findMembershipByPhone(employeePhoneE164)
-  if (existing) {
-    throw new EmployeeExistsError()
-  }
-  const key = phoneKey(employeePhoneE164)
-  const membership: MembershipRecord = {
-    phone: employeePhoneE164,
-    phoneKey: key,
-    bizId,
-    role: 'employee',
-    displayName: employeeName,
-    addedByUid: owner.uid,
-    addedByName: owner.displayName ?? '',
-    status: 'invited',
-    uid: null,
-    createdAt: Date.now(),
-    claimedAt: null,
-  }
-  await setDoc(doc(firestore, 'memberships', key), membership)
-}
-
-/**
- * Owner removes a member: delete the top-level `memberships/{phoneKey}` lookup and,
- * if the member has claimed (has a `uid`), the per-business `members/{uid}` doc.
- * Security Rules then reject the removed person's reads/writes. Their own
- * `users/{uid}` doc and past bill/activity attribution snapshots are left intact
- * (history stays truthful; on next load with no membership they re-onboard).
+ * Owner removes a member: delete the per-business `members/{uid}` doc. Security
+ * Rules then reject the removed person's reads/writes; on that person's next load
+ * their client detects they are no longer a member and clears their own
+ * `users/{uid}.bizId`, returning them to onboarding (removal-safety). Their own
+ * `users/{uid}` doc and past bill/activity attribution snapshots are left intact.
  */
 export async function removeEmployee(
   bizId: string,
-  member: { uid: string | null; phone: string },
+  member: { uid: string; phone: string },
 ): Promise<void> {
-  await deleteDoc(doc(firestore, 'memberships', phoneKey(member.phone)))
-  if (member.uid) {
-    await deleteDoc(doc(firestore, 'businesses', bizId, 'members', member.uid))
-  }
-}
-
-/**
- * An employee joins the business `bizId` an owner already added their phone to:
- * claim the pre-existing `invited` membership (set `uid`, `status:'active'`,
- * `claimedAt`), write the per-business member doc, and point `users/{uid}` at the
- * business. Attribution (`addedBy*`) is copied from the membership snapshot.
- */
-export async function claimEmployeeMembership(user: AppUser, bizId: string): Promise<void> {
-  const ts = Date.now()
-  const key = phoneKey(user.phone)
-  const name = user.displayName ?? ''
-
-  // Read the membership to carry over the owner's attribution snapshot + role.
-  const memRef = doc(firestore, 'memberships', key)
-  const memSnap = await getDoc(memRef)
-  const mem = memSnap.exists() ? (memSnap.data() as MembershipRecord) : null
-  const role: Role = mem?.role ?? 'employee'
-
-  // Claim + member doc + users pointer land together as one atomic unit.
-  const batch = writeBatch(firestore)
-
-  // Claim the membership (set uid + active + claimedAt).
-  batch.set(memRef, { uid: user.uid, status: 'active', claimedAt: ts }, { merge: true })
-
-  // businesses/{bizId}/members/{uid}
-  batch.set(
-    doc(firestore, 'businesses', bizId, 'members', user.uid),
-    {
-      uid: user.uid,
-      phone: user.phone,
-      displayName: name,
-      role,
-      addedByUid: mem?.addedByUid ?? '',
-      addedByName: mem?.addedByName ?? '',
-      addedAt: mem?.createdAt ?? ts,
-      status: 'active',
-    },
-    { merge: true },
-  )
-
-  // users/{uid} — routes the employee into the shared business
-  batch.set(
-    doc(firestore, 'users', user.uid),
-    { uid: user.uid, phone: user.phone, bizId, role, updatedAt: ts },
-    { merge: true },
-  )
-
-  await batch.commit()
+  await deleteDoc(doc(firestore, 'businesses', bizId, 'members', member.uid))
 }

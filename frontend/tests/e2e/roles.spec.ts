@@ -1,30 +1,38 @@
 import { test, expect, type Page } from '@playwright/test'
-import { signInTestOwner, signInTestEmployee, TEST_EMPLOYEE_PHONE } from './support/auth'
+import {
+  signInTestOwner,
+  signInGoogleUser,
+  ownerGenerateInviteCode,
+  uniqueEmail,
+} from './support/auth'
 
 /**
- * Phase-8 roles E2E — two REAL signed-in contexts against real Firebase Auth +
- * Cloud Firestore, exercising the owner/employee boundary end to end:
- *   owner adds the employee → employee joins & SHARES the ledger → an employee-
- *   created bill is ATTRIBUTED to them → the employee is RESTRICTED from the
- *   business profile and the Employees screen (UI gate + the published Rules).
+ * Phase-8 roles E2E — two REAL Google identities against the Firebase Auth +
+ * Firestore EMULATORS, exercising the owner/employee boundary end to end:
+ *   owner generates an INVITE CODE for an employee mobile → a SECOND Google identity
+ *   signs in, picks Employee, and redeems the code (code → matching mobile → name) →
+ *   the employee SHARES the ledger → an employee-created bill is ATTRIBUTED to them →
+ *   the employee is RESTRICTED from the business profile + the Employees screen (UI
+ *   gate AND the emulator-enforced Security Rules).
  *
- * ⚠️ REQUIRES the TIGHTENED `firestore.rules` (Phase-8 slice-a) to be PUBLISHED to
- *    the Firebase project. Without them the negative assertions (employee cannot
- *    open /employees, cannot write the business profile) are not truly enforced —
- *    the roster/add would be a client-only gate. Publish before running the gate:
- *      firebase deploy --only firestore:rules
+ * NEGATIVE case included: a correct code with a NON-MATCHING mobile shows the distinct
+ * `phoneMismatch` error and does NOT join — proving `checkInvite`'s phone gate.
  *
- * ⚠️ REQUIRES the SECOND test number `+919000000002` / `222222` to be configured in
- *    the Firebase Console (Authentication → Phone → test numbers), alongside the
- *    owner's `+919352277260` / `000000`.
- *
- * global-setup resets BOTH test users' Firestore footprints so the invite +
- * onboarding round-trip runs fresh and deterministically each run.
+ * Fully deterministic on the emulators: no real Google account, no SMS, no billing,
+ * no secret key. The published `firestore.rules` are enforced by the Firestore
+ * emulator, so the negative role assertions are real, not client-only.
  */
+
+// This spec's employee mobile (distinct from other specs). The employee EMAIL is
+// generated fresh per test invocation (see `uniqueEmail` in the test) so a retry
+// always onboards a brand-new identity rather than an already-joined one. Mobile is
+// the LOCAL 10 digits typed into the +91 PhoneField.
+const EMP_NAME = 'Employee One'
+const EMP_MOBILE_LOCAL = '9000000011'
+const WRONG_MOBILE_LOCAL = '9000000099'
 
 const OWNER_FARMER = 'OwnerFarmer Ram'
 const EMP_FARMER = 'EmpFarmer Shyam'
-const EMP_NAME = 'Employee One'
 
 /** Create a one-grain quick-entry bill; leaves the page on the home bill list. */
 async function createQuickBill(
@@ -50,15 +58,15 @@ async function createQuickBill(
   await page.waitForURL(/\/app\/(\?.*)?$/)
 }
 
-test('owner adds employee → employee joins, shares the ledger, is attributed, and is restricted', async ({
+test('owner invites by code → employee joins, shares the ledger, is attributed, and is restricted (+ phone-mismatch is rejected)', async ({
   page,
   browser,
 }) => {
-  // Two real contexts + real network — give the whole flow ample time.
+  // Two real contexts against the emulators — give the whole flow ample time.
   test.setTimeout(180_000)
 
   // ============================================================
-  // Context A — OWNER
+  // Context A — OWNER: sign in, generate an invite code, create a bill
   // ============================================================
   await signInTestOwner(page)
   await page.getByTestId('lang-toggle-en').click()
@@ -67,24 +75,21 @@ test('owner adds employee → employee joins, shares the ledger, is attributed, 
   // --- Owner → Settings → Employees entry → /employees ---
   await page.getByTestId('nav-settings').click()
   await page.waitForURL('**/app/settings/**')
-
-  // The owner sees the Manage-employees entry (employees are not shown it).
   await expect(page.getByTestId('employees-entry')).toBeVisible()
   await page.getByTestId('employees-entry').click()
   await page.waitForURL('**/app/employees/**')
   await expect(page.getByTestId('employees-screen')).toBeVisible()
 
-  // --- Owner adds the employee by phone + name → a roster row appears ---
-  await page.getByTestId('employee-phone-input').fill(TEST_EMPLOYEE_PHONE)
-  await page.getByTestId('employee-name-input').fill(EMP_NAME)
-  await page.getByTestId('add-employee-btn').click()
+  // --- Owner generates a one-time invite code for the employee's mobile ---
+  const inviteCode = await ownerGenerateInviteCode(page, {
+    name: EMP_NAME,
+    mobileLocal: EMP_MOBILE_LOCAL,
+  })
 
-  // The invited employee is NOT yet a claimed member, so the roster (claimed members)
-  // shows them only after they sign in and join — asserted below once Context B claims.
-  // NOTE: in a full-suite run a prior spec may already have invited this shared test
-  // phone, in which case the add reports "already belongs to a business" — that's fine;
-  // Context B reaching 'joined' below is the real proof. So we do NOT assert no-error.
-  await page.waitForTimeout(1000) // let the invite write reach the server
+  // The pending (unclaimed) invite is listed for re-sharing.
+  await expect(
+    page.getByTestId('pending-row').filter({ hasText: inviteCode }),
+  ).toBeVisible()
 
   // --- Owner creates a bill (proves the shared ledger for the employee) ---
   await page.getByTestId('nav-bills').click()
@@ -98,49 +103,69 @@ test('owner adds employee → employee joins, shares the ledger, is attributed, 
     amount: '3000',
   })
   await expect(
-    page.getByTestId('bill-card').filter({ hasText: OWNER_FARMER }),
+    page.getByTestId('bill-card').filter({ hasText: OWNER_FARMER }).first(),
   ).toBeVisible()
 
   // ============================================================
-  // Context B — EMPLOYEE (a separate browser context)
+  // Context B — EMPLOYEE (a separate browser context, a distinct Google identity)
   // ============================================================
   const empContext = await browser.newContext()
   const page2 = await empContext.newPage()
   try {
-    // Employee signs in → onboarding as Employee → the owner's invite is found →
-    // membership claimed → gated home.
-    const outcome = await signInTestEmployee(page2, { name: EMP_NAME })
-    expect(outcome).toBe('joined')
-    await expect(page2.getByTestId('gated-home')).toBeVisible()
+    // Sign the employee's (fresh) Google identity in → brand-new → onboarding.
+    const landing = await signInGoogleUser(page2, {
+      email: uniqueEmail('roles-emp'),
+      displayName: EMP_NAME,
+    })
+    expect(landing).toBe('onboarding')
 
-    // Identity (name + role badge) now lives on the Settings screen.
+    // --- NEGATIVE: correct code, WRONG mobile → distinct phone-mismatch, no join ---
+    await page2.getByTestId('role-employee').click()
+    await expect(page2.getByTestId('join-by-code')).toBeVisible()
+    await page2.getByTestId('join-code-input').fill(inviteCode)
+    await page2.getByTestId('join-code-next').click()
+    await expect(page2.getByTestId('join-mobile-input')).toBeVisible()
+    await page2.getByTestId('join-mobile-input').fill(WRONG_MOBILE_LOCAL)
+    await page2.getByTestId('join-mobile-next').click()
+    // A phone-mismatch alert shows; we are NOT advanced to the name step, NOT joined.
+    // The app's inline error is a <p role="alert"> (distinct from Next's route-announcer
+    // <div role="alert">, which also carries the role — hence the specific p selector).
+    await expect(page2.locator('p[role="alert"]')).toBeVisible()
+    await expect(page2.getByTestId('join-name-input')).toHaveCount(0)
+    await expect(page2.getByTestId('gated-home')).toHaveCount(0)
+
+    // --- POSITIVE: correct the mobile → advance → name → join ---
+    await page2.getByTestId('join-mobile-input').fill(EMP_MOBILE_LOCAL)
+    await page2.getByTestId('join-mobile-next').click()
+    await expect(page2.getByTestId('join-name-input')).toBeVisible()
+    await page2.getByTestId('join-name-input').fill(EMP_NAME)
+    await page2.getByTestId('join-submit').click()
+
+    await expect(page2.getByTestId('gated-home')).toBeVisible({ timeout: 25_000 })
+
+    // The employee's role badge (on Settings) reads Employee; capture their rendered name.
     await page2.getByTestId('nav-settings').click()
     await page2.waitForURL('**/app/settings/**')
-    // The employee's role badge reads Employee.
     await expect(page2.getByTestId('home-role')).toBeVisible()
-
-    // Capture the employee's ACTUAL rendered name — order-independent: in a full-suite
-    // run a prior spec may already have claimed this shared test phone with a different
-    // name, so we assert against what actually renders, not the hardcoded label.
     const empName = ((await page2.getByTestId('home-user-name').textContent()) ?? '').trim() || EMP_NAME
-
-    // Back to the bill list for the shared-ledger + attribution checks below.
     await page2.getByTestId('nav-bills').click()
 
     // --- Back on the OWNER context: the roster now lists the JOINED employee ---
-    // (a claimed member exists once Context B onboarded), proving add → join works.
-    // Match by the employee's ACTUAL rendered name (captured above) — order-independent.
     await page.goto('./employees/')
     await expect(
       page.getByTestId('employee-row').filter({ hasText: empName }),
     ).toBeVisible({ timeout: 25_000 })
+    // The invite flipped to claimed → no longer pending.
+    await expect(
+      page.getByTestId('pending-row').filter({ hasText: inviteCode }),
+    ).toHaveCount(0)
 
     await page2.getByTestId('lang-toggle-en').click()
     await expect(page2.getByTestId('new-bill-btn')).toContainText('New Bill')
 
     // --- SHARED LEDGER: the owner's bill is visible to the employee ---
     await expect(
-      page2.getByTestId('bill-card').filter({ hasText: OWNER_FARMER }),
+      page2.getByTestId('bill-card').filter({ hasText: OWNER_FARMER }).first(),
     ).toBeVisible({ timeout: 30_000 })
 
     // --- ATTRIBUTION: an employee-created bill records THEIR name ---
@@ -152,7 +177,7 @@ test('owner adds employee → employee joins, shares the ledger, is attributed, 
       weight: '100',
       amount: '2000',
     })
-    const empCard = page2.getByTestId('bill-card').filter({ hasText: EMP_FARMER })
+    const empCard = page2.getByTestId('bill-card').filter({ hasText: EMP_FARMER }).first()
     await expect(empCard).toBeVisible()
     await empCard.click()
     await page2.waitForURL('**/app/bill/**')
@@ -161,15 +186,12 @@ test('owner adds employee → employee joins, shares the ledger, is attributed, 
     // --- RESTRICTED: business profile is read-only; no Employees entry ---
     await page2.getByTestId('nav-settings').click()
     await page2.waitForURL('**/app/settings/**')
-
     await expect(page2.getByTestId('business-readonly-note')).toBeVisible()
     await expect(page2.getByTestId('settings-shop')).toBeDisabled()
     await expect(page2.getByTestId('settings-trader')).toBeDisabled()
     await expect(page2.getByTestId('settings-phone')).toBeDisabled()
-    // The Save button and the Manage-employees entry are hidden for employees.
     await expect(page2.getByTestId('settings-save')).toHaveCount(0)
     await expect(page2.getByTestId('employees-entry')).toHaveCount(0)
-
     // But the employee CAN edit their OWN personal profile (name).
     await expect(page2.getByTestId('personal-name-input')).toBeEnabled()
 

@@ -1,13 +1,12 @@
 'use client'
 
 // The React auth surface the UI consumes: AuthProvider + useAuth().
-// Implements the routing state machine over Firebase Auth + Firestore `users/{uid}`.
+// Implements the routing state machine over Firebase Auth (Google) + users/{uid}.
 //
 // Contract: architecture.md § Auth / session contract — lib/auth/context.tsx.
 //
-// Phase-6 scope note: this phase does NOT re-point lib/db/repo. The bill screens
-// keep using the local Dexie store; wiring `setActiveBusiness(bizId)` into the
-// repo is a Phase-7 task and is deliberately absent here.
+// Recognition is purely users/{uid}.bizId: on sign-in read the user doc — bizId set
+// → 'ready' (straight into the app); else → 'onboarding'. There is no phone lookup.
 
 import {
   createContext,
@@ -22,21 +21,15 @@ import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { firestore } from '@/lib/firebase/app'
 import {
   AuthError,
-  RECAPTCHA_CONTAINER_ID,
   mapAuthError,
   onFirebaseAuthChange,
+  signInWithGoogle as sessionSignInWithGoogle,
   signOutUser,
-  startPhoneSignIn as sessionStartPhoneSignIn,
   type AppUser,
-  type ConfirmationHandle,
 } from './session'
-import { decideMembership, type MembershipDecision, type Role } from './membership'
-import {
-  claimEmployeeMembership,
-  createBusiness,
-  findMembershipByPhone,
-  type NewBusinessInput,
-} from '@/lib/tenancy/business'
+import { checkInvite, routeRole, type Role, type RoleRoute } from './membership'
+import { createBusiness, type NewBusinessInput } from '@/lib/tenancy/business'
+import { claimInvite, getInvite } from '@/lib/tenancy/invite'
 import { setActiveBusiness, setActiveActor, ensureSeeded } from '@/lib/db/repo'
 import { migrateLocalToFirestore } from '@/lib/db/migrate'
 
@@ -45,12 +38,11 @@ export type AuthStatus = 'loading' | 'signed-out' | 'onboarding' | 'ready'
 export interface AuthContextValue {
   status: AuthStatus
   user: AppUser | null
-  startPhoneSignIn(phoneE164: string): Promise<void>
-  confirmOtp(code: string): Promise<void>
+  signInWithGoogle(): Promise<void>
   setDisplayName(name: string): Promise<void>
-  chooseRole(role: Role): Promise<MembershipDecision>
+  chooseRole(role: Role): Promise<RoleRoute>
   createOwnerBusiness(input: NewBusinessInput): Promise<void>
-  joinAsEmployee(bizId: string): Promise<void>
+  joinByCode(input: { code: string; phoneE164: string; name: string }): Promise<void>
   signOut(): Promise<void>
 }
 
@@ -58,14 +50,23 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 interface StoredUserDoc {
   uid?: string
-  phone?: string
+  email?: string | null
+  phone?: string | null
   displayName?: string | null
   bizId?: string | null
   role?: Role | null
 }
 
-/** Load `users/{uid}`, creating a fresh record (storing the phone) on first sign-in. */
-async function loadOrCreateUser(uid: string, phone: string): Promise<AppUser> {
+/**
+ * Load `users/{uid}`, creating a fresh record on first sign-in with the Google
+ * email + display name (prefilled, editable at onboarding) and a null phone (the
+ * mobile is captured later at onboarding as profile data — never an auth factor).
+ */
+async function loadOrCreateUser(
+  uid: string,
+  email: string | null,
+  googleName: string | null,
+): Promise<AppUser> {
   const ref = doc(firestore, 'users', uid)
   const snap = await getDoc(ref)
   const ts = Date.now()
@@ -73,28 +74,61 @@ async function loadOrCreateUser(uid: string, phone: string): Promise<AppUser> {
   if (!snap.exists()) {
     await setDoc(ref, {
       uid,
-      phone,
-      displayName: null,
+      email,
+      phone: null,
+      displayName: googleName ?? null,
       bizId: null,
       role: null,
       createdAt: ts,
       updatedAt: ts,
     })
-    return { uid, phone, displayName: null, bizId: null, role: null }
+    return { uid, email, phone: null, displayName: googleName ?? null, bizId: null, role: null }
   }
 
   const data = snap.data() as StoredUserDoc
-  // Backfill the phone if an older record somehow lacks it.
-  if (!data.phone && phone) {
-    await setDoc(ref, { phone, updatedAt: ts }, { merge: true })
+  // Backfill the email if an older record somehow lacks it.
+  if (!data.email && email) {
+    await setDoc(ref, { email, updatedAt: ts }, { merge: true })
   }
   return {
     uid,
-    phone: data.phone ?? phone,
-    displayName: data.displayName ?? null,
+    email: data.email ?? email,
+    phone: data.phone ?? null,
+    displayName: data.displayName ?? googleName ?? null,
     bizId: data.bizId ?? null,
     role: (data.role ?? null) as Role | null,
   }
+}
+
+/**
+ * Removal-safety: a ready user (bizId set) whose owner removed them still has their
+ * `users/{uid}.bizId`, but is no longer in `businesses/{bizId}/members`. Confirm the
+ * member doc still exists; if it is gone (a permission-denied read, since Rules gate
+ * member reads on membership), clear our own `users/{uid}.{bizId, role}` (a permitted
+ * self-write) and return to onboarding. Any OTHER read failure (offline/unavailable)
+ * is treated as transient — keep the ready session and re-check on the next load.
+ */
+async function confirmMembershipOrClear(u: AppUser): Promise<AppUser> {
+  if (!u.bizId) return u
+  try {
+    const memberSnap = await getDoc(doc(firestore, 'businesses', u.bizId, 'members', u.uid))
+    if (memberSnap.exists()) return u
+  } catch (err) {
+    const code = (err as { code?: string })?.code
+    if (code !== 'permission-denied') return u // transient — stay ready, offline-safe
+  }
+  // Removed by the owner — drop our pointer and re-onboard.
+  try {
+    await setDoc(
+      doc(firestore, 'users', u.uid),
+      { bizId: null, role: null, updatedAt: Date.now() },
+      { merge: true },
+    )
+  } catch {
+    // Best-effort: even if the clear write fails, drop bizId locally so the UI
+    // routes to onboarding rather than a broken ready screen whose reads Rules reject.
+  }
+  return { ...u, bizId: null, role: null }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -105,20 +139,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userRef = useRef<AppUser | null>(null)
   userRef.current = user
 
-  // The pending OTP confirmation handle between startPhoneSignIn and confirmOtp.
-  const confirmRef = useRef<ConfirmationHandle | null>(null)
-
   // Activate the ambient business scope for the data layer whenever a user is
   // ready, and (owner only) kick off the one-time local→cloud migration in the
   // background. Fire-and-forget: this must never gate `status` or block the UI.
   const activateBusinessScope = useCallback((u: AppUser) => {
     if (!u.bizId) return
     setActiveBusiness(u.bizId)
-    // Phase 8 — stamp the acting member so repo writes (createBill/addPayment) are
-    // attributed to them. Name is a snapshot; it refreshes on rename below.
-    setActiveActor({ uid: u.uid, phone: u.phone, name: u.displayName ?? '' })
-    // Seed the starter grain types into this business (idempotent) so the grain
-    // picker is populated as soon as the user is in the business. Fire-and-forget.
+    // Stamp the acting member so repo writes (createBill/addPayment) are attributed
+    // to them. Name is a snapshot; it refreshes on rename below. phone may be null.
+    setActiveActor({ uid: u.uid, phone: u.phone ?? '', name: u.displayName ?? '' })
+    // Seed the starter grain types into this business (idempotent). Fire-and-forget.
     ensureSeeded().catch(() => {})
     if (u.role === 'owner') {
       migrateLocalToFirestore(u.bizId, u.uid).catch(() => {
@@ -154,10 +184,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Single source of truth for session state: react to Firebase auth changes.
   // Fires on initial load (LOCAL persistence → stays signed in across reloads),
-  // after confirmOtp, and on sign-out.
+  // after signInWithGoogle, and on sign-out.
   useEffect(() => {
-    const unsub = onFirebaseAuthChange((uid, phone) => {
-      if (!uid) {
+    const unsub = onFirebaseAuthChange((info) => {
+      if (!info) {
         setActiveBusiness(null)
         setActiveActor(null)
         userRef.current = null
@@ -165,7 +195,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus('signed-out')
         return
       }
-      loadOrCreateUser(uid, phone ?? '')
+      loadOrCreateUser(info.uid, info.email, info.displayName)
+        .then(confirmMembershipOrClear)
         .then(applyUser)
         .catch(() => {
           // The sign-in is valid but the user doc read/create failed; keep the
@@ -176,17 +207,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsub
   }, [applyUser])
 
-  const startPhoneSignIn = useCallback(async (phoneE164: string) => {
-    confirmRef.current = await sessionStartPhoneSignIn(phoneE164, RECAPTCHA_CONTAINER_ID)
-  }, [])
-
-  const confirmOtp = useCallback(async (code: string) => {
-    const handle = confirmRef.current
-    if (!handle) throw new AuthError('auth/no-confirmation', 'auth.error.generic')
-    await handle.confirm(code)
-    confirmRef.current = null
-    // The onFirebaseAuthChange listener now loads/creates users/{uid} and
-    // transitions status (onboarding | ready).
+  const signInWithGoogle = useCallback(async () => {
+    await sessionSignInWithGoogle()
+    // The onFirebaseAuthChange listener loads/creates users/{uid} and sets status.
   }, [])
 
   const setDisplayName = useCallback(async (name: string) => {
@@ -204,64 +227,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const next: AppUser = { ...cur, displayName: name }
     setUser(next)
     userRef.current = next
-    // Phase 8 — if a business is active, refresh the attribution snapshot so
-    // subsequent bills/payments carry the new name (past writes keep the old one).
+    // If a business is active, refresh the attribution snapshot so subsequent
+    // bills/payments carry the new name (past writes keep the old one).
     if (next.bizId) {
-      setActiveActor({ uid: next.uid, phone: next.phone, name })
+      setActiveActor({ uid: next.uid, phone: next.phone ?? '', name })
     }
   }, [])
 
-  const chooseRole = useCallback(
-    async (role: Role): Promise<MembershipDecision> => {
-      const cur = userRef.current
-      if (!cur) throw new AuthError('auth/not-signed-in', 'auth.error.generic')
-
-      const lookup = await findMembershipByPhone(cur.phone)
-      const decision = decideMembership(
-        role,
-        lookup ? { bizId: lookup.bizId, role: lookup.role, status: lookup.status } : null,
-      )
-
-      if (decision.kind === 'owner') {
-        // Returning owner recognised by membership — point users/{uid} at the biz.
-        await setDoc(
-          doc(firestore, 'users', cur.uid),
-          { bizId: decision.bizId, role: 'owner', updatedAt: Date.now() },
-          { merge: true },
-        )
-        enterReady(cur, decision.bizId, 'owner')
-      } else if (decision.kind === 'employee-joined') {
-        await claimEmployeeMembership(cur, decision.bizId)
-        enterReady(cur, decision.bizId, 'employee')
-      }
-      // 'new' → UI shows CreateBusiness; 'employee-unadded' → UI shows AskOwner.
-      return decision
-    },
-    [enterReady],
-  )
+  // The role chooser is a pure local route now (no phone→business lookup):
+  // 'owner' → create-business, 'employee' → JoinByCode. Async signature kept to
+  // match the frozen context contract.
+  const chooseRole = useCallback(async (role: Role): Promise<RoleRoute> => {
+    return routeRole(role)
+  }, [])
 
   const createOwnerBusiness = useCallback(
     async (input: NewBusinessInput) => {
       const cur = userRef.current
       if (!cur) throw new AuthError('auth/not-signed-in', 'auth.error.generic')
-      const bizId = await createBusiness(cur, input)
-      enterReady(cur, bizId, 'owner')
+      // The owner's create form captures their mobile as profile data.
+      const owner: AppUser = input.phone ? { ...cur, phone: input.phone } : cur
+      const bizId = await createBusiness(owner, input)
+      enterReady(owner, bizId, 'owner')
     },
     [enterReady],
   )
 
-  const joinAsEmployee = useCallback(
-    async (bizId: string) => {
+  const joinByCode = useCallback(
+    async (input: { code: string; phoneE164: string; name: string }) => {
       const cur = userRef.current
       if (!cur) throw new AuthError('auth/not-signed-in', 'auth.error.generic')
-      await claimEmployeeMembership(cur, bizId)
-      enterReady(cur, bizId, 'employee')
+      // The employee's name (prefilled from Google, editable) is threaded onto the
+      // user so claimInvite writes it into members + users.
+      const named: AppUser = { ...cur, displayName: input.name, phone: input.phoneE164 }
+
+      // Defensive re-validation of the frozen invite check (the UI validates too,
+      // for its two-step distinct errors).
+      const invite = await getInvite(input.code)
+      const check = checkInvite(invite, input.phoneE164)
+      if (check.kind === 'phone-mismatch') {
+        throw new AuthError('invite/phone-mismatch', 'onboarding.join.phoneMismatch')
+      }
+      if (check.kind !== 'ok') {
+        throw new AuthError('invite/not-found', 'onboarding.join.notFound')
+      }
+
+      await claimInvite(named, input.code, input.phoneE164)
+      enterReady(named, check.bizId, 'employee')
     },
     [enterReady],
   )
 
   const signOut = useCallback(async () => {
-    confirmRef.current = null
     await signOutUser()
     // The listener flips status to 'signed-out' and clears the user.
   }, [])
@@ -269,27 +286,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextValue = {
     status,
     user,
-    startPhoneSignIn,
-    confirmOtp,
+    signInWithGoogle,
     setDisplayName,
     chooseRole,
     createOwnerBusiness,
-    joinAsEmployee,
+    joinByCode,
     signOut,
   }
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-      {/* Invisible reCAPTCHA target for phone sign-in. Mounted once, above the
-          whole app, so `startPhoneSignIn` (RecaptchaVerifier on this id) always
-          finds it — including before LoginScreen has rendered. Must NOT be
-          `display:none` — invisible reCAPTCHA cannot initialize in a hidden
-          container and `signInWithPhoneNumber` would hang. grecaptcha injects
-          its own fixed-position badge; this container stays empty. */}
-      <div id={RECAPTCHA_CONTAINER_ID} />
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth(): AuthContextValue {

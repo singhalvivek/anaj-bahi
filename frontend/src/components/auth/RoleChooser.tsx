@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/lib/auth/context'
-import type { MembershipDecision } from '@/lib/auth/membership'
+import type { RoleRoute } from '@/lib/auth/membership'
 
 /** Pull a translatable i18n key off an AuthError, else a generic fallback. */
 function errorKey(err: unknown): string {
@@ -20,19 +20,17 @@ function errorKey(err: unknown): string {
 
 interface RoleChooserProps {
   /**
-   * Called after `chooseRole` resolves, lifting the MembershipDecision to the
-   * parent (OnboardingFlow). For `'owner'` / `'employee-joined'` the AuthProvider
-   * has already flipped status to `ready`, so the parent unmounts — passing the
-   * decision up is harmless. For `'new'` / `'employee-unadded'` the parent shows
-   * the next sub-screen.
+   * Called after `chooseRole` resolves, lifting the pure RoleRoute to the parent
+   * (OnboardingFlow): `{ kind:'create' }` (Owner → CreateBusiness) or
+   * `{ kind:'join' }` (Employee → JoinByCode).
    */
-  onDecision: (decision: MembershipDecision) => void
+  onDecision: (route: RoleRoute) => void
 }
 
 /**
- * Onboarding step 2: pick Owner or Employee. Runs the pure membership decision
- * (via `chooseRole`) which — critically — lets an EXISTING membership win over
- * the fresh choice (one-person-one-business).
+ * Onboarding role step: pick Owner or Employee. `chooseRole` is now a pure local
+ * route (no phone→business lookup) — 'owner' → create a business, 'employee' →
+ * join by invite code — so recognition of returning users is enforced upstream.
  */
 export function RoleChooser({ onDecision }: RoleChooserProps) {
   const { t } = useI18n()
@@ -46,8 +44,8 @@ export function RoleChooser({ onDecision }: RoleChooserProps) {
     setError(null)
     setBusy(role)
     try {
-      const decision = await chooseRole(role)
-      onDecision(decision)
+      const route = await chooseRole(role)
+      onDecision(route)
     } catch (err) {
       setError(t(errorKey(err)))
     } finally {

@@ -18,15 +18,17 @@ function errorKey(err: unknown): string {
 }
 
 /**
- * Onboarding step 1: capture the user's display name (a phone carries no name).
- * Continue is disabled until non-blank. On success the AuthProvider updates
- * `user.displayName`, and OnboardingFlow advances to the role chooser.
+ * Prefill-capable display-name input. Google now supplies the name, so the
+ * onboarding flow captures the name inline in CreateBusiness / JoinByCode rather
+ * than as a standalone first step; this component is retained as a reusable,
+ * prefilled (from `user.displayName`), editable name prompt. Continue is disabled
+ * until non-blank; on success the AuthProvider updates `user.displayName`.
  */
 export function NamePrompt() {
   const { t } = useI18n()
-  const { setDisplayName } = useAuth()
+  const { user, setDisplayName } = useAuth()
 
-  const [name, setName] = useState('')
+  const [name, setName] = useState(user?.displayName ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

@@ -1,45 +1,40 @@
 # Capability: First-Run Name & Role Chooser
 
-_Phase 6 · slice-a (pure `lib/auth/membership` + wiring) + slice-b (onboarding UI)._
+_Phase 6 · slice-a (pure `lib/auth/membership` route + `lib/tenancy/invite` check + wiring) + slice-b (onboarding UI)._
 
-Frozen decision logic: [architecture.md § Membership decision logic](../architecture.md#membership-decision-logic--libauthmembershipts).
+Frozen routing + invite logic: [architecture.md § Role routing + invite logic](../architecture.md#role-routing--invite-logic--libauthmembershipts-pure-unit-tested).
 
 ## What It Does
-Guides a newly signed-in phone through first-run onboarding: capture a **display name** (a phone carries no name), then choose **"I am an Owner"** or **"I am an Employee"**, and route to the correct next step using a **pure membership-decision function**.
+Guides a **genuinely new** signed-in user (one whose `users/{uid}.bizId` is not yet set) through first-run onboarding: capture a **display name** (prefilled from the Google account, editable), then choose **"I am an Owner"** or **"I am an Employee"**, and route to the correct next step. Returning users are recognized upstream by `users/{uid}.bizId` and **never see this chooser**.
 
 ## Inputs
 | Input | Type | Source | Required |
 |-------|------|--------|----------|
-| display name | string (non-blank) | `display-name-input` | yes |
+| display name | string (non-blank; prefilled from Google) | `name-input` | yes |
 | role choice | `'owner' \| 'employee'` | `role-owner` / `role-employee` | yes |
-| phone→membership lookup | `MembershipLookup \| null` | `memberships/{phoneKey}` (Firestore) | yes (may be null) |
 
 ## Outputs
 | Output | Type | Destination |
 |--------|------|-------------|
-| decision | `owner \| employee-joined \| employee-unadded \| new` | drives the next onboarding screen |
+| route | `create` (owner) \| `join` (employee) | drives the next onboarding screen |
 | displayName | string | `users/{uid}.displayName` (+ name snapshots) |
 
 ## External Calls
 | System | Operation | On Failure |
 |--------|-----------|------------|
-| Firestore `memberships/{phoneKey}` | read lookup on role choice | Visible error; user can retry; never routes on stale/error data |
 | Firestore `users/{uid}` | persist display name | Visible error; retry |
 
+_(The role chooser itself no longer reads any phone→business lookup — recognition of returning users happens before onboarding via `users/{uid}.bizId`.)_
+
 ## Business Rules
-- **`decideMembership(chosenRole, lookup)`** is pure and unit-tested (all four branches):
-  - existing **owner** membership → `owner` (enter that business as owner);
-  - existing **employee** membership → `employee-joined` (join that business);
-  - no membership + chose **owner** → `new` (go to create-business);
-  - no membership + chose **employee** → `employee-unadded` (show "ask your owner").
-- **An existing membership always wins over the fresh choice** — this enforces **one person → one business** (a phone already tied to a business can't create a second).
-- Returning users (a `users/{uid}` with a `bizId`) **skip the chooser** entirely and go straight into the app.
-- Display name is stored as a **snapshot** with attribution so it survives later renames/removal.
+- **`routeRole(chosenRole)`** is pure and unit-tested: `'owner'` → `create` (go to create-business), `'employee'` → `join` (go to JoinByCode). No membership lookup — one-person-one-business is enforced upstream (a user with a `bizId` never reaches onboarding).
+- Display name defaults to the Google `displayName` and is editable; it is stored as a **snapshot** with attribution so it survives later renames/removal.
+- Returning users (a `users/{uid}` with a `bizId`) **skip the chooser entirely** and go straight into the app — on any device, because the `uid` is stable per Google account.
+- The old **"ask your owner"** dead-end screen is **removed**; choosing Employee now leads to the actionable **JoinByCode** flow (enter code + mobile + name). See [business-tenancy](business-tenancy.md).
 
 ## Success Criteria
-- [ ] A brand-new phone is prompted for a name (required, non-blank) before the role choice.
-- [ ] Choosing **Owner** with no prior membership routes to **create-business** (`new`).
-- [ ] Choosing **Employee** whose phone an owner **already added** routes to **join** (`employee-joined`) and lands in that business.
-- [ ] Choosing **Employee** whose phone is **not** added routes to the **ask-your-owner** screen (`employee-unadded`) with no app access.
-- [ ] A phone that already belongs to a business is routed by its **existing** membership regardless of the button tapped (one-person-one-business).
-- [ ] `decideMembership` unit tests cover all four branches plus the "existing membership overrides choice" edges.
+- [ ] A brand-new Google account is prompted for a name (required, non-blank, **prefilled** from Google) before the role choice.
+- [ ] Choosing **Owner** routes to **create-business** (`create`).
+- [ ] Choosing **Employee** routes to the **JoinByCode** screen (`join`), never a dead-end "ask your owner" screen.
+- [ ] A Google account already tied to a business is routed **straight into that business** on sign-in and never sees the chooser (one-person-one-business).
+- [ ] `routeRole` unit tests cover both branches; the invite-check logic (`checkInvite`) is unit-tested for `ok` / `not-found` / `phone-mismatch`.

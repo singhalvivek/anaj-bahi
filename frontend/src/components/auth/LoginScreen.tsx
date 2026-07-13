@@ -3,16 +3,15 @@
 import { useState } from 'react'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/lib/auth/context'
-import { PhoneField, isValidIndianPhone } from '@/components/PhoneField'
 
 /**
- * Full-screen phone + SMS-OTP login (shown by the AuthGate when
- * `status === 'signed-out'`). Two internal phases: enter phone → enter OTP.
+ * Full-screen Google sign-in (shown by the AuthGate when `status === 'signed-out'`).
  *
- * India-only: the phone is captured through <PhoneField> (fixed +91 prefix; the
- * user types just the local 10 digits) and submitted in E.164. The invisible
- * reCAPTCHA target (`#recaptcha-container`) is mounted by the AuthProvider — this
- * component deliberately does NOT render its own.
+ * A single primary "Continue with Google" button → `signInWithGoogle()`
+ * (`signInWithPopup(GoogleAuthProvider)`). There is NO phone field, NO OTP input
+ * and NO reCAPTCHA container anywhere — Google is the only sign-in factor. Popup
+ * failures (popup closed / network / unauthorized-domain) surface as an inline,
+ * bilingual, retryable error; the button stays tappable.
  *
  * i18n: keys live in slice-a's shipped dictionary under `auth.*`.
  */
@@ -32,63 +31,27 @@ function errorKey(err: unknown): string {
 
 export function LoginScreen() {
   const { t, setLang, lang } = useI18n()
-  const { startPhoneSignIn, confirmOtp } = useAuth()
+  const { signInWithGoogle } = useAuth()
 
-  const [phase, setPhase] = useState<'phone' | 'otp'>('phone')
-  const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState('')
-  const [sending, setSending] = useState(false)
-  const [verifying, setVerifying] = useState(false)
+  const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const trimmedPhone = phone.trim()
-
-  async function onSendCode() {
+  async function onSignIn() {
     setError(null)
-    if (!isValidIndianPhone(trimmedPhone)) {
-      setError(t('auth.error.invalidPhone'))
-      return
-    }
-    setSending(true)
+    setSigningIn(true)
     try {
-      await startPhoneSignIn(trimmedPhone)
-      setPhase('otp')
+      // On success the AuthProvider's auth listener loads/creates users/{uid} and
+      // flips `status` → onboarding|ready, so the AuthGate unmounts this screen.
+      await signInWithGoogle()
     } catch (err) {
       setError(t(errorKey(err)))
     } finally {
-      setSending(false)
+      setSigningIn(false)
     }
   }
 
-  async function onVerify() {
-    setError(null)
-    const code = otp.replace(/\D/g, '')
-    if (code.length !== 6) {
-      setError(t('auth.error.invalidOtp'))
-      return
-    }
-    setVerifying(true)
-    try {
-      // On success the AuthProvider flips `status` → onboarding|ready and the
-      // AuthGate unmounts this screen; nothing more to do here.
-      await confirmOtp(code)
-    } catch (err) {
-      setError(t(errorKey(err)))
-    } finally {
-      setVerifying(false)
-    }
-  }
-
-  function changeNumber() {
-    setPhase('phone')
-    setOtp('')
-    setError(null)
-  }
-
-  const inputClass =
-    'h-14 w-full rounded-xl border-2 border-stone-300 bg-white px-4 text-lg text-stone-800 outline-none focus:border-green-600'
   const primaryBtn =
-    'flex min-h-[56px] w-full items-center justify-center rounded-xl bg-green-700 text-lg font-semibold text-white transition-colors disabled:opacity-60 active:bg-green-800'
+    'flex min-h-[56px] w-full items-center justify-center gap-3 rounded-xl bg-green-700 text-lg font-semibold text-white transition-colors disabled:opacity-60 active:bg-green-800'
 
   return (
     <div
@@ -131,81 +94,21 @@ export function LoginScreen() {
           <p className="text-base text-stone-600">{t('auth.login.title')}</p>
         </div>
 
-        {phase === 'phone' ? (
-          <div className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-stone-600">{t('auth.phone.label')}</span>
-              <PhoneField
-                testId="login-phone-input"
-                value={phone}
-                onChange={setPhone}
-                ariaLabel={t('auth.phone.label')}
-                placeholder={t('auth.phone.placeholder')}
-                className="h-14 rounded-xl border-2 border-stone-300 bg-white text-lg text-stone-800 focus-within:border-green-600"
-              />
-            </label>
-
-            {error && (
-              <p role="alert" className="text-sm font-medium text-red-600">
-                {error}
-              </p>
-            )}
-
-            <button
-              type="button"
-              data-testid="login-send-code"
-              onClick={onSendCode}
-              disabled={sending}
-              className={primaryBtn}
-            >
-              {sending ? t('auth.sending') : t('auth.sendCode')}
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <p className="text-sm text-stone-500">
-              <span className="font-semibold text-stone-700">{trimmedPhone}</span>
-            </p>
-
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-stone-600">{t('auth.otp.label')}</span>
-              <input
-                data-testid="login-otp-input"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder={t('auth.otp.placeholder')}
-                className={`${inputClass} tracking-[0.4em]`}
-              />
-            </label>
-
-            {error && (
-              <p role="alert" className="text-sm font-medium text-red-600">
-                {error}
-              </p>
-            )}
-
-            <button
-              type="button"
-              data-testid="login-verify"
-              onClick={onVerify}
-              disabled={verifying}
-              className={primaryBtn}
-            >
-              {verifying ? t('auth.verifying') : t('auth.verify')}
-            </button>
-
-            <button
-              type="button"
-              onClick={changeNumber}
-              className="text-sm font-medium text-green-700 underline underline-offset-2"
-            >
-              {t('auth.changeNumber')}
-            </button>
-          </div>
+        {error && (
+          <p role="alert" className="text-sm font-medium text-red-600">
+            {error}
+          </p>
         )}
+
+        <button
+          type="button"
+          data-testid="login-google"
+          onClick={onSignIn}
+          disabled={signingIn}
+          className={primaryBtn}
+        >
+          {signingIn ? t('auth.google.signingIn') : t('auth.google.button')}
+        </button>
       </div>
     </div>
   )
