@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useI18n } from '@/lib/i18n/context'
 import { useAuth } from '@/lib/auth/context'
+import { PhoneField, isValidIndianPhone } from '@/components/PhoneField'
 
 /** Pull a translatable i18n key off an AuthError, else a generic fallback. */
 function errorKey(err: unknown): string {
@@ -18,29 +19,41 @@ function errorKey(err: unknown): string {
 }
 
 /**
- * Onboarding step 3a (Owner, decision `new`): create a new business. Only the
- * shop name is asked; the trader name defaults to the user's display name. On
- * success the AuthProvider flips `status` → `ready` and the app renders.
+ * Onboarding (Owner, route `create`): create a new business. A single form with
+ * three fields — name (prefilled from the Google displayName, editable), shop
+ * name, and mobile (India-only PhoneField, stored as profile data). On submit, if
+ * the name was edited we persist it first (setDisplayName) so attribution
+ * snapshots the trader's chosen name, then create the business. On success the
+ * AuthProvider flips `status` → `ready` and the app renders.
  */
 export function CreateBusiness() {
   const { t } = useI18n()
-  const { user, createOwnerBusiness } = useAuth()
+  const { user, setDisplayName, createOwnerBusiness } = useAuth()
 
+  const [name, setName] = useState(user?.displayName ?? '')
   const [shopName, setShopName] = useState('')
+  const [mobile, setMobile] = useState('') // canonical E.164 from PhoneField
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const trimmed = shopName.trim()
-  const canSubmit = trimmed !== ''
+  const trimmedName = name.trim()
+  const trimmedShop = shopName.trim()
+  const mobileValid = isValidIndianPhone(mobile)
+  const canSubmit = trimmedName !== '' && trimmedShop !== '' && mobileValid
 
   async function onCreate() {
     setError(null)
     if (!canSubmit) return
     setSaving(true)
     try {
+      // Persist an edited name first so the owner's attribution snapshot uses it.
+      if (trimmedName !== (user?.displayName ?? '')) {
+        await setDisplayName(trimmedName)
+      }
       await createOwnerBusiness({
-        shopName: trimmed,
-        traderName: user?.displayName?.trim() || trimmed,
+        shopName: trimmedShop,
+        traderName: trimmedName,
+        phone: mobile,
       })
     } catch (err) {
       setError(t(errorKey(err)))
@@ -48,6 +61,10 @@ export function CreateBusiness() {
       setSaving(false)
     }
   }
+
+  const inputClass =
+    'h-14 w-full rounded-xl border-2 border-stone-300 bg-white px-4 text-lg text-stone-800 outline-none focus:border-green-600'
+  const fieldBox = 'h-14 rounded-xl border-2 border-stone-300 bg-white text-lg text-stone-800 focus-within:border-green-600'
 
   return (
     <div
@@ -61,14 +78,40 @@ export function CreateBusiness() {
 
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-stone-600">
+            {t('onboarding.createBusiness.nameLabel')}
+          </span>
+          <input
+            data-testid="create-name-input"
+            className={inputClass}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-stone-600">
             {t('onboarding.createBusiness.shopName')}
           </span>
           <input
             data-testid="create-shop-input"
-            className="h-14 w-full rounded-xl border-2 border-stone-300 bg-white px-4 text-lg text-stone-800 outline-none focus:border-green-600"
+            className={inputClass}
             value={shopName}
             onChange={(e) => setShopName(e.target.value)}
             autoComplete="off"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-stone-600">
+            {t('onboarding.createBusiness.mobile')}
+          </span>
+          <PhoneField
+            testId="create-mobile-input"
+            value={mobile}
+            onChange={setMobile}
+            ariaLabel={t('onboarding.createBusiness.mobile')}
+            className={fieldBox}
           />
         </label>
 
@@ -91,7 +134,13 @@ export function CreateBusiness() {
         </button>
 
         {!canSubmit && (
-          <p className="text-xs text-stone-500">{t('onboarding.createBusiness.shopRequired')}</p>
+          <p className="text-xs text-stone-500">
+            {trimmedName === ''
+              ? t('onboarding.createBusiness.nameRequired')
+              : trimmedShop === ''
+                ? t('onboarding.createBusiness.shopRequired')
+                : t('onboarding.createBusiness.mobileRequired')}
+          </p>
         )}
       </div>
     </div>

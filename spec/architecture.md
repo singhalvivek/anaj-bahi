@@ -8,7 +8,7 @@
 
 Anaj Bahi is an installable **Next.js PWA** that runs on the trader's phone. In Phase 1 there is **no backend and no network dependency**: the browser is the whole runtime. The UI (React 19 client components) reads and writes an **IndexedDB** database via **Dexie**; a pure TypeScript **calc module** computes all weights and money; a **service worker** caches the app shell so it launches offline; a lightweight **i18n context** swaps Hindi/English. Phases 1–5 built this single-user local ledger (with an optional FastAPI + SQLite personal-backup backend in the now-**superseded** Phase 4).
 
-> **Firebase multi-tenant redesign (Phases 6–9).** The app is evolving from single-user-single-device into a **multi-tenant, multi-user** ledger: many independent **businesses**, each with **owners** and **employees** who share one ledger. The FastAPI + SQLite sync backend is **replaced entirely by Firebase** — **Firebase Auth (phone/SMS-OTP)** for identity and **Cloud Firestore (accessed directly from the client, with IndexedDB offline persistence as the store)** for the shared, business-scoped data. There is still **no server we run** (no FastAPI, no container) and — critically — **still no AI/LLM/agent** (see [agent.md](agent.md)). The full frozen contracts for this redesign are in [§ Firebase multi-tenant redesign — frozen contracts](#firebase-multi-tenant-redesign-phases-69--frozen-contracts) at the end of this file.
+> **Firebase multi-tenant redesign (Phases 6–9).** The app is evolving from single-user-single-device into a **multi-tenant, multi-user** ledger: many independent **businesses**, each with **owners** and **employees** who share one ledger. The FastAPI + SQLite sync backend is **replaced entirely by Firebase** — **Firebase Auth (Google sign-in)** for identity and **Cloud Firestore (accessed directly from the client, with IndexedDB offline persistence as the store)** for the shared, business-scoped data. There is still **no server we run** (no FastAPI, no container) and — critically — **still no AI/LLM/agent** (see [agent.md](agent.md)). The full frozen contracts for this redesign are in [§ Firebase multi-tenant redesign — frozen contracts](#firebase-multi-tenant-redesign-phases-69--frozen-contracts) at the end of this file.
 
 ## Component Map
 
@@ -74,10 +74,10 @@ No network, no server, no keys anywhere in this flow.
 - **LLM provider + model:** **None** — not an AI app.
 - **Frontend:** Next.js 15.3 (App Router) + React 19, **static export** (`output: 'export'`, `basePath: '/app'`, `trailingSlash: true`), Tailwind CSS 4. Installable PWA (manifest + hand-written service worker). Unchanged by the redesign.
 - **Local store (Phases 1–5):** **IndexedDB via Dexie 4**. No server DB on device.
-- **Auth (Phase 6+):** **Firebase Authentication — Phone / SMS-OTP** via the Firebase Web JS SDK (`firebase/auth`): invisible reCAPTCHA + `signInWithPhoneNumber`, **`browserLocalPersistence`** (stays signed in until explicit sign-out). Identity = the phone number in **E.164**. Web config is 6 **public** `NEXT_PUBLIC_FIREBASE_*` values (not secrets); real security is **Firestore Security Rules**.
+- **Auth (Phase 6+):** **Firebase Authentication — Google sign-in** via the Firebase Web JS SDK (`firebase/auth`): `GoogleAuthProvider` + `signInWithPopup`, **`browserLocalPersistence`** (stays signed in until explicit sign-out). Identity = the Firebase **`uid`** (stable per Google account, the same on every device). **No SMS/OTP, no reCAPTCHA, no Blaze plan** — Google sign-in is free on the **Spark** tier (phone/SMS-OTP was removed after it began returning `auth/billing-not-enabled`; the "10 free SMS/day" console banner is dead since Sept 2024). Google supplies `displayName` + `email`; email is stored on the user record. The **mobile number** is captured at onboarding as **profile/verification data only** — never an auth factor. Web config is 6 **public** `NEXT_PUBLIC_FIREBASE_*` values (not secrets); real security is **Firestore Security Rules**.
 - **Cloud data store (Phase 7+):** **Cloud Firestore**, accessed **directly from the client** (`firebase/firestore`) with **no server**. **IndexedDB offline persistence (`persistentLocalCache` + `persistentMultipleTabManager`) is THE store** — writes save + queue locally offline and auto-sync on reconnect; reads are live cross-device via `onSnapshot`. Data is **business-scoped** (see the frozen collection-path map). Free **Spark/Blaze-free-quota** tier; no infra we operate.
 - **~~Backend (Phase 4)~~ — SUPERSEDED / REMOVED (Phase 7):** the FastAPI + SQLite + SQLAlchemy `backend/` tree, its `uv` toolchain, the `frontend/src/lib/sync/*` engine, and the `SyncSettings` UI are **all removed** in Phase 7 and replaced by Firestore. The Phase-4 sync contract below is retained only as historical record, marked SUPERSEDED.
-- **Key new dependency:** **`firebase`** (npm, ^11) — Auth + Firestore Web SDK (frontend `dependencies`). **`firebase-admin`** (^13) is a frontend **devDependency** used only by the Playwright global-setup to reset the test user's cloud docs (never shipped to the client).
+- **Key new dependency:** **`firebase`** (npm, ^11) — Auth + Firestore Web SDK (frontend `dependencies`). **`firebase-tools`** is a frontend **devDependency** (or `npx`-invoked) that runs the **Auth + Firestore emulators** for E2E (`firebase emulators:exec`); the emulator is cleared via its REST endpoint, so **no `firebase-admin` and no service-account key are required**.
 - **Dependency management:** **pnpm** (frontend). (`uv`/Python removed with the backend in Phase 7.)
 - **Observability:** N/A in the AI sense (no LLM tracing because there is no LLM). Client errors surface as visible UI messages; Firebase Auth/Firestore errors are mapped to translated messages; dev uses browser devtools + the Firebase console.
 
@@ -85,7 +85,7 @@ No network, no server, no keys anywhere in this flow.
 
 > **Assumed:** the Next.js app keeps its existing home under **`frontend/`** (the real source tree already present); all app code lives there, never loose at repo root. The Phase-4 backend gets its own **`backend/`** tree.
 
-> **Assumed (Firebase redesign):** (1) the canonical E2E test number is **`+911111111111`** / OTP **`123456`** — the user must add this exact pair in the Firebase Console. (2) E2E stays deterministic against **real Cloud Firestore** by resetting the test user's docs in Playwright `global-setup` via the **Firebase Admin SDK**, which needs a gitignored **service-account key** (`FIREBASE_SERVICE_ACCOUNT`) at gate time — the one real secret (the 6 `NEXT_PUBLIC_FIREBASE_*` values are public web config). (3) Firestore uses the modern **`persistentLocalCache`** offline API (not the deprecated `enableIndexedDbPersistence`). (4) `phoneKey` = E.164 without the leading `+`. (5) In Phase 6, the old `backend` **`uvicorn` webServer** and `sync-journey.spec.ts` are removed from the Playwright config so the Phase-6 gate is Firebase-frontend-only; the fuller backend-tree / `lib/sync` / `SyncSettings` removal completes in Phase 7.
+> **Assumed (Firebase redesign):** (1) **E2E runs against the Firebase Auth + Firestore emulators** (see [§ E2E determinism](#e2e-determinism-frozen)) — Google sign-in is simulated by the Auth emulator's built-in test-IdP popup, so no real Google account, no external network, and no SMS/OTP are involved. (2) The app connects to the emulators only when the env flag **`NEXT_PUBLIC_FIREBASE_USE_EMULATORS=1`** is set (Playwright + optional local dev); unset → real Firebase. The Firestore emulator is reset before each run via its **REST clear endpoint** (no Admin SDK, no service-account key). (3) Firestore uses the modern **`persistentLocalCache`** offline API (not the deprecated `enableIndexedDbPersistence`). (4) `phoneKey` = E.164 without the leading `+` — now used only for the **invite** mobile match, not for identity. (5) In Phase 6, the old `backend` **`uvicorn` webServer** and `sync-journey.spec.ts` are removed from the Playwright config so the Phase-6 gate is Firebase-frontend-only; the fuller backend-tree / `lib/sync` / `SyncSettings` removal completes in Phase 7.
 
 ## Commands
 
@@ -116,15 +116,16 @@ No network, no server, no keys anywhere in this flow.
 | Command / setting | Value |
 |-------------------|-------|
 | Firebase Web config (PUBLIC, not secrets) | 6 vars in **`frontend/.env.local`** (gitignored): `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`, `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`. Documented in **`frontend/.env.example`**. Read at build/runtime by `lib/firebase/app.ts` via `process.env.NEXT_PUBLIC_*` (inlined into the static export). |
-| E2E cloud-reset secret | `FIREBASE_SERVICE_ACCOUNT` in `frontend/.env.local` — path to a **gitignored** service-account JSON, used **only** by the Playwright `global-setup` (Firebase Admin SDK) to wipe the test user's Firestore docs before each run. The one real secret; never inlined into the client bundle (no `NEXT_PUBLIC_` prefix). |
-| Canonical E2E test phone | **`+911111111111`** with fixed OTP **`123456`** — a Firebase **test phone number** (Console → Authentication → Sign-in method → Phone → *Phone numbers for testing*). It sends **no real SMS** and **bypasses reCAPTCHA**, so E2E is deterministic and never touches the ~10 free-SMS/day quota. The user must add this exact pair in the Firebase Console (documented in DEPLOY.md, not automated). |
-| Authorized domains | Add `localhost` and `singhalvivek.github.io` in Console → Authentication → Settings → Authorized domains (documented in DEPLOY.md, not automated). |
+| Emulator flag (E2E / optional dev) | **`NEXT_PUBLIC_FIREBASE_USE_EMULATORS=1`** — when set, `lib/firebase/app.ts` calls `connectAuthEmulator(...)` + `connectFirestoreEmulator(...)`. Unset (default) → real Firebase. Playwright sets it; local dev may set it to iterate without touching the real project. **No service-account key and no `FIREBASE_SERVICE_ACCOUNT` are required** anymore. |
+| Emulator ports | Auth `9099`, Firestore `8080` (declared in **`firebase.json`** → `emulators`). The Firestore emulator is cleared before each E2E run via `DELETE http://127.0.0.1:8080/emulator/v1/projects/<projectId>/databases/(default)/documents`. |
+| Google provider (real project) | Enable **Authentication → Sign-in method → Google** with a **support email** (Console; documented in DEPLOY.md, not automated). Only needed for real (non-emulator) use, e.g. production. |
+| Authorized domains (real project) | Add `localhost` and `singhalvivek.github.io` in Console → Authentication → Settings → Authorized domains (documented in DEPLOY.md, not automated). |
 | Dev run / port / URL | **Unchanged:** `pnpm dev` (cwd `frontend/`), port `3000`, URL `http://localhost:3000/app/`. `pnpm dev` auto-loads `frontend/.env.local`. |
-| Unit test command | **Unchanged:** `pnpm test` → `vitest run` (cwd `frontend/`) — now also covers the pure membership-decision module. |
-| E2E / UI test command | **Unchanged:** `pnpm test:e2e` → `playwright test` (cwd `frontend/`). The `webServer` runs `pnpm dev` only (the backend `uvicorn` webServer is **removed** in Phase 6); `global-setup` resets the test user's Firestore docs via the Admin SDK. |
-| **Phase-6 gate** | `pnpm install && pnpm test && pnpm build && pnpm test:e2e` (cwd `frontend/`), **with `frontend/.env.local` present** (real `NEXT_PUBLIC_FIREBASE_*` + `FIREBASE_SERVICE_ACCOUNT`) and the `+911111111111`/`123456` test number configured in the Firebase Console. Frontend-only — **no `uv`, no backend**. |
+| Unit test command | **Unchanged:** `pnpm test` → `vitest run` (cwd `frontend/`) — covers invite-code generation + the pure invite-check / role-route decision modules. |
+| E2E / UI test command | `pnpm test:e2e` → **`firebase emulators:exec --only auth,firestore "playwright test"`** (cwd `frontend/`), so the Auth + Firestore emulators are up for the whole run. Playwright's `webServer` runs `pnpm dev` (with `NEXT_PUBLIC_FIREBASE_USE_EMULATORS=1`); `global-setup` clears the Firestore emulator via its REST endpoint. Google sign-in is driven through the **Auth emulator's test-IdP popup**. |
+| **Phase-6 gate** | `pnpm install && pnpm test && pnpm build && pnpm test:e2e` (cwd `frontend/`), **with `frontend/.env.local` present** (the 6 `NEXT_PUBLIC_FIREBASE_*` values). E2E runs entirely on the **emulators** — no real Google account, no SMS, no secret key. Frontend-only — **no `uv`, no backend**. |
 
-**`package.json` deps to add (owned by Phase-6 slice-a):** `firebase` (^11) in `dependencies`; `firebase-admin` (^13) in `devDependencies` (global-setup only).
+**`package.json` deps to add (owned by Phase-6 slice-a):** `firebase` (^11) in `dependencies`; `firebase-tools` in `devDependencies` (emulator runner for E2E). **`firebase-admin` is NOT needed** (emulator reset is a REST call).
 
 ### ~~Phase-4 backend commands (cwd `backend/`)~~ — SUPERSEDED / REMOVED (Phase 7)
 
@@ -167,7 +168,7 @@ Static export (`frontend/out/`) served as plain files under a `basePath` — ins
 **Concrete targets** (copy-paste steps in [`../DEPLOY.md`](../DEPLOY.md)):
 
 - **Frontend → GitHub Pages** (repo `anaj-bahi`) at `https://singhalvivek.github.io/anaj-bahi/`. The `basePath` is parameterized by `NEXT_PUBLIC_BASE_PATH` (default `/app`; production `/anaj-bahi`). The workflow `.github/workflows/deploy-pages.yml` runs `pnpm build:pages` with `NEXT_PUBLIC_BASE_PATH=/anaj-bahi`, adds `.nojekyll`, and publishes `frontend/out/`. The postbuild `scripts/apply-base-path.mjs` rewrites the `/app` literals in the exported `manifest.webmanifest`/`sw.js` (a no-op at the default `/app`, so local dev + E2E are untouched). The 6 `NEXT_PUBLIC_FIREBASE_*` web-config values are supplied as **GitHub repo secrets** at build time; `singhalvivek.github.io` must be a Firebase **authorized domain**.
-- **Firebase (no infra we run):** Auth (Phone/SMS-OTP) + Cloud Firestore, free tier. `firestore.rules` (repo root) is published via the console or `firebase deploy --only firestore:rules`.
+- **Firebase (no infra we run):** Auth (**Google** provider, with a support email; add `singhalvivek.github.io` to Authorized domains) + Cloud Firestore, **free Spark tier — no Blaze**. `firestore.rules` (repo root) is published via the console or `firebase deploy --only firestore:rules`.
 
 ### PWA updates & per-deploy versioning
 
@@ -437,7 +438,7 @@ DEVICE_TOKEN=change-me-to-a-long-random-string
 
 ## Firebase multi-tenant redesign (Phases 6–9) — frozen contracts
 
-> **All contracts in this section are frozen** so the Phase-6 slices build in parallel on disjoint paths (and Phases 7–9 extend them). Identity is a **phone number in E.164**; one person belongs to **exactly one business**; all business data is **business-scoped** in Firestore. There is **no server we run** and **no AI/LLM** — Firebase Auth + client-side Firestore replace the retired FastAPI backend. Product-narrative detail lives in the capability files; the shapes and signatures live here.
+> **All contracts in this section are frozen** so the Phase-6 slices build in parallel on disjoint paths (and Phases 7–9 extend them). Identity is the **Firebase `uid`** (stable per Google account, cross-device); one person belongs to **exactly one business**; all business data is **business-scoped** in Firestore. There is **no server we run** and **no AI/LLM** — Firebase Auth (Google) + client-side Firestore replace the retired FastAPI backend. Product-narrative detail lives in the capability files; the shapes and signatures live here.
 
 ### Component map (Firebase era)
 
@@ -447,13 +448,13 @@ DEVICE_TOKEN=change-me-to-a-long-random-string
   Trader ──tap──►│  React client components (App Router)                │
                  │        │                     ▲                       │
                  │        ▼                     │                       │
-                 │  lib/auth (AuthProvider / useAuth) ── phone OTP ─────┼──► Firebase Auth
-                 │        │  status: signed-out│onboarding│ready        │    (SMS-OTP, LOCAL persistence)
+                 │  lib/auth (AuthProvider / useAuth) ── Google popup ──┼──► Firebase Auth
+                 │        │  status: signed-out│onboarding│ready        │    (Google, LOCAL persistence)
                  │        ▼                     │                       │
                  │  AuthGate ─ signed-out→Login │ onboarding→Onboarding │
                  │            │ ready→ the app  │                       │
                  │            ▼                                         │
-                 │  lib/tenancy (createBusiness / findMembershipByPhone)│
+                 │  lib/tenancy (createBusiness / invites / claimInvite)│
                  │  lib/db/repo (business-scoped) ── onSnapshot/writes ─┼──► Cloud Firestore
                  │  lib/calc (pure math, UNCHANGED)                     │    (IndexedDB offline cache = the store)
                  │  lib/i18n (Hindi/English, UNCHANGED)                 │    Security Rules enforce roles
@@ -465,14 +466,14 @@ The `lib/calc`, `lib/i18n`, PWA shell, and all bill-form/receipt UI are **retain
 
 ### Firestore data model — frozen collection-path map
 
-phoneKey rule: **E.164 with the leading `+` stripped** (digits only). `+911111111111` → `911111111111`. Used as a safe Firestore document id.
+phoneKey rule: **E.164 with the leading `+` stripped** (digits only). `+911111111111` → `911111111111`. Used **only** to match the mobile an employee enters against the mobile the owner put on the invite — **never** an identity/document key for users. Identity is the Firebase `uid`.
 
-| Path | Doc id | Purpose | Access (Security Rules, finalized Phase 8–9) |
-|------|--------|---------|----------------------------------------------|
-| `users/{uid}` | Firebase Auth uid | The signed-in user's own record; drives fast routing on sign-in. Fields: `{ uid, phone (E.164), displayName, bizId \| null, role \| null, createdAt, updatedAt }` | read/write only when `uid == request.auth.uid` |
-| `memberships/{phoneKey}` | phoneKey | **Top-level phone→business lookup** — the invite/roster keyed by phone; the record an Employee's phone is matched against ("added by an owner?"). Fields: `{ phone (E.164), phoneKey, bizId, role: 'owner'\|'employee', displayName, addedByUid, addedByName, status: 'invited'\|'active', uid \| null, createdAt, claimedAt \| null }` | read: the phone owner (once signed in) or a member of `bizId`; write: an **owner** of `bizId` (add/remove employees) or self-claim on join |
+| Path | Doc id | Purpose | Access (Security Rules) |
+|------|--------|---------|-------------------------|
+| `users/{uid}` | Firebase Auth uid | The signed-in user's own record; **the sole basis for routing on sign-in** (`bizId` set → `ready`; else → onboarding). Fields: `{ uid, email, phone (E.164, set at onboarding), displayName, bizId \| null, role \| null, createdAt, updatedAt }` | read/write only when `uid == request.auth.uid` |
+| `invites/{code}` | one-time share **code** (6 uppercase chars, ambiguity-safe alphabet — no `O/0/I/1`) | **Owner-generated employee invite.** The owner creates it from the employee's **mobile alone** and shares the **code + mobile** out-of-band; the employee redeems it at first run, and their name is captured then from their Google login. Fields: `{ code, bizId, role: 'employee', assignedPhone (E.164), phoneKey (normalized digits), displayName (blank until claim), addedByUid, addedByName, status: 'unused'\|'claimed', claimedByUid \| null, createdAt (number), claimedAt (number \| null) }` | **get** (by-id, the code is a secret): any signed-in user; **list** (enumerate): an **owner** of `resource.data.bizId` only — so no one can enumerate another business's invites; **create/delete:** an **owner** of the business; **update:** an **owner**, OR the single-use `unused → claimed` transition stamped with `claimedByUid == request.auth.uid`. See [§ Security Rules — hardened invites + members model](#security-rules--hardened-invites--members-model-code-generator-edits-firestorerules) |
 | `businesses/{bizId}` | uuid | The business + its **business profile**. Fields: `{ id, shopName, traderName, phone, address?, createdByUid, createdByName, createdAt, updatedAt }` | read: any member of `bizId`; write: an **owner** of `bizId` |
-| `businesses/{bizId}/members/{uid}` | member uid | Per-business member (for in-app roster + rule membership checks). Fields: `{ uid, phone, displayName, role, addedByUid, addedByName, addedAt, status }` | read: any member; write: an **owner** (or self on claim) |
+| `businesses/{bizId}/members/{uid}` | member uid | Per-business member (for in-app roster + rule membership checks — the **role source** for the rules). Fields: `{ uid, phone, displayName, role, addedByUid, addedByName, addedAt, status, inviteCode (string \| null — the code used at claim; null/omitted for the owner's own doc), phoneKey (normalized digits of the claimed mobile; owner: from own onboarding mobile) }` | read: any member; **create:** self **only** via the owner-bootstrap arm (role `owner` **and** the business does not yet exist) or the employee-claim arm (a matching **unused** `invites/{inviteCode}` tying `bizId` + `phoneKey`), OR an **owner** writing the roster; update: an **owner** or self; delete: an **owner** |
 | `businesses/{bizId}/bills/{billId}` | `DDMMYY/xxxxx` | Shared bill ledger (same `Bill` shape as [data.md](data.md); Phase 8 adds `createdBy` attribution snapshot) | read/write: any member of `bizId` (edit-lock still applies) |
 | `businesses/{bizId}/farmers/{farmerId}` | uuid | Shared farmers | read/write: any member of `bizId` |
 | `businesses/{bizId}/grainTypes/{grainTypeId}` | slug/uuid | Shared grain types (seeded + custom) | read/write: any member of `bizId` |
@@ -480,84 +481,181 @@ phoneKey rule: **E.164 with the leading `+` stripped** (digits only). `+91111111
 
 > **Name snapshots (attribution survives renames/removal):** `displayName`/`createdByName`/`actorName`/`addedByName` are **snapshots written at the time of the action**, never a live join to `users`. So an activity entry or a bill's `createdBy` still shows who did it even after that person renames themselves or is removed from the business.
 
-> **One-person-one-business** is enforced by data + rules: a user's `users/{uid}.bizId` and their `memberships/{phoneKey}` both point at a single business; the membership-decision logic refuses to create a second business for a phone that already has a membership.
+> **One-person-one-business** is enforced by the **`uid`**: once `users/{uid}.bizId` is set, sign-in routes the user straight to `ready` and they **never re-enter onboarding**, so they can never reach the create-business form or the join-by-code screen to acquire a second business. A user already in a business therefore cannot redeem an invite code (they never see JoinByCode). No phone-keyed lookup is involved.
+
+### Security Rules — hardened `invites` + `members` model (code-generator edits `firestore.rules`)
+
+The `firestore.rules` file replaces its old `match /memberships/{phoneKey}` block with a `match /invites/{code}` block **and hardens the `members/{uid}` block** to close a tenant-isolation hole (an earlier draft's `read: signedIn()` granted LIST — letting any signed-in user enumerate every business's invites — and the old members `create` let any signed-in user self-create an `owner` member for **any** bizId, since the phone/invite match was only client-side; net = cross-tenant owner escalation). The `users`, `businesses`, `bills`/`farmers`/`grainTypes`, and `activity` blocks are **UNCHANGED**; the `isMember` / `isOwner` helpers are unchanged.
+
+The design is **claim/create-bootstrap-safe under a single client `writeBatch`**: Firestore rules only see **committed** state during a batch, so each write in the batch is evaluated against the pre-batch snapshot. The `members`-create rule reads the invite's still-`'unused'` committed state, while the `invites`-update rule enforces the `unused → claimed` single-use transition — the two writes are therefore mutually consistent and cannot be replayed.
+
+```
+// GET is by-id (the code is a shared secret an employee reads pre-membership); LIST is owner-only,
+// so no one can enumerate another business's invites. Only an owner mints/cancels; the sole non-owner
+// write is the single-use unused→claimed transition, stamped with the claimer's own uid.
+match /invites/{code} {
+  allow get:    if signedIn();
+  allow list:   if signedIn() && isOwner(resource.data.bizId);
+  allow create: if signedIn() && isOwner(request.resource.data.bizId);
+  allow update: if signedIn() && (
+    isOwner(resource.data.bizId) ||
+    ( resource.data.status == 'unused'
+      && request.resource.data.status == 'claimed'
+      && request.resource.data.claimedByUid == request.auth.uid )
+  );
+  allow delete: if signedIn() && isOwner(resource.data.bizId);
+}
+
+match /businesses/{bizId} {
+  // …businesses/bills/farmers/grainTypes/activity unchanged…
+  match /members/{uid} {
+    allow read: if isMember(bizId);
+    // Self-create is tightly gated to two legitimate bootstraps, else an owner writes roster docs:
+    allow create: if signedIn() && request.auth.uid == uid && (
+      // owner bootstrap — ONLY while the business does not yet exist in committed state (the create
+      // batch), which blocks self-owning an already-existing business:
+      ( request.resource.data.role == 'owner'
+        && !exists(/databases/$(database)/documents/businesses/$(bizId)) )
+      ||
+      // employee claim — gated on a REAL matching UNUSED invite (by code), tying bizId + phoneKey:
+      ( request.resource.data.role == 'employee'
+        && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode))
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.bizId == bizId
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.phoneKey == request.resource.data.phoneKey
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.status == 'unused' )
+    ) || isOwner(bizId);
+    allow update: if isOwner(bizId) || isSelf(uid);
+    allow delete: if isOwner(bizId);
+  }
+}
+```
+
+To satisfy the employee-claim rule, the **`members/{uid}` doc carries `inviteCode` + `phoneKey`** written at claim time (see the collection-path map). `createBusiness`'s owner member doc has `inviteCode: null` (or omitted) and `role: 'owner'`; its create passes the owner-bootstrap arm because `businesses/{bizId}` does not yet exist in committed state when the batch is evaluated. `claimInvite`'s single `writeBatch` — invite `unused→claimed` + `members/{uid}{…, inviteCode, phoneKey}` + `users/{uid}` — commits atomically and is rules-safe by the mutual-consistency argument above.
+
+**Rules-unit test (required, `@firebase/rules-unit-testing`) must prove:** (1) a signed-in **non-owner cannot LIST** invites; (2) a signed-in user **cannot self-create an `owner`** member on an **already-existing** business; (3) a user **cannot claim-create an `employee`** member without a matching **unused** invite, or with a **mismatched `phoneKey`**; (4) the legit **owner-create** (fresh business) and **employee-claim** (matching unused invite) paths still **succeed**.
+
+**These rules must be published** by the user (Firebase console or `firebase deploy --only firestore:rules`).
 
 ### Auth / session contract — `lib/auth`
 
-`lib/firebase/app.ts` initializes the SDK from `NEXT_PUBLIC_FIREBASE_*` and exports `app`, `auth`, and `firestore` (Firestore with `persistentLocalCache({ tabManager: persistentMultipleTabManager() })`; auth uses `browserLocalPersistence`).
+`lib/firebase/app.ts` initializes the SDK from `NEXT_PUBLIC_FIREBASE_*` and exports `app`, `auth`, and `firestore` (Firestore with `persistentLocalCache({ tabManager: persistentMultipleTabManager() })`; auth uses `browserLocalPersistence`). When `NEXT_PUBLIC_FIREBASE_USE_EMULATORS=1` it also calls `connectAuthEmulator(auth, 'http://127.0.0.1:9099')` + `connectFirestoreEmulator(firestore, '127.0.0.1', 8080)`. **No reCAPTCHA verifier and no `#recaptcha-container` are created anywhere** — those are removed with SMS/OTP.
 
 ```ts
 // lib/auth/session.ts (thin wrappers over firebase/auth; no React)
 export interface AppUser {
   uid: string
-  phone: string                 // E.164
+  email: string | null          // from Google; stored on users/{uid}
+  phone: string | null          // E.164, captured at onboarding — PROFILE DATA, not an auth factor
   displayName: string | null
   bizId: string | null
   role: 'owner' | 'employee' | null
 }
-export interface ConfirmationHandle { confirm(code: string): Promise<void> }   // wraps ConfirmationResult
-// sends the OTP (invisible reCAPTCHA mounted in `recaptchaContainerId`); returns a confirm handle
-export function startPhoneSignIn(phoneE164: string, recaptchaContainerId: string): Promise<ConfirmationHandle>
+// GoogleAuthProvider + signInWithPopup; LOCAL persistence. Throws a mapped, translatable AuthError.
+export function signInWithGoogle(): Promise<void>
 export function signOutUser(): Promise<void>
-export function onFirebaseAuthChange(cb: (uid: string | null, phone: string | null) => void): () => void
+// cb receives the Google identity fields on sign-in, null on sign-out.
+export function onFirebaseAuthChange(
+  cb: (u: { uid: string; email: string | null; displayName: string | null } | null) => void,
+): () => void
 
 // lib/auth/context.tsx (the surface the UI consumes)
 export type AuthStatus = 'loading' | 'signed-out' | 'onboarding' | 'ready'
 export interface AuthContextValue {
   status: AuthStatus
   user: AppUser | null                                   // set while signed-in (onboarding or ready)
-  startPhoneSignIn(phoneE164: string): Promise<void>     // sends OTP (mounts invisible reCAPTCHA)
-  confirmOtp(code: string): Promise<void>                // verifies; loads/creates users/{uid}; sets status
-  setDisplayName(name: string): Promise<void>            // onboarding step 1 (persists to users/{uid})
-  chooseRole(role: 'owner' | 'employee'): Promise<import('./membership').MembershipDecision>
-  createOwnerBusiness(input: import('../tenancy/business').NewBusinessInput): Promise<void> // → status 'ready'
-  joinAsEmployee(bizId: string): Promise<void>           // claim invited membership → status 'ready'
+  signInWithGoogle(): Promise<void>                      // Google popup; loads/creates users/{uid}; sets status
+  setDisplayName(name: string): Promise<void>            // onboarding step 1 (persists to users/{uid}); prefilled from Google
+  chooseRole(role: 'owner' | 'employee'): Promise<import('./membership').RoleRoute>  // routes: owner → create; employee → join
+  createOwnerBusiness(input: import('../tenancy/business').NewBusinessInput): Promise<void> // createBusiness + seed the local BusinessProfile (shopName/traderName/phone) so Settings + receipt header show it; → status 'ready'
+  joinByCode(input: { code: string; phoneE164: string; name: string }): Promise<void> // claim invite → status 'ready'
   signOut(): Promise<void>
 }
 export function AuthProvider(props: { children: React.ReactNode }): JSX.Element
 export function useAuth(): AuthContextValue
 ```
 
-Routing rule the `AuthGate` implements from `status`: `loading` → splash; `signed-out` → `<LoginScreen/>`; `onboarding` → `<OnboardingFlow/>` (name → role chooser → owner-create-business | employee-ask-owner); `ready` → the app (`{children}`) with the gated home header. **No new App-Router routes** — the gate swaps surfaces by conditional rendering (static-export-safe). Session persists across reloads (LOCAL persistence); on reload `status` resolves via `users/{uid}` without re-login.
+Routing rule the `AuthGate` implements from `status`: `loading` → splash; `signed-out` → `<LoginScreen/>` (a single **Continue with Google** button); `onboarding` → `<OnboardingFlow/>` (name → role chooser → owner-create-business | employee-join-by-code); `ready` → the app (`{children}`) with the gated home header. **No new App-Router routes** — the gate swaps surfaces by conditional rendering (static-export-safe). Session persists across reloads (LOCAL persistence); on reload `status` resolves **purely from `users/{uid}.bizId`** without re-sign-in (no phone lookup).
 
-### Membership decision logic — `lib/auth/membership.ts` (pure, unit-tested)
+> **Removal-safety:** because recognition is now purely `users/{uid}.bizId`, a member an owner removed still has their `bizId` set but is no longer in `businesses/{bizId}/members`. When the AuthProvider resolves a user with a `bizId`, it confirms the `members/{uid}` doc still exists; if it is gone (removed), it clears the user's own `users/{uid}.{bizId, role}` (a permitted self-write) and returns them to onboarding rather than leaving them stuck at a `ready` screen whose reads the rules reject.
+
+### Role routing + invite logic — `lib/auth/membership.ts` (pure, unit-tested)
+
+Recognition of returning users happens **before** onboarding (via `users/{uid}.bizId`), so the role chooser only routes a genuinely-new user to the correct onboarding sub-screen. The invite-check and code-generation logic are pure and unit-tested (they are what the JoinByCode and Generate-code flows call).
 
 ```ts
 export type Role = 'owner' | 'employee'
-export interface MembershipLookup { bizId: string; role: Role; status: 'invited' | 'active' }
-export type MembershipDecision =
-  | { kind: 'owner'; bizId: string }            // phone already has an OWNER membership → enter as owner
-  | { kind: 'employee-joined'; bizId: string }  // phone already has an EMPLOYEE membership → enter as employee
-  | { kind: 'employee-unadded' }                // chose Employee, no membership → "ask your owner"
-  | { kind: 'new' }                             // chose Owner, no membership → create a business
 
-// FROZEN RULES (all four branches unit-tested; an existing membership ALWAYS wins over the fresh choice,
-// which is what enforces one-person-one-business):
-//   lookup && lookup.role === 'owner'      → { kind:'owner', bizId }
-//   lookup && lookup.role === 'employee'   → { kind:'employee-joined', bizId }
-//   !lookup && chosenRole === 'owner'      → { kind:'new' }
-//   !lookup && chosenRole === 'employee'   → { kind:'employee-unadded' }
-export function decideMembership(chosenRole: Role, lookup: MembershipLookup | null): MembershipDecision
+// Role chooser is now a trivial 2-way route (no phone lookup — one-person-one-business is
+// enforced upstream because a user with a bizId never reaches onboarding at all):
+export type RoleRoute = { kind: 'create' } | { kind: 'join' }
+export function routeRole(chosenRole: Role): RoleRoute   // 'owner' → 'create'; 'employee' → 'join'
+
+// Shape read from invites/{code} (see the collection-path map):
+export interface InviteRecord {
+  code: string; bizId: string; role: 'employee'
+  assignedPhone: string; phoneKey: string; displayName: string
+  addedByUid: string; addedByName: string
+  status: 'unused' | 'claimed'; claimedByUid: string | null
+  createdAt: number; claimedAt: number | null
+}
+
+// PURE invite check — drives the two JoinByCode steps and their distinct errors:
+export type InviteCheck =
+  | { kind: 'ok'; bizId: string }        // code exists, unused, mobile matches → claimable
+  | { kind: 'not-found' }                // no such code OR status !== 'unused' (step-1 error)
+  | { kind: 'phone-mismatch' }           // code ok but entered mobile ≠ invite.phoneKey (step-2 error)
+// FROZEN RULES (unit-tested):
+//   !invite || invite.status !== 'unused'         → { kind: 'not-found' }
+//   phoneKey(enteredPhoneE164) !== invite.phoneKey → { kind: 'phone-mismatch' }
+//   else                                           → { kind: 'ok', bizId: invite.bizId }
+export function checkInvite(invite: InviteRecord | null, enteredPhoneE164: string): InviteCheck
+```
+
+### Invite-code generation — `lib/tenancy/invite.ts` (generation is pure & unit-tested)
+
+```ts
+// Ambiguity-safe alphabet — no O, 0, I, 1: 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' (32 chars).
+// 6 chars from crypto.getRandomValues → uppercase, human-shareable, unbiased (reject-sample the RNG).
+export function generateInviteCode(): string
+
+// Owner creates an invite from a MOBILE ALONE (random code, retry on the rare id collision).
+// Writes invites/{code} with status:'unused' and a blank displayName (the employee's name is
+// captured at claim time from their Google login). Returns the record so the UI shows the code.
+export function createInvite(
+  owner: AppUser, bizId: string, employeePhoneE164: string,
+): Promise<InviteRecord>
+export function getInvite(code: string): Promise<InviteRecord | null>          // reads invites/{code}
+export function listPendingInvites(bizId: string): Promise<InviteRecord[]>      // status === 'unused', for the roster
+export function cancelInvite(code: string): Promise<void>                       // owner deletes an unused invite
+// claimInvite runs the JoinByCode redemption in one atomic writeBatch (rules-safe: the members-create
+// rule reads the invite's still-COMMITTED 'unused' state; the invite-update rule enforces unused→claimed):
+//   - flip invites/{code} → status:'claimed', claimedByUid, claimedAt
+//   - write businesses/{bizId}/members/{uid} (employee, active; inviteCode:code, phoneKey:phoneKey(phoneE164);
+//     addedBy* + createdAt copied from the invite) — inviteCode + phoneKey are REQUIRED by the members rule
+//   - set users/{uid}.{ bizId, role:'employee', phone, email }
+// Pre-condition: checkInvite(getInvite(code), phoneE164).kind === 'ok'.
+export function claimInvite(user: AppUser, code: string, phoneE164: string): Promise<void>
 ```
 
 ### Tenancy write helpers — `lib/tenancy/business.ts`
 
 ```ts
 export interface NewBusinessInput { shopName: string; traderName: string; phone?: string; address?: string }
-export interface MembershipRecord {
-  phone: string; phoneKey: string; bizId: string; role: Role; displayName: string
-  addedByUid: string; addedByName: string; status: 'invited' | 'active'
-  uid: string | null; createdAt: number; claimedAt: number | null
-}
-export function phoneKey(phoneE164: string): string     // '+911111111111' → '911111111111'
-export function findMembershipByPhone(phoneE164: string): Promise<MembershipRecord | null>  // reads memberships/{phoneKey}
-// createBusiness writes, in one logical unit: businesses/{bizId}, businesses/{bizId}/members/{uid} (owner,active),
-// memberships/{phoneKey} (owner,active,uid set), and users/{uid} (bizId,role). Returns the new bizId.
+export function phoneKey(phoneE164: string): string     // '+911111111111' → '911111111111' (invite mobile match only)
+// createBusiness writes, in one atomic writeBatch: businesses/{bizId}, businesses/{bizId}/members/{uid}
+// (owner, active, inviteCode:null, phoneKey from the owner's onboarding mobile), and users/{uid}
+// ({ bizId, role:'owner', phone, email }). The owner member-create passes the rule's owner-bootstrap arm
+// because businesses/{bizId} does not yet exist in committed state during the batch. There is NO owner
+// invite doc — the owner's own uid recognises them on any device. Returns the new bizId.
 export function createBusiness(owner: AppUser, input: NewBusinessInput): Promise<string>
-// claimEmployeeMembership sets uid + status:'active' + claimedAt on memberships/{phoneKey},
-// writes businesses/{bizId}/members/{uid}, and sets users/{uid}.{bizId,role}.
-export function claimEmployeeMembership(user: AppUser, bizId: string): Promise<void>
+export function listMembers(bizId: string): Promise<MemberRecord[]>       // CLAIMED roster (members subcollection)
+// removeEmployee deletes businesses/{bizId}/members/{uid}. (The removed user's own users/{uid}.bizId is cleared
+// by that user's client on their next load — see the removal-safety note above — since rules forbid writing
+// another user's users doc.) Past attribution snapshots are left intact.
+export function removeEmployee(bizId: string, member: { uid: string; phone: string }): Promise<void>
 ```
+
+> **`memberships/{phoneKey}` is gone**, and with it `findMembershipByPhone` and `claimEmployeeMembership`. Employee onboarding is now the `invites/{code}` flow (`createInvite` → share code+mobile → `claimInvite`).
 
 ### Firestore-backed repo contract — `lib/db/repo` (re-pointed in Phase 7)
 
@@ -596,8 +694,9 @@ export function useGrainTypes(): GrainType[] | undefined
 
 Automatic (Firestore handles it) **plus** a visible **online/sync status + "Sync now"** control in Settings (`lib/db` exposes a small `getSyncStatus()`/`waitForPendingWrites()` helper over Firestore). The old `SyncSettings` base-URL/device-token box is **deleted** — there is no URL or token to enter; the user is identified by their phone.
 
-### E2E determinism (frozen)
+### E2E determinism (frozen — emulator-based)
 
-- Auth is **real Firebase** driven by the **test phone number** `+911111111111` / fixed OTP `123456` (no SMS, no reCAPTCHA challenge). Firestore writes hit **real Cloud Firestore** (free tier).
-- Playwright **`global-setup`** (replacing the old SQLite-wipe) uses the **Firebase Admin SDK** (`FIREBASE_SERVICE_ACCOUNT`) to **reset the test user's cloud footprint** before the run — `recursiveDelete` of the test owner's `businesses/{bizId}`, and delete of `memberships/{testPhoneKey}` + `users/{testUid}` — so onboarding runs fresh and deterministically every time (mirrors how the retired `global-setup` wiped `e2e.db`).
-- A shared helper **`tests/e2e/support/auth.ts` → `signInTestOwner(page, { bizName })`** drives login→(onboarding-if-shown)→app so every retained journey spec authenticates first; the dedicated `auth-onboarding.spec.ts` (which sorts first, `workers: 1`) sees the clean user and asserts the full login→name→owner-creates-business→gated-home path.
+- Auth + Firestore run on the **Firebase emulators** (Auth `9099`, Firestore `8080`, from `firebase.json`). The app connects to them when `NEXT_PUBLIC_FIREBASE_USE_EMULATORS=1` (set for the Playwright `webServer`'s `pnpm dev`). **No real Firebase project, no real Google account, no SMS, no service-account key.**
+- **Google sign-in is simulated by the Auth emulator's test-IdP popup:** `signInWithPopup(GoogleAuthProvider)` against the emulator opens the emulator's built-in "sign-in with Google" page where the test picks/creates a Google identity (email + display name); Playwright drives that popup. The same emulator email → the same stable `uid` across a run, so returning-user recognition (`users/{uid}.bizId`) is exercised for real.
+- Playwright **`global-setup`** clears the Firestore emulator before the run via its REST endpoint (`DELETE http://127.0.0.1:8080/emulator/v1/projects/<projectId>/databases/(default)/documents`) — the emulator equivalent of the old cloud reset, needing no Admin SDK. The whole suite is wrapped by `firebase emulators:exec --only auth,firestore "playwright test"`.
+- A shared helper **`tests/e2e/support/auth.ts` → `signInTestOwner(page, { bizName })`** drives Google-popup → (onboarding-if-shown: name → Owner → shop+mobile) → app so every retained journey spec authenticates first; a dedicated `auth-onboarding.spec.ts` (sorts first, `workers: 1`) asserts the full Google-sign-in → name → owner-creates-business → gated-home path, plus the **owner-generates-code → second Google identity joins by code** round-trip.

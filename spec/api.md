@@ -14,7 +14,7 @@
 
 **Phase 4** introduced a REST **sync** service (**FastAPI + SQLite**) — **now ⚠️ SUPERSEDED / REMOVED in Phase 7** (see below).
 
-**Phases 6–9 (Firebase era):** there is **still no REST/GraphQL/CLI API we author** and no server we run. The "API" is the **Firebase client SDK surface** the PWA calls directly — **Firebase Auth (phone/OTP)** and **Cloud Firestore** — governed by **Firestore Security Rules** (there is no application server to enforce auth; the Rules do). See [§ Firebase client SDK surface](#firebase-client-sdk-surface-phases-69) below and the frozen [architecture.md § Firebase multi-tenant redesign](architecture.md#firebase-multi-tenant-redesign-phases-69--frozen-contracts).
+**Phases 6–9 (Firebase era):** there is **still no REST/GraphQL/CLI API we author** and no server we run. The "API" is the **Firebase client SDK surface** the PWA calls directly — **Firebase Auth (Google sign-in)** and **Cloud Firestore** — governed by **Firestore Security Rules** (there is no application server to enforce auth; the Rules do). See [§ Firebase client SDK surface](#firebase-client-sdk-surface-phases-69) below and the frozen [architecture.md § Firebase multi-tenant redesign](architecture.md#firebase-multi-tenant-redesign-phases-69--frozen-contracts).
 
 ---
 
@@ -22,13 +22,13 @@
 
 No HTTP endpoints we define — the client talks to Firebase directly. The authoritative shapes/signatures (auth/session context, membership-decision function, tenancy helpers, Firestore-backed repo, collection paths) are frozen in [architecture.md § Firebase multi-tenant redesign](architecture.md#firebase-multi-tenant-redesign-phases-69--frozen-contracts). Summary:
 
-### Firebase Auth (phone / SMS-OTP)
-- `signInWithPhoneNumber(auth, phoneE164, RecaptchaVerifier)` → OTP sent (invisible reCAPTCHA); `confirmationResult.confirm(code)` completes sign-in. Persistence **LOCAL** (stays signed-in until explicit sign-out). Identity = phone in **E.164**.
-- Wrapped by `lib/auth/session.ts` + the `AuthProvider`/`useAuth` context (`startPhoneSignIn`, `confirmOtp`, `setDisplayName`, `chooseRole`, `createOwnerBusiness`, `joinAsEmployee`, `signOut`).
-- **Testing:** Firebase **test phone numbers** (`+911111111111` / `123456`) — no SMS, no reCAPTCHA, no quota use.
+### Firebase Auth (Google sign-in)
+- `signInWithPopup(auth, new GoogleAuthProvider())` completes sign-in. Persistence **LOCAL** (stays signed-in until explicit sign-out). Identity = the Firebase **`uid`** (stable per Google account, cross-device). **No reCAPTCHA, no SMS, no OTP, no Blaze plan** (free on Spark). Google supplies `displayName` + `email`; mobile is captured at onboarding as profile data only.
+- Wrapped by `lib/auth/session.ts` + the `AuthProvider`/`useAuth` context (`signInWithGoogle`, `setDisplayName`, `chooseRole`, `createOwnerBusiness`, `joinByCode`, `signOut`).
+- **Testing:** the **Auth + Firestore emulators** (via `firebase.json`; `NEXT_PUBLIC_FIREBASE_USE_EMULATORS=1`). Google sign-in is simulated by the Auth emulator's test-IdP popup — no real Google account, no external network.
 
 ### Cloud Firestore (direct client reads/writes)
-- Business-scoped collections `businesses/{bizId}/{bills|farmers|grainTypes|activity|members}`, plus top-level `users/{uid}` and `memberships/{phoneKey}` (the phone→business lookup). Paths frozen in architecture.md.
+- Business-scoped collections `businesses/{bizId}/{bills|farmers|grainTypes|activity|members}`, plus top-level `users/{uid}` and `invites/{code}` (the owner-generated employee invite). Paths frozen in architecture.md.
 - Reads are **live** (`onSnapshot`); writes save offline (IndexedDB persistence) and auto-sync on reconnect. Accessed via the Firestore-backed `lib/db/repo` (same function names as Phases 1–5) and `lib/tenancy/business.ts`.
 - **Auth/authorization is enforced by Firestore Security Rules** (owner-only writes to the business profile, membership, and activity-read; member-scoped ledger access). Rules are authored in Phase 8 and hardened in Phase 9.
 

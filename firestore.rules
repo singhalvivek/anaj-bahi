@@ -9,20 +9,27 @@ rules_version = '2';
 // Drawn from the frozen model in
 // spec/architecture.md § "Firestore data model — frozen collection-path map":
 //   - users/{uid}                      → only the owner (uid == request.auth.uid)
-//   - memberships/{phoneKey}           → read: any signed-in user (phone→bizId lookup
-//                                         at onboarding, before membership exists);
-//                                         write: self (own uid) or an owner of bizId
+//   - invites/{code}                   → read: any signed-in user (an employee reads
+//                                         the invite to verify code+mobile before they
+//                                         are a member); create/update: an owner of the
+//                                         invite's bizId OR the claimer stamping their
+//                                         own uid; delete: an owner of the business
 //   - businesses/{bizId}               → read: any member; write: an owner
-//   - businesses/{bizId}/members/{uid} → read: any member; create: self on claim OR
-//                                         owner; update: owner or self; delete: owner
+//   - businesses/{bizId}/members/{uid} → read: any member; create: self ONLY via the
+//                                         owner-bootstrap arm (role owner + business not
+//                                         yet existing) or the employee-claim arm (a
+//                                         matching UNUSED invites/{inviteCode} tying
+//                                         bizId + phoneKey), OR an owner; update: owner
+//                                         or self; delete: owner
 //   - businesses/{bizId}/bills|farmers|grainTypes → read/write: any member of bizId
 //   - businesses/{bizId}/activity      → read: OWNERS only; create-only for members;
 //                                         no update/delete (Phase 9 — final append-only)
 //
 // These rules are claim-bootstrap-safe: verified against the onboarding writeBatch
-// in lib/tenancy/business.ts (createBusiness / claimEmployeeMembership) — the owner
-// and employee self-create their own membership + member docs before any membership
-// exists to check, so create allows `request.resource.data.uid == request.auth.uid`.
+// in lib/tenancy/business.ts (createBusiness) and lib/tenancy/invite.ts (claimInvite)
+// — the owner and employee self-create their own member docs before any membership
+// exists to check, so members create allows `request.auth.uid == uid`, and the invite
+// claim update allows `claimedByUid == request.auth.uid`.
 //
 // NOTE: the activity match block below is UNCHANGED from Phase 8 (it was already the
 // hardened target: create-only for members, owner-only read, update/delete forbidden).
@@ -43,16 +50,20 @@ service cloud.firestore {
       allow read, write: if isSelf(uid);
     }
 
-    // Phone -> business invite/roster lookup. Read is open to any signed-in user
-    // (findMembershipByPhone runs at onboarding before the user is a member; the doc
-    // is a non-sensitive phone->bizId mapping). Writes: owner of the target business,
-    // OR the person setting their OWN uid (owner self-create at onboarding / employee
-    // self-claim). Delete: owner of the business the membership points at.
-    match /memberships/{phoneKey} {
-      allow read: if signedIn();
-      allow create, update: if signedIn() && (
-        request.resource.data.uid == request.auth.uid ||
-        isOwner(request.resource.data.bizId)
+    // Owner-generated one-time employee invites (invites/{code}). GET is by-id (the
+    // code is a shared secret an employee reads pre-membership); LIST is owner-only,
+    // so no one can enumerate another business's invites. Only an owner mints/cancels;
+    // the sole non-owner write is the single-use unused→claimed transition, stamped
+    // with the claimer's own uid.
+    match /invites/{code} {
+      allow get:    if signedIn();
+      allow list:   if signedIn() && isOwner(resource.data.bizId);
+      allow create: if signedIn() && isOwner(request.resource.data.bizId);
+      allow update: if signedIn() && (
+        isOwner(resource.data.bizId) ||
+        ( resource.data.status == 'unused'
+          && request.resource.data.status == 'claimed'
+          && request.resource.data.claimedByUid == request.auth.uid )
       );
       allow delete: if signedIn() && isOwner(resource.data.bizId);
     }
@@ -65,8 +76,24 @@ service cloud.firestore {
 
       match /members/{uid} {
         allow read: if isMember(bizId);
-        // Self-create on claim/onboarding (not yet a member), or owner manages roster.
-        allow create: if signedIn() && (request.auth.uid == uid || isOwner(bizId));
+        // Self-create is tightly gated to two legitimate bootstraps, else an owner
+        // writes roster docs. Rules see only COMMITTED state during a client batch,
+        // so the owner-bootstrap arm reads businesses/{bizId} as still-absent, and the
+        // employee-claim arm reads the invite as still-'unused'.
+        allow create: if signedIn() && request.auth.uid == uid && (
+          // owner bootstrap — ONLY while the business does not yet exist (create batch),
+          // which blocks self-owning an already-existing business:
+          ( request.resource.data.role == 'owner'
+            && !exists(/databases/$(database)/documents/businesses/$(bizId)) )
+          ||
+          // employee claim — gated on a REAL matching UNUSED invite (by code), tying
+          // bizId + phoneKey:
+          ( request.resource.data.role == 'employee'
+            && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode))
+            && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.bizId == bizId
+            && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.phoneKey == request.resource.data.phoneKey
+            && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.status == 'unused' )
+        ) || isOwner(bizId);
         allow update: if isOwner(bizId) || isSelf(uid);
         allow delete: if isOwner(bizId);
       }

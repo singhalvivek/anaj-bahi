@@ -1,29 +1,33 @@
 import { test, expect, type Page } from '@playwright/test'
-import { signInTestOwner, signInTestEmployee, TEST_EMPLOYEE_PHONE } from './support/auth'
+import {
+  signInTestOwner,
+  signInGoogleUser,
+  ownerGenerateInviteCode,
+  employeeJoinByCode,
+  uniqueEmail,
+} from './support/auth'
 
 /**
- * Phase-9 activity-log E2E — two REAL signed-in contexts against real Firebase Auth +
- * Cloud Firestore, proving the per-action attribution feed end to end:
+ * Phase-9 activity-log E2E — two REAL Google identities against the Firebase Auth +
+ * Firestore EMULATORS, proving the per-action attribution feed end to end:
  *   owner and employee each create a bill in the SHARED ledger → BOTH actions land in
  *   the owner-only activity log, each ATTRIBUTED to the actor who did it → the employee
- *   is RESTRICTED from the log (no Settings entry AND the `/activity` route refuses them,
- *   the owner-only Rules denying their listen → fail-safe empty).
+ *   is RESTRICTED from the log (no Settings entry AND the `/activity` route refuses
+ *   them, the owner-only Rules denying their listen → fail-safe empty).
  *
- * ⚠️ REQUIRES the two registered Firebase test numbers already configured (owner
- *    `+919352277260` / `000000`, employee `+919000000002` / `222222`) and the
- *    already-PUBLISHED `firestore.rules` (activity reads are owner-only). No new
- *    Firebase-console steps are needed to run this spec.
- *
- * global-setup resets BOTH test users' Firestore footprints, so the invite +
- * onboarding round-trip runs fresh each run. This spec is also robust to running in
- * the full suite (owner already has a business; employee may already be a member) —
- * it identifies its own rows by distinctive farmer names and asserts attribution
- * against the employee's own rendered display name.
+ * Fully deterministic on the emulators (no real Google account, no SMS, no billing).
+ * The published `firestore.rules` (activity reads owner-only) are enforced by the
+ * Firestore emulator, so the restriction is real, not a client-only gate.
  */
+
+// This spec's employee mobile (distinct from other specs). The employee EMAIL is
+// generated fresh per test invocation (see `uniqueEmail` in the test) so a retry
+// always onboards a brand-new identity rather than an already-joined one.
+const EMP_NAME = 'Act Employee'
+const EMP_MOBILE_LOCAL = '9000000022'
 
 const OWNER_FARMER = 'ActOwner Ram'
 const EMP_FARMER = 'ActEmp Shyam'
-const EMP_NAME = 'Act Employee'
 
 /** Create a one-grain quick-entry bill; leaves the page on the home bill list. */
 async function createQuickBill(
@@ -53,12 +57,11 @@ test('activity log records both owner and employee bill-creates, attributed; emp
   page,
   browser,
 }) => {
-  // Two real contexts + real network (including cross-context activity sync) — give
-  // the whole flow ample time.
+  // Two real contexts + cross-context activity sync — give the whole flow ample time.
   test.setTimeout(180_000)
 
   // ============================================================
-  // Context A — OWNER: create a bill + invite the employee
+  // Context A — OWNER: create a bill + generate an invite code
   // ============================================================
   await signInTestOwner(page)
   await page.getByTestId('lang-toggle-en').click()
@@ -74,10 +77,10 @@ test('activity log records both owner and employee bill-creates, attributed; emp
     amount: '3000',
   })
   await expect(
-    page.getByTestId('bill-card').filter({ hasText: OWNER_FARMER }),
+    page.getByTestId('bill-card').filter({ hasText: OWNER_FARMER }).first(),
   ).toBeVisible()
 
-  // --- Owner → Settings → Employees entry → /employees, add the employee ---
+  // --- Owner → Settings → Employees entry → /employees, generate the invite code ---
   await page.getByTestId('nav-settings').click()
   await page.waitForURL('**/app/settings/**')
   await expect(page.getByTestId('employees-entry')).toBeVisible()
@@ -85,32 +88,30 @@ test('activity log records both owner and employee bill-creates, attributed; emp
   await page.waitForURL('**/app/employees/**')
   await expect(page.getByTestId('employees-screen')).toBeVisible()
 
-  await page.getByTestId('employee-phone-input').fill(TEST_EMPLOYEE_PHONE)
-  await page.getByTestId('employee-name-input').fill(EMP_NAME)
-  await page.getByTestId('add-employee-btn').click()
-  // The invite write reaches the server. In a full-suite run the employee may already
-  // be a member (a benign "already belongs to a business" notice) — we do NOT assert
-  // on the add result here; Context B reaching 'joined' below is the real proof the
-  // invite exists.
-  await page.waitForTimeout(1200)
+  const inviteCode = await ownerGenerateInviteCode(page, {
+    mobileLocal: EMP_MOBILE_LOCAL,
+  })
 
   // ============================================================
-  // Context B — EMPLOYEE (a separate browser context)
+  // Context B — EMPLOYEE (a separate browser context, a distinct Google identity)
   // ============================================================
   const empContext = await browser.newContext()
   const page2 = await empContext.newPage()
   try {
-    // Employee signs in → onboarding as Employee → the owner's invite is found →
-    // membership claimed → gated home.
-    const outcome = await signInTestEmployee(page2, { name: EMP_NAME })
-    expect(outcome).toBe('joined')
-    await expect(page2.getByTestId('gated-home')).toBeVisible()
+    // Sign in (fresh identity) → onboarding → Employee → redeem the code → joined.
+    const landing = await signInGoogleUser(page2, {
+      email: uniqueEmail('act-emp'),
+      displayName: EMP_NAME,
+    })
+    expect(landing).toBe('onboarding')
+    await employeeJoinByCode(page2, {
+      code: inviteCode,
+      mobileLocal: EMP_MOBILE_LOCAL,
+      name: EMP_NAME,
+    })
+    await expect(page2.getByTestId('gated-home')).toBeVisible({ timeout: 25_000 })
 
-    // The employee's OWN rendered display name (now on the Settings screen) —
-    // attribution snapshots the actor's name at action time, so we assert the
-    // activity row against exactly this. (In a fresh reset this is EMP_NAME; in a
-    // full-suite run it is the employee's persisted name — reading it here keeps the
-    // attribution assertion truthful either way.)
+    // The employee's OWN rendered display name (attribution snapshots the actor).
     await page2.getByTestId('nav-settings').click()
     await page2.waitForURL('**/app/settings/**')
     const empDisplayName = (await page2.getByTestId('home-user-name').innerText()).trim()
@@ -122,7 +123,7 @@ test('activity log records both owner and employee bill-creates, attributed; emp
 
     // --- SHARED LEDGER: the owner's bill is visible to the employee ---
     await expect(
-      page2.getByTestId('bill-card').filter({ hasText: OWNER_FARMER }),
+      page2.getByTestId('bill-card').filter({ hasText: OWNER_FARMER }).first(),
     ).toBeVisible({ timeout: 30_000 })
 
     // --- Employee creates a bill (their own action, attributed to them) ---
@@ -135,7 +136,7 @@ test('activity log records both owner and employee bill-creates, attributed; emp
       amount: '2000',
     })
     await expect(
-      page2.getByTestId('bill-card').filter({ hasText: EMP_FARMER }),
+      page2.getByTestId('bill-card').filter({ hasText: EMP_FARMER }).first(),
     ).toBeVisible()
 
     // ============================================================
@@ -149,30 +150,24 @@ test('activity log records both owner and employee bill-creates, attributed; emp
 
     // The owner's own bill-create row (the farmer name is carried in the summary).
     await expect(
-      page.getByTestId('activity-row').filter({ hasText: OWNER_FARMER }),
+      page.getByTestId('activity-row').filter({ hasText: OWNER_FARMER }).first(),
     ).toBeVisible({ timeout: 40_000 })
 
     // The employee's bill-create row — identified by its distinctive farmer summary
-    // AND attributed to the employee's name (the row shows both). Generous timeout:
-    // this entry syncs from Context B over the network.
-    const empRow = page.getByTestId('activity-row').filter({ hasText: EMP_FARMER })
+    // AND attributed to the employee's name. Generous timeout: it syncs from Context B.
+    const empRow = page.getByTestId('activity-row').filter({ hasText: EMP_FARMER }).first()
     await expect(empRow).toBeVisible({ timeout: 40_000 })
     await expect(empRow).toContainText(empDisplayName)
 
-    // At least the two actions above are present in the feed.
     expect(await page.getByTestId('activity-row').count()).toBeGreaterThanOrEqual(2)
 
     // ============================================================
     // Context B — EMPLOYEE is RESTRICTED from the activity log
     // ============================================================
-    // No Settings entry for employees (the UI gate).
     await page2.getByTestId('nav-settings').click()
     await page2.waitForURL('**/app/settings/**')
     await expect(page2.getByTestId('activity-entry')).toHaveCount(0)
 
-    // Navigating directly to /activity is refused — the friendly UI notice shows and
-    // the feed never renders. The owner-only Rules also deny the employee's listen, so
-    // even a bypassed UI would fail-safe to empty.
     await page2.goto('./activity/')
     await expect(page2.getByTestId('activity-forbidden')).toBeVisible({ timeout: 20_000 })
     await expect(page2.getByTestId('activity-log')).toHaveCount(0)

@@ -1,45 +1,51 @@
-# Capability: Business Tenancy (create business + membership)
+# Capability: Business Tenancy (create business + join by code)
 
-_Phase 6 · slice-a (`lib/tenancy/business.ts` + wiring) + slice-b (owner create-business / employee ask-owner UI)._
+_Phase 6 · slice-a (`lib/tenancy/business.ts` + `lib/tenancy/invite.ts` + wiring) + slice-b (owner create-business / employee join-by-code UI)._
 
-Frozen tenancy helpers + collection paths: [architecture.md § Tenancy write helpers](../architecture.md#tenancy-write-helpers--libtenancybusinessts) and [§ Firestore data model](../architecture.md#firestore-data-model--frozen-collection-path-map).
+Frozen tenancy helpers + collection paths: [architecture.md § Role routing + invite logic](../architecture.md#role-routing--invite-logic--libauthmembershipts-pure-unit-tested), [§ Tenancy write helpers](../architecture.md#tenancy-write-helpers--libtenancybusinessts), and [§ Firestore data model](../architecture.md#firestore-data-model--frozen-collection-path-map).
 
 ## What It Does
-Establishes the multi-tenant spine: an **Owner** self-serve **creates a new business** (a Firestore tenant with themselves as owner), and an **Employee** whose phone an owner already added **joins** that same business. Guarantees **one person → one business**, all business data **scoped under `businesses/{bizId}`**.
+Establishes the multi-tenant spine: an **Owner** self-serve **creates a new business** (a Firestore tenant with themselves as owner), and an **Employee** an owner invited **joins** that business by redeeming a one-time **invite code + mobile**. Guarantees **one person → one business** (enforced by the Firebase `uid`), all business data **scoped under `businesses/{bizId}`**.
 
 ## Inputs
 | Input | Type | Source | Required |
 |-------|------|--------|----------|
-| new-business profile | `{ shopName, traderName, phone?, address? }` | create-business form | yes (shopName) |
-| signed-in user | `AppUser` (uid + phone + displayName) | `useAuth()` | yes |
-| target bizId (employee join) | string | matched `memberships/{phoneKey}` | yes (join only) |
+| new-business profile | `{ shopName, traderName, phone (mobile), address? }` | create-business form | yes (shopName, traderName, mobile) |
+| signed-in user | `AppUser` (uid + email + displayName from Google) | `useAuth()` | yes |
+| invite code | string (6 uppercase chars) | JoinByCode step 1 | yes (join only) |
+| mobile number | string (E.164) | JoinByCode step 2 — must match `invite.phoneKey` | yes (join only) |
+| display name | string | JoinByCode step 3 (prefilled from Google) | yes (join only) |
 
 ## Outputs
 | Output | Type | Destination |
 |--------|------|-------------|
 | business doc | `businesses/{bizId}` (profile + createdBy snapshot) | Firestore |
 | owner/employee member | `businesses/{bizId}/members/{uid}` (`active`) | Firestore |
-| membership lookup | `memberships/{phoneKey}` (role, status, bizId, uid) | Firestore |
-| user record | `users/{uid}` (`bizId`, `role`) | Firestore |
+| claimed invite | `invites/{code}` (`status: claimed`, `claimedByUid`, `claimedAt`) | Firestore (join only) |
+| user record | `users/{uid}` (`{ bizId, role, phone, email }`) | Firestore |
 
 ## External Calls
 | System | Operation | On Failure |
 |--------|-----------|------------|
-| Firestore `createBusiness(owner, input)` | write business + members + memberships + users (one logical unit) | Visible error; stay on the form; no partial "half-created" business is left navigable (the user record's `bizId` is set **last**, so onboarding only completes when all writes land) |
-| Firestore `claimEmployeeMembership(user, bizId)` | set uid/active on membership, write member + users | Visible error; retry; membership stays `invited` until claimed |
-| Firestore `findMembershipByPhone(phone)` | lookup by phoneKey | Visible error; retry |
+| Firestore `createBusiness(owner, input)` | atomic `writeBatch`: business + owner member + `users/{uid}` (one logical unit; **no owner invite doc**) | Visible error; stay on the form; the `users/{uid}.bizId` is written in the same batch, so onboarding only completes when all writes land |
+| Local `saveProfile(...)` (after createBusiness) | seed the Dexie `businessProfile` (shopName/traderName/phone) that Settings shop-details + the receipt header read, so the signup shop name shows immediately | Best-effort; a failure never blocks onboarding |
+| Firestore `getInvite(code)` + pure `checkInvite` | verify code (exists & unused) then mobile (matches `invite.phoneKey`) | `not-found` → "code invalid/used" error; `phone-mismatch` → a **distinct** "number doesn't match" error; both keep the user on the step to retry |
+| Firestore `claimInvite(user, code, phoneE164)` | atomic `writeBatch`: flip invite → claimed, write member, set `users/{uid}` | Visible error; retry; invite stays `unused` until the claim commits |
 
 ## Business Rules
-- **phoneKey** = E.164 without the leading `+` (`+911111111111` → `911111111111`) — the Firestore doc id for the phone→business lookup.
-- Creating a business writes the owner's own `memberships/{phoneKey}` (`role: owner`, `status: active`, `uid` set) so a returning owner is recognised on any device.
-- An employee **join** claims the pre-existing **`invited`** membership (owner added the phone earlier) → sets `uid`, `status: active`, `claimedAt`.
-- **One person → one business:** a phone with an existing membership can never create a second business (the [membership decision](first-run-role-chooser.md) blocks it before this capability is reached).
+- **Identity is the Firebase `uid`.** Creating a business writes only `businesses/{bizId}`, the owner's `members/{uid}` (`owner`, `active`), and `users/{uid}` — **no invite/membership doc for the owner**; the owner's `uid` recognises them on any device via `users/{uid}.bizId`.
+- The owner's create form captures **name** (prefilled from Google, editable), **shop name**, and **mobile**; the mobile is stored as business/profile data (`businesses.phone` + `users.phone`), not an auth factor.
+- **Join by code:** the employee redeems the owner-generated **`invites/{code}`** in three steps — enter code (must exist and be `status: 'unused'`), enter mobile (must match `invite.phoneKey`), enter name (prefilled from Google). `claimInvite` then atomically flips the invite to `claimed`, writes `members/{uid}` (attribution copied from the invite, **plus `inviteCode` + `phoneKey`**), and sets `users/{uid}.{bizId, role:'employee', phone, email}`.
+- **Security Rules enforce the claim server-side (not just client-side):** the `members/{uid}` create is allowed only when a **real matching `invites/{inviteCode}`** exists that ties the same `bizId` + `phoneKey` and is still `status: 'unused'`, and the invite `update` allows only the single-use `unused → claimed` transition stamped with the claimer's own uid. The two writes are mutually consistent inside the atomic `writeBatch` because rules see the invite's still-`unused` committed state during the batch. This closes cross-tenant escalation (no self-minted owner/employee membership without a valid invite). See [architecture § Security Rules](../architecture.md#security-rules--hardened-invites--members-model-code-generator-edits-firestorerules).
+- **phoneKey** = E.164 without the leading `+` — used only to match the redeemed mobile against the invite, never as an identity key.
+- **One person → one business:** a user whose `users/{uid}.bizId` is set is routed straight to the app on sign-in and never re-enters onboarding, so they can never create a second business or redeem a code (see [architecture § one-person-one-business](../architecture.md#firestore-data-model--frozen-collection-path-map)).
 - Multiple **owners** per business are allowed; all members share the business's ledger.
-- Attribution: `createdByName`/`displayName` are **snapshots** at write time.
+- Attribution: `createdByName` / `displayName` / `addedByName` are **snapshots** at write time.
 
 ## Success Criteria
-- [ ] An Owner creates a business (shop name required) and immediately lands in the app as **owner** of that business; `businesses/{bizId}`, its `members/{uid}`, `memberships/{phoneKey}`, and `users/{uid}` are all written.
-- [ ] Signing the same owner in again (even a fresh browser) routes **straight into their business** via `users/{uid}` / `memberships/{phoneKey}` — no re-onboarding.
-- [ ] An Employee whose phone was pre-added joins the **same** business and lands in the app as **employee**.
-- [ ] A phone already tied to a business cannot create a second business (one-person-one-business).
+- [ ] An Owner signs in with Google, fills name + shop name + mobile, and immediately lands in the app as **owner**; `businesses/{bizId}`, its `members/{uid}`, and `users/{uid}` (with `bizId`, `role:'owner'`, `phone`, `email`) are all written, and **no invite doc** is created for the owner.
+- [ ] Signing the same Google account in again (even a fresh browser/device) routes **straight into their business** via `users/{uid}.bizId` — no re-onboarding, no code.
+- [ ] An Employee redeems a valid `invites/{code}` whose mobile they enter correctly, joins the **same** business as **employee**, and the invite flips to `claimed` with `claimedByUid`/`claimedAt` set.
+- [ ] A wrong/used code shows the "invalid/used" error; a correct code with a **non-matching mobile** shows the **distinct** "number doesn't match" error.
+- [ ] A user already in a business cannot redeem a code (they never reach JoinByCode).
 - [ ] All ledger data written after onboarding lives under `businesses/{bizId}/…` (business-scoped), never at a global path.

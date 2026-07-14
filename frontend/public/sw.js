@@ -19,7 +19,7 @@
  * Bump CACHE_VERSION whenever the shell changes to retire the previous cache.
  */
 const CACHE_PREFIX = 'anajbahi-shell-'
-const CACHE_VERSION = `${CACHE_PREFIX}v3`
+const CACHE_VERSION = `${CACHE_PREFIX}v4`
 const BASE = '/app'
 
 // Core shell URLs to precache (navigable entry points + PWA assets). Best-effort.

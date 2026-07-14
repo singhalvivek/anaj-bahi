@@ -1,50 +1,66 @@
 import { describe, it, expect } from 'vitest'
-import { decideMembership, type MembershipLookup } from './membership'
+import { routeRole, checkInvite, phoneKey, type InviteRecord } from './membership'
 
-describe('decideMembership — the four frozen branches', () => {
-  it('existing OWNER membership → enter as owner (regardless of status)', () => {
-    const lookup: MembershipLookup = { bizId: 'biz-1', role: 'owner', status: 'active' }
-    expect(decideMembership('owner', lookup)).toEqual({ kind: 'owner', bizId: 'biz-1' })
+describe('routeRole — the two frozen branches', () => {
+  it("'owner' → create (go to create-business)", () => {
+    expect(routeRole('owner')).toEqual({ kind: 'create' })
   })
 
-  it('existing EMPLOYEE membership → employee-joined', () => {
-    const lookup: MembershipLookup = { bizId: 'biz-2', role: 'employee', status: 'invited' }
-    expect(decideMembership('employee', lookup)).toEqual({
-      kind: 'employee-joined',
-      bizId: 'biz-2',
-    })
-  })
-
-  it('no membership + chose Owner → new (create a business)', () => {
-    expect(decideMembership('owner', null)).toEqual({ kind: 'new' })
-  })
-
-  it('no membership + chose Employee → employee-unadded (ask your owner)', () => {
-    expect(decideMembership('employee', null)).toEqual({ kind: 'employee-unadded' })
+  it("'employee' → join (go to JoinByCode)", () => {
+    expect(routeRole('employee')).toEqual({ kind: 'join' })
   })
 })
 
-describe('decideMembership — existing membership overrides the fresh choice', () => {
-  it('owner-lookup but chose Employee → still owner (one-person-one-business)', () => {
-    const lookup: MembershipLookup = { bizId: 'biz-3', role: 'owner', status: 'active' }
-    // The user tapped Employee, but their phone already owns a business.
-    expect(decideMembership('employee', lookup)).toEqual({ kind: 'owner', bizId: 'biz-3' })
+describe('phoneKey — E.164 → digits only', () => {
+  it('strips the leading + ', () => {
+    expect(phoneKey('+911111111111')).toBe('911111111111')
   })
 
-  it('employee-lookup but chose Owner → still employee-joined (cannot start a 2nd business)', () => {
-    const lookup: MembershipLookup = { bizId: 'biz-4', role: 'employee', status: 'active' }
-    // The user tapped Owner, but their phone is already an employee somewhere.
-    expect(decideMembership('owner', lookup)).toEqual({
-      kind: 'employee-joined',
-      bizId: 'biz-4',
-    })
+  it('strips spaces, dashes and other non-digits', () => {
+    expect(phoneKey('+91 98765-43210')).toBe('919876543210')
+  })
+})
+
+function makeInvite(overrides: Partial<InviteRecord> = {}): InviteRecord {
+  return {
+    code: 'ABC234',
+    bizId: 'biz-1',
+    role: 'employee',
+    assignedPhone: '+911111111111',
+    phoneKey: '911111111111',
+    displayName: 'Ramesh',
+    addedByUid: 'owner-uid',
+    addedByName: 'Owner',
+    status: 'unused',
+    claimedByUid: null,
+    createdAt: 1,
+    claimedAt: null,
+    ...overrides,
+  }
+}
+
+describe('checkInvite — the three frozen branches', () => {
+  it('null invite → not-found (no such code)', () => {
+    expect(checkInvite(null, '+911111111111')).toEqual({ kind: 'not-found' })
   })
 
-  it('an invited employee membership still routes to employee-joined even if Owner chosen', () => {
-    const lookup: MembershipLookup = { bizId: 'biz-5', role: 'employee', status: 'invited' }
-    expect(decideMembership('owner', lookup)).toEqual({
-      kind: 'employee-joined',
-      bizId: 'biz-5',
-    })
+  it('already-claimed invite (status !== unused) → not-found', () => {
+    const invite = makeInvite({ status: 'claimed', claimedByUid: 'someone', claimedAt: 2 })
+    expect(checkInvite(invite, '+911111111111')).toEqual({ kind: 'not-found' })
+  })
+
+  it('valid code but non-matching mobile → phone-mismatch', () => {
+    const invite = makeInvite()
+    expect(checkInvite(invite, '+919999999999')).toEqual({ kind: 'phone-mismatch' })
+  })
+
+  it('valid code + matching mobile → ok with bizId', () => {
+    const invite = makeInvite()
+    expect(checkInvite(invite, '+911111111111')).toEqual({ kind: 'ok', bizId: 'biz-1' })
+  })
+
+  it('mobile match is normalized (spaces/dashes ignored)', () => {
+    const invite = makeInvite()
+    expect(checkInvite(invite, '+91 11111-11111')).toEqual({ kind: 'ok', bizId: 'biz-1' })
   })
 })

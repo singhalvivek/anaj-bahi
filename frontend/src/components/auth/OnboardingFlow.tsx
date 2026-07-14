@@ -1,58 +1,38 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuth } from '@/lib/auth/context'
-import type { MembershipDecision } from '@/lib/auth/membership'
-import { NamePrompt } from './NamePrompt'
+import type { RoleRoute } from '@/lib/auth/membership'
 import { RoleChooser } from './RoleChooser'
 import { CreateBusiness } from './CreateBusiness'
-import { AskOwner } from './AskOwner'
+import { JoinByCode } from './JoinByCode'
 
 /**
  * Orchestrates first-run onboarding by LOCAL component state (no routes) while
  * the AuthGate holds `status === 'onboarding'`. Full-screen, no app chrome.
  *
- * Steps:
- *   1. NamePrompt      — until `user.displayName` is set.
- *   2. RoleChooser     — Owner / Employee → lifts a MembershipDecision here.
- *   3a. CreateBusiness — decision `new` (Owner, no prior membership).
- *   3b. AskOwner       — decision `employee-unadded` (Employee, not on a roster).
+ * Google already supplies the user's name, so there is no standalone name prompt
+ * up front — the name is captured inline (prefilled, editable) in whichever form
+ * the role choice routes to.
  *
- * For decisions `owner` / `employee-joined`, `chooseRole` inside the AuthProvider
- * has ALREADY claimed membership (as needed) and flipped `status` → `ready`, so
- * this component simply unmounts (the AuthGate switches surfaces) — no extra call
- * is needed here.
+ * Steps:
+ *   1. RoleChooser    — Owner / Employee → lifts a pure RoleRoute here.
+ *   2a. CreateBusiness — route `{ kind:'create' }` (Owner): name + shop + mobile.
+ *   2b. JoinByCode     — route `{ kind:'join' }`  (Employee): code → mobile → name.
+ *
+ * On the create/join success the AuthProvider flips `status` → `ready`, so this
+ * component simply unmounts (the AuthGate switches surfaces).
  */
 export function OnboardingFlow() {
-  const { user } = useAuth()
-  const [decision, setDecision] = useState<MembershipDecision | null>(null)
+  const [route, setRoute] = useState<RoleRoute | null>(null)
 
   function renderStep() {
-    // Step 1 — name must be set before anything else.
-    if (!user?.displayName) {
-      return <NamePrompt />
-    }
-
-    // Step 3 — branch on the stored role decision.
-    if (decision?.kind === 'new') {
+    if (route?.kind === 'create') {
       return <CreateBusiness />
     }
-    if (decision?.kind === 'employee-unadded') {
-      return <AskOwner />
+    if (route?.kind === 'join') {
+      return <JoinByCode />
     }
-
-    // Step 2 — role chooser (default). `owner` / `employee-joined` already
-    // transitioned to `ready` in the provider, so we only store the two
-    // decisions that need a further sub-screen.
-    return (
-      <RoleChooser
-        onDecision={(d) => {
-          if (d.kind === 'new' || d.kind === 'employee-unadded') {
-            setDecision(d)
-          }
-        }}
-      />
-    )
+    return <RoleChooser onDecision={setRoute} />
   }
 
   return <div data-testid="onboarding-flow">{renderStep()}</div>

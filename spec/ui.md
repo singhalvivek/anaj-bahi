@@ -127,33 +127,30 @@ A single friendly placeholder screen: icon + "Coming soon — जल्द आ �
 
 ## Firebase multi-tenant screens (Phases 6–9)
 
-> All bilingual Hindi/English, big-button, one-handed, low-end-Android — same conventions as above. These are rendered by the **`AuthGate`** (conditional on `useAuth().status`), **not** as new App-Router routes (static-export-safe). Contracts are frozen in [architecture.md § Firebase multi-tenant redesign](architecture.md#firebase-multi-tenant-redesign-phases-69--frozen-contracts). Product detail is in the capability files ([phone-auth](capabilities/phone-auth.md), [first-run-role-chooser](capabilities/first-run-role-chooser.md), [business-tenancy](capabilities/business-tenancy.md), [employee-management](capabilities/employee-management.md), [activity-log](capabilities/activity-log.md), [personal-profile](capabilities/personal-profile.md)).
+> All bilingual Hindi/English, big-button, one-handed, low-end-Android — same conventions as above. These are rendered by the **`AuthGate`** (conditional on `useAuth().status`), **not** as new App-Router routes (static-export-safe). Contracts are frozen in [architecture.md § Firebase multi-tenant redesign](architecture.md#firebase-multi-tenant-redesign-phases-69--frozen-contracts). Product detail is in the capability files ([google-auth](capabilities/google-auth.md), [first-run-role-chooser](capabilities/first-run-role-chooser.md), [business-tenancy](capabilities/business-tenancy.md), [employee-management](capabilities/employee-management.md), [activity-log](capabilities/activity-log.md), [personal-profile](capabilities/personal-profile.md)).
 
 ### India-only phone entry (`PhoneField`)
 
 The app serves **Indian traders only**, so **every** phone field uses one shared component, `frontend/src/components/PhoneField.tsx`, rather than a free-form E.164 text box. It renders a **fixed, non-editable `🇮🇳 +91` prefix chip** next to a numeric input; the user types **only the local 10 digits**. The component's value in/out is always canonical **E.164** (`+91XXXXXXXXXX`, or `''` when empty), so callers store and validate one shape everywhere:
 
 - **Parsing is tolerant** (`localDigits`): a stored E.164, a legacy free-form string, or a full number pasted with the country code all resolve to the same local 10 digits (a leading `91` is stripped only when the value exceeds 10 digits, so a genuine 10-digit number starting `91` survives).
-- **Validation** (`isValidIndianPhone`): `/^\+91\d{10}$/` — used by Login (Send code) and Add-employee (enable Add).
-- **Applies to:** Login phone (`login-phone-input`), Add-employee phone (`employee-phone-input`), Business profile phone (`settings-phone`), and the farmer phone in `FarmerPicker`. Read-only phone displays (personal profile, ask-owner) already show the immutable login identity and are unchanged.
+- **Validation** (`isValidIndianPhone`): `/^\+91\d{10}$/` — used by JoinByCode (mobile step), Generate-code (enable Generate), Personal-profile mobile, and Business-profile phone.
+- **Applies to:** JoinByCode mobile (`join-mobile-input`), Generate-code employee phone (`employee-phone-input`), Personal-profile mobile (`personal-mobile-input`), Business profile phone (`settings-phone`), and the farmer phone in `FarmerPicker`. **Login no longer has a phone field** (Google sign-in). The personal profile shows the Google **email** read-only (the identity), not a phone.
 
-### Screen: Login (phone + OTP) — Phase 6, slice-b
+### Screen: Login (Google sign-in) — Phase 6, slice-b
 
 Shown when `status === 'signed-out'`. Container `data-testid="login-screen"`.
-1. **Phone number** input via the shared **`PhoneField`** (see [India-only phone entry](#india-only-phone-entry-phonefield) below): a fixed, non-editable `🇮🇳 +91` prefix chip beside a numeric input where the user types only the local 10 digits. `data-testid="phone-input"`. Value is submitted in E.164 (`+91XXXXXXXXXX`).
-2. Invisible reCAPTCHA mount point `data-testid="recaptcha-container"` (renders nothing visible for test numbers).
-3. **Send code** button `data-testid="send-otp-btn"` → calls `startPhoneSignIn`.
-4. After send: **OTP** input (`inputmode="numeric"`, 6 digits) `data-testid="otp-input"` + **Verify** button `data-testid="verify-otp-btn"` → `confirmOtp`.
-5. Inline bilingual error on wrong code / network (mapped from Firebase error). Never crashes.
+1. App title + a one-line "Sign in to your grain ledger" subtitle, and the **language toggle** so a first-time user can pick Hindi/English up front.
+2. A single **Continue with Google** button `data-testid="google-signin-btn"` → calls `signInWithGoogle()` (`signInWithPopup(GoogleAuthProvider)`). **No phone field, no OTP input, no reCAPTCHA container** — all removed.
+3. Inline bilingual error on popup-closed / network / unauthorized-domain (mapped from the Firebase error). Never crashes; the button stays tappable to retry.
 
 ### Screen: First-run onboarding — Phase 6, slice-b
 
 Shown when `status === 'onboarding'` (signed in, no `bizId`). A short stepped flow inside `data-testid="onboarding"`:
-1. **Name prompt** (`data-testid="name-prompt"`): "What's your name?" — `data-testid="display-name-input"`, **Continue** `data-testid="name-continue-btn"` (required, non-blank) → `setDisplayName`.
-2. **Role chooser** (`data-testid="role-chooser"`): two large cards — **"I am an Owner"** `data-testid="role-owner"` and **"I am an Employee"** `data-testid="role-employee"` → `chooseRole(role)` runs the [membership decision](capabilities/first-run-role-chooser.md).
-3a. **Owner → Create business** (`data-testid="create-business"`): shop name `data-testid="biz-shop-input"` (required), trader name `data-testid="biz-trader-input"`, phone `data-testid="biz-phone-input"`, address `data-testid="biz-address-input"` (optional); **Create** `data-testid="create-business-btn"` → `createOwnerBusiness` → lands in the app as owner.
-3b. **Employee (added) → joins** the business automatically (decision `employee-joined`), landing in the app.
-3c. **Employee (not added) → Ask your owner** (`data-testid="ask-owner-screen"`): a friendly bilingual "Ask your owner to add your number <phone>, then sign in again" with a **Sign out** button. No app access.
+1. **Name prompt** (`data-testid="name-prompt"`): "What's your name?" — `data-testid="display-name-input"` **prefilled from the Google account** (editable), **Continue** `data-testid="name-continue-btn"` (required, non-blank) → `setDisplayName`.
+2. **Role chooser** (`data-testid="role-chooser"`): two large cards — **"I am an Owner"** `data-testid="role-owner"` and **"I am an Employee"** `data-testid="role-employee"` → `chooseRole(role)` runs the pure [role route](capabilities/first-run-role-chooser.md).
+3a. **Owner → Create business** (`data-testid="create-business"`): name `data-testid="biz-trader-input"` (prefilled from Google, editable, required), shop name `data-testid="biz-shop-input"` (required), **mobile** via `PhoneField` `data-testid="biz-phone-input"` (required), address `data-testid="biz-address-input"` (optional); **Create** `data-testid="create-business-btn"` → `createOwnerBusiness` → lands in the app as owner.
+3b. **Employee → Join by code** (`data-testid="join-by-code"`): a stepped flow — **step 1** code input `data-testid="join-code-input"` + **Next** `data-testid="join-code-next"` (verifies `invites/{code}` exists and is unused; else a distinct "code invalid/used" error); **step 2** mobile via `PhoneField` `data-testid="join-mobile-input"` + **Next** `data-testid="join-mobile-next"` (must match `invite.phoneKey`; else a distinct "number doesn't match" error); **step 3** name `data-testid="join-name-input"` (prefilled from Google) + **Join** `data-testid="join-submit"` → `joinByCode({ code, phoneE164, name })` → lands in the app as employee. The old "ask your owner" dead-end is removed.
 
 ### Signed-in identity / account strip — Phase 6 (relocated to Settings)
 
@@ -164,12 +161,12 @@ When `status === 'ready'` the app shell is `TopBar` + `<main data-testid="gated-
 ### Screen: Settings — Personal profile vs Business profile — Phase 8
 
 The Settings screen splits into two sections:
-1. **Personal profile** (`data-testid="personal-profile"`): the user's own **display name** (editable, `data-testid="personal-name-input"`, **Save** `data-testid="personal-save"`) + **phone** (read-only) + language. Shown in attribution.
+1. **Personal profile** (`data-testid="personal-profile"`): the user's own **display name** (editable, `data-testid="personal-name-input"`) + **mobile** (editable, `PhoneField` `data-testid="personal-mobile-input"`, profile data only) + Google **email** (read-only, the identity) + language, with **Save** `data-testid="personal-save"`. Display name is shown in attribution.
 2. **Business profile** (`data-testid="business-profile"`, the existing form): shop/trader/phone/address — **owner-only editable**; employees see it **read-only** (inputs disabled + a "only an owner can edit" note). The old `SyncSettings` base-URL/token box is **removed** (Phase 7).
 
 ### Screen: Employees (owner-only) — Phase 8
 
-`data-testid="employees-screen"` (reachable from Settings for owners only): a roster of members (name + phone + role) and an **Add employee** form — phone `data-testid="employee-phone-input"` + name label `data-testid="employee-name-input"` + **Add** `data-testid="add-employee-btn"` (writes an `invited` membership keyed by phone) and **Remove** per employee `data-testid="remove-employee-btn"`. Employees cannot see this screen.
+`data-testid="employees-screen"` (reachable from Settings for owners only), with three parts. **Generate invite:** mobile `PhoneField` `data-testid="employee-mobile-input"` (no name field — the employee's name comes from their Google login at claim) + **Generate code** `data-testid="generate-code-btn"` → writes `invites/{code}` and shows the 6-char code **large** (`data-testid="invite-code"`) with a **Copy** button `data-testid="copy-code-btn"` to share out-of-band. **Pending invites** `data-testid="pending-invites"`: each unclaimed invite row `data-testid="pending-row"` shows its assigned mobile + code + a **Cancel** button `data-testid="cancel-invite-btn"`. **Member roster:** claimed members (name + phone + role) with **Remove** per employee `data-testid="remove-employee-btn"`. Employees cannot see this screen.
 
 ### Screen: Activity log (owner-only) — Phase 9
 
