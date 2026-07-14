@@ -40,10 +40,5 @@
     "tailwindcss": "^4.1.8",
     "typescript": "^5",
     "vitest": "^2"
-  },
-  "pnpm": {
-    "ignoredBuiltDependencies": [
-      "re2"
-    ]
   }
 }
