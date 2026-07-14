@@ -28,6 +28,7 @@ Establishes the multi-tenant spine: an **Owner** self-serve **creates a new busi
 | System | Operation | On Failure |
 |--------|-----------|------------|
 | Firestore `createBusiness(owner, input)` | atomic `writeBatch`: business + owner member + `users/{uid}` (one logical unit; **no owner invite doc**) | Visible error; stay on the form; the `users/{uid}.bizId` is written in the same batch, so onboarding only completes when all writes land |
+| Local `saveProfile(...)` (after createBusiness) | seed the Dexie `businessProfile` (shopName/traderName/phone) that Settings shop-details + the receipt header read, so the signup shop name shows immediately | Best-effort; a failure never blocks onboarding |
 | Firestore `getInvite(code)` + pure `checkInvite` | verify code (exists & unused) then mobile (matches `invite.phoneKey`) | `not-found` → "code invalid/used" error; `phone-mismatch` → a **distinct** "number doesn't match" error; both keep the user on the step to retry |
 | Firestore `claimInvite(user, code, phoneE164)` | atomic `writeBatch`: flip invite → claimed, write member, set `users/{uid}` | Visible error; retry; invite stays `unused` until the claim commits |
 

@@ -32,6 +32,7 @@ import { createBusiness, type NewBusinessInput } from '@/lib/tenancy/business'
 import { claimInvite, getInvite } from '@/lib/tenancy/invite'
 import { setActiveBusiness, setActiveActor, ensureSeeded } from '@/lib/db/repo'
 import { migrateLocalToFirestore } from '@/lib/db/migrate'
+import { saveProfile } from '@/lib/settings/profile'
 
 export type AuthStatus = 'loading' | 'signed-out' | 'onboarding' | 'ready'
 
@@ -248,6 +249,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The owner's create form captures their mobile as profile data.
       const owner: AppUser = input.phone ? { ...cur, phone: input.phone } : cur
       const bizId = await createBusiness(owner, input)
+      // Seed the LOCAL business profile (Dexie) that the Settings shop-details form
+      // and the receipt header read from, so the shop name entered at signup shows up
+      // straight away. Best-effort — a failure here must never block onboarding.
+      try {
+        await saveProfile({
+          shopName: input.shopName,
+          traderName: input.traderName,
+          phone: input.phone ?? '',
+          address: input.address,
+        })
+      } catch {
+        // local profile seed is non-critical; ignore
+      }
       enterReady(owner, bizId, 'owner')
     },
     [enterReady],

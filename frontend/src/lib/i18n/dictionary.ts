@@ -436,6 +436,7 @@ export const EN = {
   'employees.inviteMobile': 'Mobile number',
   'employees.pendingTitle': 'Pending invites',
   'employees.pendingEmpty': 'No pending invites',
+  'employees.pendingAwaiting': 'Waiting for them to join',
   'employees.cancelInvite': 'Cancel',
   'employees.cancelling': 'Cancelling…',
 
@@ -877,6 +878,7 @@ export const HI: Record<TKey, string> = {
   'employees.inviteMobile': 'मोबाइल नंबर',
   'employees.pendingTitle': 'बाकी आमंत्रण',
   'employees.pendingEmpty': 'कोई बाकी आमंत्रण नहीं',
+  'employees.pendingAwaiting': 'शामिल होने की प्रतीक्षा',
   'employees.cancelInvite': 'रद्द करें',
   'employees.cancelling': 'रद्द हो रहा है…',
 

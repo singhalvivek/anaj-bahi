@@ -82,7 +82,6 @@ test('owner invites by code → employee joins, shares the ledger, is attributed
 
   // --- Owner generates a one-time invite code for the employee's mobile ---
   const inviteCode = await ownerGenerateInviteCode(page, {
-    name: EMP_NAME,
     mobileLocal: EMP_MOBILE_LOCAL,
   })
 

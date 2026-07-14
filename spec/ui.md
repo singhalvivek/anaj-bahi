@@ -166,7 +166,7 @@ The Settings screen splits into two sections:
 
 ### Screen: Employees (owner-only) — Phase 8
 
-`data-testid="employees-screen"` (reachable from Settings for owners only), with three parts. **Generate invite:** name label `data-testid="employee-name-input"` + mobile `PhoneField` `data-testid="employee-phone-input"` + **Generate code** `data-testid="generate-code-btn"` → writes `invites/{code}` and shows the 6-char code **large** (`data-testid="invite-code"`) with a **Copy** button `data-testid="copy-code-btn"` to share out-of-band. **Pending invites** `data-testid="pending-invites"`: each unclaimed invite row `data-testid="pending-invite-row"` shows its code + assigned mobile + a **Cancel** button `data-testid="cancel-invite-btn"`. **Member roster:** claimed members (name + phone + role) with **Remove** per employee `data-testid="remove-employee-btn"`. Employees cannot see this screen.
+`data-testid="employees-screen"` (reachable from Settings for owners only), with three parts. **Generate invite:** mobile `PhoneField` `data-testid="employee-mobile-input"` (no name field — the employee's name comes from their Google login at claim) + **Generate code** `data-testid="generate-code-btn"` → writes `invites/{code}` and shows the 6-char code **large** (`data-testid="invite-code"`) with a **Copy** button `data-testid="copy-code-btn"` to share out-of-band. **Pending invites** `data-testid="pending-invites"`: each unclaimed invite row `data-testid="pending-row"` shows its assigned mobile + code + a **Cancel** button `data-testid="cancel-invite-btn"`. **Member roster:** claimed members (name + phone + role) with **Remove** per employee `data-testid="remove-employee-btn"`. Employees cannot see this screen.
 
 ### Screen: Activity log (owner-only) — Phase 9
 

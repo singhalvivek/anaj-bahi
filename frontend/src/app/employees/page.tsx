@@ -65,8 +65,8 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
   const [pendingError, setPendingError] = useState(false)
   const [cancellingCode, setCancellingCode] = useState<string | null>(null)
 
-  // Generate-code form
-  const [name, setName] = useState('')
+  // Generate-code form (mobile only — the employee's name comes from their Google
+  // login when they claim the code, not from the owner here)
   const [mobile, setMobile] = useState('')
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState(false)
@@ -100,18 +100,16 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
     void refreshPending()
   }, [refreshRoster, refreshPending])
 
-  const trimmedName = name.trim()
-  const canGenerate = trimmedName !== '' && isValidIndianPhone(mobile) && !generating
+  const canGenerate = isValidIndianPhone(mobile) && !generating
 
   async function onGenerate() {
     if (!user || !canGenerate) return
     setGenError(false)
     setGenerating(true)
     try {
-      const invite = await createInvite(user, bizId, trimmedName, mobile)
+      const invite = await createInvite(user, bizId, mobile)
       setLastInvite(invite)
       setCopied(false)
-      setName('')
       setMobile('')
       await refreshPending()
     } catch {
@@ -165,8 +163,6 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
     }
   }
 
-  const inputClass =
-    'w-full rounded-xl border-2 border-stone-300 bg-white px-4 py-3 text-base text-stone-800 outline-none focus:border-emerald-500'
   const labelClass = 'text-sm font-medium text-stone-600'
 
   return (
@@ -179,20 +175,6 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
       {/* Generate invite code */}
       <section className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
         <h3 className="text-lg font-semibold text-stone-800">{t('employees.addTitle')}</h3>
-
-        <label className="flex flex-col gap-1">
-          <span className={labelClass}>{t('employees.nameLabel')}</span>
-          <input
-            data-testid="employee-name-input"
-            className={inputClass}
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value)
-              setGenError(false)
-            }}
-            autoComplete="off"
-          />
-        </label>
 
         <label className="flex flex-col gap-1">
           <span className={labelClass}>{t('employees.phoneLabel')}</span>
@@ -278,9 +260,9 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
             >
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-base font-semibold text-stone-800">
-                  {invite.displayName || invite.assignedPhone}
+                  {invite.assignedPhone}
                 </span>
-                <span className="truncate text-sm text-stone-500">{invite.assignedPhone}</span>
+                <span className="text-xs text-stone-500">{t('employees.pendingAwaiting')}</span>
                 <span className="font-mono text-sm font-bold tracking-widest text-emerald-800">
                   {invite.code}
                 </span>

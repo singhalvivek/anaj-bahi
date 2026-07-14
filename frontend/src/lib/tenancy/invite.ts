@@ -51,14 +51,15 @@ function normalizeCode(code: string): string {
 }
 
 /**
- * Owner creates a one-time employee invite. Generates a random code, retries on the
- * rare id collision, and writes `invites/{code}` with `status:'unused'`. Returns the
- * created record so the UI can show the code large to copy + share out-of-band.
+ * Owner creates a one-time employee invite from a mobile number alone. Generates a
+ * random code, retries on the rare id collision, and writes `invites/{code}` with
+ * `status:'unused'`. The employee's NAME is NOT collected here — it is captured from
+ * their Google login when they claim the code (see `claimInvite`), so `displayName`
+ * starts blank. Returns the created record so the UI can show the code large to copy.
  */
 export async function createInvite(
   owner: AppUser,
   bizId: string,
-  employeeName: string,
   employeePhoneE164: string,
 ): Promise<InviteRecord> {
   const ts = Date.now()
@@ -77,7 +78,7 @@ export async function createInvite(
       role: 'employee',
       assignedPhone: employeePhoneE164,
       phoneKey: key,
-      displayName: employeeName,
+      displayName: '', // filled with the employee's own name at claim time
       addedByUid: owner.uid,
       addedByName: ownerName,
       status: 'unused',

@@ -207,14 +207,14 @@ export async function employeeJoinByCode(
 
 /**
  * As an OWNER on the `/employees` screen, generate a one-time invite code for the
- * given employee name + mobile. Returns the 6-char code shown large to copy.
+ * given mobile. The employee's name is captured at claim time (from their Google
+ * login), not here. Returns the 6-char code shown large to copy.
  */
 export async function ownerGenerateInviteCode(
   page: Page,
-  opts: { name: string; mobileLocal: string },
+  opts: { mobileLocal: string },
 ): Promise<string> {
   await expect(page.getByTestId('employees-screen')).toBeVisible()
-  await page.getByTestId('employee-name-input').fill(opts.name)
   await page.getByTestId('employee-mobile-input').fill(opts.mobileLocal)
   await page.getByTestId('generate-code-btn').click()
 

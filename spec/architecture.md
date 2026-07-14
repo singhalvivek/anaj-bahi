@@ -471,7 +471,7 @@ phoneKey rule: **E.164 with the leading `+` stripped** (digits only). `+91111111
 | Path | Doc id | Purpose | Access (Security Rules) |
 |------|--------|---------|-------------------------|
 | `users/{uid}` | Firebase Auth uid | The signed-in user's own record; **the sole basis for routing on sign-in** (`bizId` set → `ready`; else → onboarding). Fields: `{ uid, email, phone (E.164, set at onboarding), displayName, bizId \| null, role \| null, createdAt, updatedAt }` | read/write only when `uid == request.auth.uid` |
-| `invites/{code}` | one-time share **code** (6 uppercase chars, ambiguity-safe alphabet — no `O/0/I/1`) | **Owner-generated employee invite.** The owner creates it with the employee's name + mobile and shares the **code + mobile** out-of-band; the employee redeems it at first run. Fields: `{ code, bizId, role: 'employee', assignedPhone (E.164), phoneKey (normalized digits), displayName (owner's label), addedByUid, addedByName, status: 'unused'\|'claimed', claimedByUid \| null, createdAt (number), claimedAt (number \| null) }` | **get** (by-id, the code is a secret): any signed-in user; **list** (enumerate): an **owner** of `resource.data.bizId` only — so no one can enumerate another business's invites; **create/delete:** an **owner** of the business; **update:** an **owner**, OR the single-use `unused → claimed` transition stamped with `claimedByUid == request.auth.uid`. See [§ Security Rules — hardened invites + members model](#security-rules--hardened-invites--members-model-code-generator-edits-firestorerules) |
+| `invites/{code}` | one-time share **code** (6 uppercase chars, ambiguity-safe alphabet — no `O/0/I/1`) | **Owner-generated employee invite.** The owner creates it from the employee's **mobile alone** and shares the **code + mobile** out-of-band; the employee redeems it at first run, and their name is captured then from their Google login. Fields: `{ code, bizId, role: 'employee', assignedPhone (E.164), phoneKey (normalized digits), displayName (blank until claim), addedByUid, addedByName, status: 'unused'\|'claimed', claimedByUid \| null, createdAt (number), claimedAt (number \| null) }` | **get** (by-id, the code is a secret): any signed-in user; **list** (enumerate): an **owner** of `resource.data.bizId` only — so no one can enumerate another business's invites; **create/delete:** an **owner** of the business; **update:** an **owner**, OR the single-use `unused → claimed` transition stamped with `claimedByUid == request.auth.uid`. See [§ Security Rules — hardened invites + members model](#security-rules--hardened-invites--members-model-code-generator-edits-firestorerules) |
 | `businesses/{bizId}` | uuid | The business + its **business profile**. Fields: `{ id, shopName, traderName, phone, address?, createdByUid, createdByName, createdAt, updatedAt }` | read: any member of `bizId`; write: an **owner** of `bizId` |
 | `businesses/{bizId}/members/{uid}` | member uid | Per-business member (for in-app roster + rule membership checks — the **role source** for the rules). Fields: `{ uid, phone, displayName, role, addedByUid, addedByName, addedAt, status, inviteCode (string \| null — the code used at claim; null/omitted for the owner's own doc), phoneKey (normalized digits of the claimed mobile; owner: from own onboarding mobile) }` | read: any member; **create:** self **only** via the owner-bootstrap arm (role `owner` **and** the business does not yet exist) or the employee-claim arm (a matching **unused** `invites/{inviteCode}` tying `bizId` + `phoneKey`), OR an **owner** writing the roster; update: an **owner** or self; delete: an **owner** |
 | `businesses/{bizId}/bills/{billId}` | `DDMMYY/xxxxx` | Shared bill ledger (same `Bill` shape as [data.md](data.md); Phase 8 adds `createdBy` attribution snapshot) | read/write: any member of `bizId` (edit-lock still applies) |
@@ -566,7 +566,7 @@ export interface AuthContextValue {
   signInWithGoogle(): Promise<void>                      // Google popup; loads/creates users/{uid}; sets status
   setDisplayName(name: string): Promise<void>            // onboarding step 1 (persists to users/{uid}); prefilled from Google
   chooseRole(role: 'owner' | 'employee'): Promise<import('./membership').RoleRoute>  // routes: owner → create; employee → join
-  createOwnerBusiness(input: import('../tenancy/business').NewBusinessInput): Promise<void> // → status 'ready'
+  createOwnerBusiness(input: import('../tenancy/business').NewBusinessInput): Promise<void> // createBusiness + seed the local BusinessProfile (shopName/traderName/phone) so Settings + receipt header show it; → status 'ready'
   joinByCode(input: { code: string; phoneE164: string; name: string }): Promise<void> // claim invite → status 'ready'
   signOut(): Promise<void>
 }
@@ -618,10 +618,11 @@ export function checkInvite(invite: InviteRecord | null, enteredPhoneE164: strin
 // 6 chars from crypto.getRandomValues → uppercase, human-shareable, unbiased (reject-sample the RNG).
 export function generateInviteCode(): string
 
-// Owner creates an invite (random code, retry on the rare id collision). Writes invites/{code}
-// with status:'unused'. Returns the created record so the UI can show the code large to copy.
+// Owner creates an invite from a MOBILE ALONE (random code, retry on the rare id collision).
+// Writes invites/{code} with status:'unused' and a blank displayName (the employee's name is
+// captured at claim time from their Google login). Returns the record so the UI shows the code.
 export function createInvite(
-  owner: AppUser, bizId: string, employeeName: string, employeePhoneE164: string,
+  owner: AppUser, bizId: string, employeePhoneE164: string,
 ): Promise<InviteRecord>
 export function getInvite(code: string): Promise<InviteRecord | null>          // reads invites/{code}
 export function listPendingInvites(bizId: string): Promise<InviteRecord[]>      // status === 'unused', for the roster

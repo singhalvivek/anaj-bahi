@@ -89,7 +89,6 @@ test('activity log records both owner and employee bill-creates, attributed; emp
   await expect(page.getByTestId('employees-screen')).toBeVisible()
 
   const inviteCode = await ownerGenerateInviteCode(page, {
-    name: EMP_NAME,
     mobileLocal: EMP_MOBILE_LOCAL,
   })
 
