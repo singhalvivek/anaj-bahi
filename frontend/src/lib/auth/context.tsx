@@ -27,7 +27,7 @@ import {
   signOutUser,
   type AppUser,
 } from './session'
-import { checkInvite, routeRole, type Role, type RoleRoute } from './membership'
+import { checkInvite, routeOnboarding, type Role, type RoleRoute } from './membership'
 import { createBusiness, type NewBusinessInput } from '@/lib/tenancy/business'
 import { claimInvite, getInvite } from '@/lib/tenancy/invite'
 import { setActiveBusiness, setActiveActor, ensureSeeded } from '@/lib/db/repo'
@@ -41,7 +41,7 @@ export interface AuthContextValue {
   user: AppUser | null
   signInWithGoogle(): Promise<void>
   setDisplayName(name: string): Promise<void>
-  chooseRole(role: Role): Promise<RoleRoute>
+  chooseOnboardingPath(choice: 'create' | 'join'): Promise<RoleRoute>
   createOwnerBusiness(input: NewBusinessInput): Promise<void>
   joinByCode(input: { code: string; phoneE164: string; name: string }): Promise<void>
   signOut(): Promise<void>
@@ -235,12 +235,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // The role chooser is a pure local route now (no phone→business lookup):
-  // 'owner' → create-business, 'employee' → JoinByCode. Async signature kept to
-  // match the frozen context contract.
-  const chooseRole = useCallback(async (role: Role): Promise<RoleRoute> => {
-    return routeRole(role)
-  }, [])
+  // Onboarding is role-free: the chooser is a pure local route (no phone→business
+  // lookup): 'create' ('New business') → create-business (becomes owner); 'join'
+  // ('Business already registered') → JoinByCode (role from the invite). Async
+  // signature kept to match the frozen context contract.
+  const chooseOnboardingPath = useCallback(
+    async (choice: 'create' | 'join'): Promise<RoleRoute> => {
+      return routeOnboarding(choice)
+    },
+    [],
+  )
 
   const createOwnerBusiness = useCallback(
     async (input: NewBusinessInput) => {
@@ -282,12 +286,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (check.kind === 'phone-mismatch') {
         throw new AuthError('invite/phone-mismatch', 'onboarding.join.phoneMismatch')
       }
-      if (check.kind !== 'ok') {
+      if (check.kind !== 'ok' || !invite) {
         throw new AuthError('invite/not-found', 'onboarding.join.notFound')
       }
 
+      // The joined role is carried by the invite (employee or partner) — never
+      // hardcoded. claimInvite writes members/{uid}.role + users/{uid}.role from it.
       await claimInvite(named, input.code, input.phoneE164)
-      enterReady(named, check.bizId, 'employee')
+      enterReady(named, check.bizId, invite.role)
     },
     [enterReady],
   )
@@ -302,7 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     signInWithGoogle,
     setDisplayName,
-    chooseRole,
+    chooseOnboardingPath,
     createOwnerBusiness,
     joinByCode,
     signOut,

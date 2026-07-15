@@ -1,13 +1,14 @@
 'use client'
 
-// Owner-only Employees screen (Phase 8 · slice-c). Renders inside the AuthGate's
-// `ready` branch as the `/employees` route (static-export-safe). Employees are
-// refused the screen and see a labelled "owner only" notice; Security Rules are the
-// real boundary — this UI gate is the friendly first line.
+// Members screen — owner OR partner (managers) (Phase 8 · slice-c). Renders inside the
+// AuthGate's `ready` branch as the `/employees` route (static-export-safe). Employees
+// are refused the screen and see a labelled "owners & partners only" notice; Security
+// Rules are the real boundary — this UI gate is the friendly first line.
 //
-// The owner GENERATES a one-time invite code (by employee name + mobile), shares the
-// code + mobile out-of-band, then manages PENDING (unclaimed) invites and the CLAIMED
-// member roster below.
+// A manager GENERATES a one-time invite code (by mobile + a chosen role — Employee or
+// Partner), shares the code + mobile out-of-band, then manages PENDING (unclaimed)
+// invites and the CLAIMED member roster below. This roster is the ONLY place in the
+// app where a role (Owner / Partner / Employee) is displayed.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -16,7 +17,7 @@ import { useAuth } from '@/lib/auth/context'
 import { PhoneField, isValidIndianPhone } from '@/components/PhoneField'
 import { createInvite, listPendingInvites, cancelInvite } from '@/lib/tenancy/invite'
 import type { InviteRecord } from '@/lib/auth/membership'
-import { listMembers, removeEmployee, type MemberRecord } from '@/lib/tenancy/business'
+import { listMembers, removeMember, type MemberRecord } from '@/lib/tenancy/business'
 
 export default function EmployeesPage() {
   const { t } = useI18n()
@@ -26,7 +27,9 @@ export default function EmployeesPage() {
   // guard for the type and bail cleanly if it is somehow absent.
   if (!user) return null
 
-  if (user.role !== 'owner') {
+  // Managers (owner OR partner) reach this screen; employees are refused.
+  const canManage = user.role === 'owner' || user.role === 'partner'
+  if (!canManage) {
     return (
       <div
         data-testid="employees-forbidden"
@@ -65,9 +68,10 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
   const [pendingError, setPendingError] = useState(false)
   const [cancellingCode, setCancellingCode] = useState<string | null>(null)
 
-  // Generate-code form (mobile only — the employee's name comes from their Google
-  // login when they claim the code, not from the owner here)
+  // Generate-code form (mobile + a chosen role — the member's name comes from their
+  // Google login when they claim the code, not from the manager here)
   const [mobile, setMobile] = useState('')
+  const [inviteRole, setInviteRole] = useState<'employee' | 'partner'>('employee')
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState(false)
   const [lastInvite, setLastInvite] = useState<InviteRecord | null>(null)
@@ -107,10 +111,11 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
     setGenError(false)
     setGenerating(true)
     try {
-      const invite = await createInvite(user, bizId, mobile)
+      const invite = await createInvite(user, bizId, mobile, inviteRole)
       setLastInvite(invite)
       setCopied(false)
       setMobile('')
+      setInviteRole('employee')
       await refreshPending()
     } catch {
       setGenError(true)
@@ -151,12 +156,13 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
   }
 
   async function onRemove(member: MemberRecord) {
-    // Never remove an owner, and never remove yourself.
+    // A manager (owner or partner) may remove any NON-owner member (employee or
+    // partner). Owners are never removable, and no one removes themselves.
     if (member.role === 'owner') return
     if (user && member.uid === user.uid) return
     setRemovingUid(member.uid)
     try {
-      await removeEmployee(bizId, { uid: member.uid, phone: member.phone })
+      await removeMember(bizId, { uid: member.uid, phone: member.phone, role: member.role })
       await refreshRoster()
     } catch {
       setRemovingUid(null)
@@ -188,6 +194,21 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
             ariaLabel={t('employees.phoneLabel')}
             className="min-h-[48px] rounded-xl border-2 border-stone-300 bg-white text-base text-stone-800 focus-within:border-emerald-500"
           />
+        </label>
+
+        {/* Role picker — Employee or Partner. A Partner claims manager powers. */}
+        <label className="flex flex-col gap-1">
+          <span className={labelClass}>{t('employees.roleSelectLabel')}</span>
+          <select
+            data-testid="invite-role-select"
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value as 'employee' | 'partner')}
+            aria-label={t('employees.roleSelectLabel')}
+            className="min-h-[48px] w-full rounded-xl border-2 border-stone-300 bg-white px-4 text-base text-stone-800 outline-none focus:border-emerald-500"
+          >
+            <option value="employee">{t('employees.optionEmployee')}</option>
+            <option value="partner">{t('employees.optionPartner')}</option>
+          </select>
         </label>
 
         {genError && (
@@ -307,8 +328,21 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
           !loadError &&
           members.map((member) => {
             const isOwner = member.role === 'owner'
+            const isPartner = member.role === 'partner'
             const isSelf = user != null && member.uid === user.uid
+            // A manager reaches this view, so removability is purely: not an owner and
+            // not yourself. Partners can remove employees and other partners.
             const canRemove = !isOwner && !isSelf
+            const roleLabel = isOwner
+              ? t('employees.roleOwner')
+              : isPartner
+                ? t('employees.rolePartner')
+                : t('employees.roleEmployee')
+            const roleBadgeClass = isOwner
+              ? 'bg-emerald-100 text-emerald-800'
+              : isPartner
+                ? 'bg-amber-100 text-amber-800'
+                : 'bg-stone-100 text-stone-600'
             return (
               <div
                 key={member.uid}
@@ -321,13 +355,10 @@ function EmployeesOwnerView({ bizId }: { bizId: string }) {
                       {member.displayName || member.phone}
                     </span>
                     <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                        isOwner
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-stone-100 text-stone-600'
-                      }`}
+                      data-testid="member-role"
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass}`}
                     >
-                      {isOwner ? t('employees.roleOwner') : t('employees.roleEmployee')}
+                      {roleLabel}
                     </span>
                   </div>
                   <span className="truncate text-sm text-stone-500">{member.phone}</span>

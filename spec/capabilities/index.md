@@ -49,14 +49,14 @@ One file per capability. Phase 1 delivers the full local purchase-capture journe
 
 ## Firebase multi-tenant redesign (Phases 6–9)
 
-> Anaj Bahi becomes **multi-tenant, multi-user**: many businesses, each with owners + employees sharing one ledger. Firebase Auth (**Google sign-in**) + Cloud Firestore replace the retired FastAPI backend. Still **no AI/LLM** — see [../agent.md](../agent.md).
+> Anaj Bahi becomes **multi-tenant, multi-user**: many businesses, each with owners, **partners (co-owners)**, and employees sharing one ledger. Firebase Auth (**Google sign-in**) + Cloud Firestore replace the retired FastAPI backend. Still **no AI/LLM** — see [../agent.md](../agent.md).
 
 ### Phase 6 — Auth + role + business spine (the smallest first-time-right win)
 
 | Capability | File | Slice |
 |-----------|------|-------|
 | Google Sign-In | [google-auth.md](google-auth.md) | a (lib) + b (login UI) + c (gate) |
-| First-Run Name & Role Chooser | [first-run-role-chooser.md](first-run-role-chooser.md) | a (pure decision) + b (onboarding UI) |
+| First-Run Name & Onboarding-Path Chooser | [first-run-role-chooser.md](first-run-role-chooser.md) | a (pure decision) + b (onboarding UI) |
 | Business Tenancy (create + join-by-code) | [business-tenancy.md](business-tenancy.md) | a (tenancy lib) + b (create/join-by-code UI) |
 
 ### Phase 7 — Firestore shared store, offline persistence, migration; remove old backend
@@ -69,7 +69,7 @@ One file per capability. Phase 1 delivers the full local purchase-capture journe
 
 | Capability | File |
 |-----------|------|
-| Employee Management (owner adds/removes) | [employee-management.md](employee-management.md) |
+| Member Management (owner/partner adds/removes; partner role) | [employee-management.md](employee-management.md) |
 | Personal vs Business Profile | [personal-profile.md](personal-profile.md) |
 | (per-action attribution snapshots on bills/payments — see [firestore-store](firestore-store.md) / [data.md](../data.md)) | — |
 
@@ -77,7 +77,7 @@ One file per capability. Phase 1 delivers the full local purchase-capture journe
 
 | Capability | File |
 |-----------|------|
-| Activity Log (owner-only audit trail) | [activity-log.md](activity-log.md) |
+| Activity Log (owner/partner audit trail) | [activity-log.md](activity-log.md) |
 
 ## Notes
 

@@ -21,13 +21,15 @@ import { expect, type Page } from '@playwright/test'
  * for real).
  *
  * Testids target the ACTUAL shipped components (verified by grepping the source):
- * Login `auth-login`/`login-google`; RoleChooser `role-chooser`/`role-owner`/
- * `role-employee`; CreateBusiness `create-business`/`create-name-input`/
- * `create-shop-input`/`create-mobile-input`/`create-business-submit`; JoinByCode
- * `join-by-code`/`join-code-input`/`join-code-next`/`join-mobile-input`/
- * `join-mobile-next`/`join-name-input`/`join-submit`. There is NO standalone name
- * prompt in the Google flow — the name is captured inline (prefilled from Google) in
- * the create/join form. Bilingual copy is avoided: selection is by testid/role.
+ * Login `auth-login`/`login-google`; RoleChooser (role-free path chooser)
+ * `role-chooser`/`choose-new-business`/`choose-existing-business`; CreateBusiness
+ * `create-business`/`create-name-input`/`create-shop-input`/`create-mobile-input`/
+ * `create-business-submit`; JoinByCode `join-by-code`/`join-code-input`/
+ * `join-code-next`/`join-mobile-input`/`join-mobile-next`/`join-name-input`/
+ * `join-submit`. Onboarding is ROLE-FREE — no owner/partner/employee wording; the
+ * joiner's role comes from the invite. There is NO standalone name prompt in the
+ * Google flow — the name is captured inline (prefilled from Google) in the create/join
+ * form. Bilingual copy is avoided: selection is by testid/role.
  */
 
 // --- Canonical test identities ----------------------------------------------
@@ -149,8 +151,8 @@ export async function signInTestOwner(page: Page, opts: SignInOptions = {}): Pro
   await expect(gatedHome.or(roleChooser).first()).toBeVisible({ timeout: 40_000 })
   if (await gatedHome.isVisible()) return
 
-  // Owner onboarding: role → create business (name prefilled from Google).
-  await page.getByTestId('role-owner').click()
+  // Owner onboarding: New business → create business (name prefilled from Google).
+  await page.getByTestId('choose-new-business').click()
   await expect(page.getByTestId('create-business')).toBeVisible()
   await page.getByTestId('create-shop-input').fill(bizName)
   await page.getByTestId('create-mobile-input').fill(OWNER_MOBILE_LOCAL)
@@ -181,16 +183,17 @@ export async function signInGoogleUser(
 }
 
 /**
- * From the RoleChooser, drive the Employee JoinByCode redemption (code → mobile →
- * name). Leaves the app on the gated home once the claim commits. Returns without
- * asserting the terminal — the caller asserts gated-home (or an error) as needed.
+ * From the RoleChooser, drive the "Business already registered" JoinByCode redemption
+ * (code → mobile → name). The joined role (employee or partner) is carried by the
+ * invite, not chosen here. Leaves the app on the gated home once the claim commits.
+ * Returns without asserting the terminal — the caller asserts gated-home (or an error).
  */
 export async function employeeJoinByCode(
   page: Page,
   opts: { code: string; mobileLocal: string; name: string },
 ): Promise<void> {
   await expect(page.getByTestId('role-chooser')).toBeVisible()
-  await page.getByTestId('role-employee').click()
+  await page.getByTestId('choose-existing-business').click()
 
   await expect(page.getByTestId('join-by-code')).toBeVisible()
   await page.getByTestId('join-code-input').fill(opts.code)
@@ -206,16 +209,20 @@ export async function employeeJoinByCode(
 }
 
 /**
- * As an OWNER on the `/employees` screen, generate a one-time invite code for the
- * given mobile. The employee's name is captured at claim time (from their Google
- * login), not here. Returns the 6-char code shown large to copy.
+ * As a MANAGER (owner or partner) on the `/employees` Members screen, generate a
+ * one-time invite code for the given mobile and role (default Employee; pass
+ * `role: 'partner'` to mint a Partner invite). The member's name is captured at claim
+ * time (from their Google login), not here. Returns the 6-char code shown large to copy.
  */
 export async function ownerGenerateInviteCode(
   page: Page,
-  opts: { mobileLocal: string },
+  opts: { mobileLocal: string; role?: 'employee' | 'partner' },
 ): Promise<string> {
   await expect(page.getByTestId('employees-screen')).toBeVisible()
   await page.getByTestId('employee-mobile-input').fill(opts.mobileLocal)
+  if (opts.role) {
+    await page.getByTestId('invite-role-select').selectOption(opts.role)
+  }
   await page.getByTestId('generate-code-btn').click()
 
   await expect(page.getByTestId('invite-code')).toBeVisible({ timeout: 15_000 })

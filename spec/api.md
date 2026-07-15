@@ -24,13 +24,13 @@ No HTTP endpoints we define — the client talks to Firebase directly. The autho
 
 ### Firebase Auth (Google sign-in)
 - `signInWithPopup(auth, new GoogleAuthProvider())` completes sign-in. Persistence **LOCAL** (stays signed-in until explicit sign-out). Identity = the Firebase **`uid`** (stable per Google account, cross-device). **No reCAPTCHA, no SMS, no OTP, no Blaze plan** (free on Spark). Google supplies `displayName` + `email`; mobile is captured at onboarding as profile data only.
-- Wrapped by `lib/auth/session.ts` + the `AuthProvider`/`useAuth` context (`signInWithGoogle`, `setDisplayName`, `chooseRole`, `createOwnerBusiness`, `joinByCode`, `signOut`).
+- Wrapped by `lib/auth/session.ts` + the `AuthProvider`/`useAuth` context (`signInWithGoogle`, `setDisplayName`, `chooseOnboardingPath`, `createOwnerBusiness`, `joinByCode`, `signOut`).
 - **Testing:** the **Auth + Firestore emulators** (via `firebase.json`; `NEXT_PUBLIC_FIREBASE_USE_EMULATORS=1`). Google sign-in is simulated by the Auth emulator's test-IdP popup — no real Google account, no external network.
 
 ### Cloud Firestore (direct client reads/writes)
-- Business-scoped collections `businesses/{bizId}/{bills|farmers|grainTypes|activity|members}`, plus top-level `users/{uid}` and `invites/{code}` (the owner-generated employee invite). Paths frozen in architecture.md.
+- Business-scoped collections `businesses/{bizId}/{bills|farmers|grainTypes|activity|members}`, plus top-level `users/{uid}` and `invites/{code}` (the manager-generated invite carrying `role: 'employee' | 'partner'`). Paths frozen in architecture.md.
 - Reads are **live** (`onSnapshot`); writes save offline (IndexedDB persistence) and auto-sync on reconnect. Accessed via the Firestore-backed `lib/db/repo` (same function names as Phases 1–5) and `lib/tenancy/business.ts`.
-- **Auth/authorization is enforced by Firestore Security Rules** (owner-only writes to the business profile, membership, and activity-read; member-scoped ledger access). Rules are authored in Phase 8 and hardened in Phase 9.
+- **Auth/authorization is enforced by Firestore Security Rules** with three roles (`owner | partner | employee`): **owner-only** business-profile writes; **manager (owner-or-partner)** invite create/list/delete, non-owner member removal, and activity read; member-scoped ledger access. Rules are authored in Phase 8 and hardened in Phase 9.
 
 ## ~~Phase 4 — Sync API~~ — ⚠️ SUPERSEDED (removed in Phase 7)
 
@@ -82,4 +82,4 @@ Small push/pull backup service on **FastAPI + SQLite**, authenticated by a per-d
 
 - **Phases 1–3:** none — no server.
 - **Phase 4 (superseded):** a per-device **bearer token** via `Authorization: Bearer <token>`.
-- **Phases 6–9 (current):** **Firebase Authentication — phone number + SMS OTP** (E.164 identity, LOCAL persistence). No passwords, no bearer token to enter — the user is identified by their phone. Authorization (who may read/write which business data, owner-vs-employee) is enforced by **Firestore Security Rules**, not by application code. Config is 6 **public** `NEXT_PUBLIC_FIREBASE_*` values in `frontend/.env.local`; the only real secret is the E2E `FIREBASE_SERVICE_ACCOUNT` used by the test global-setup. See [architecture.md § Commands](architecture.md#firebase-env--commands-phase-6-cwd-frontend).
+- **Phases 6–9 (current):** **Firebase Authentication — phone number + SMS OTP** (E.164 identity, LOCAL persistence). No passwords, no bearer token to enter — the user is identified by their phone. Authorization (who may read/write which business data, across the three roles **owner / partner / employee**) is enforced by **Firestore Security Rules**, not by application code. Config is 6 **public** `NEXT_PUBLIC_FIREBASE_*` values in `frontend/.env.local`; the only real secret is the E2E `FIREBASE_SERVICE_ACCOUNT` used by the test global-setup. See [architecture.md § Commands](architecture.md#firebase-env--commands-phase-6-cwd-frontend).

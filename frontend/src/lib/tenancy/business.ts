@@ -4,7 +4,7 @@
 //
 // Identity is the Firebase `uid`: creating a business writes only the business, the
 // owner's member doc, and users/{uid} — there is NO owner invite/membership doc.
-// Employee onboarding is the invites/{code} flow in ./invite.ts.
+// Member onboarding (employee or partner) is the invites/{code} flow in ./invite.ts.
 //
 // Name snapshots (`displayName` / `createdByName` / `addedByName`) are written at
 // action time — never a live join — so attribution survives renames/removal.
@@ -91,12 +91,12 @@ export async function createBusiness(owner: AppUser, input: NewBusinessInput): P
   return bizId
 }
 
-// ---- Employee management (owner-only roster) ----
+// ---- Member management (owner-or-partner roster) ----
 
 /**
  * A claimed row of the in-business roster, read from `businesses/{bizId}/members`.
  * These are the members who have actually signed in and joined (the owner on
- * create; employees once they redeem an invite code).
+ * create; employees and partners once they redeem an invite code).
  */
 export interface MemberRecord {
   uid: string
@@ -114,9 +114,12 @@ export interface MemberRecord {
   phoneKey: string
 }
 
+/** Role display/sort order within the roster: owners, then partners, then employees. */
+const ROLE_ORDER: Record<Role, number> = { owner: 0, partner: 1, employee: 2 }
+
 /**
  * The roster of CLAIMED members for a business: read `businesses/{bizId}/members`
- * and sort owners first, then by `addedAt` ascending.
+ * and sort owner → partner → employee, then by `addedAt` ascending within a role.
  */
 export async function listMembers(bizId: string): Promise<MemberRecord[]> {
   const snap = await getDocs(collection(firestore, 'businesses', bizId, 'members'))
@@ -136,22 +139,25 @@ export async function listMembers(bizId: string): Promise<MemberRecord[]> {
     }
   })
   members.sort((a, b) => {
-    if (a.role !== b.role) return a.role === 'owner' ? -1 : 1
+    if (a.role !== b.role) return ROLE_ORDER[a.role] - ROLE_ORDER[b.role]
     return a.addedAt - b.addedAt
   })
   return members
 }
 
 /**
- * Owner removes a member: delete the per-business `members/{uid}` doc. Security
- * Rules then reject the removed person's reads/writes; on that person's next load
- * their client detects they are no longer a member and clears their own
- * `users/{uid}.bizId`, returning them to onboarding (removal-safety). Their own
- * `users/{uid}` doc and past bill/activity attribution snapshots are left intact.
+ * A MANAGER (owner or partner) removes a member: delete the per-business
+ * `members/{uid}` doc. Only a NON-owner target (employee or partner) is removable —
+ * the Security Rules reject removing an owner, so a partner can never remove an owner
+ * and owners are never removable through the roster. Security Rules then reject the
+ * removed person's reads/writes; on that person's next load their client detects they
+ * are no longer a member and clears their own `users/{uid}.bizId`, returning them to
+ * onboarding (removal-safety). Their own `users/{uid}` doc and past bill/activity
+ * attribution snapshots are left intact.
  */
-export async function removeEmployee(
+export async function removeMember(
   bizId: string,
-  member: { uid: string; phone: string },
+  member: { uid: string; phone: string; role: 'employee' | 'partner' },
 ): Promise<void> {
   await deleteDoc(doc(firestore, 'businesses', bizId, 'members', member.uid))
 }

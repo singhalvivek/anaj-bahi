@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { routeRole, checkInvite, phoneKey, type InviteRecord } from './membership'
+import { routeOnboarding, checkInvite, phoneKey, type InviteRecord } from './membership'
 
-describe('routeRole — the two frozen branches', () => {
-  it("'owner' → create (go to create-business)", () => {
-    expect(routeRole('owner')).toEqual({ kind: 'create' })
+describe('routeOnboarding — the two role-free branches', () => {
+  it("'create' ('New business') → { kind: 'create' } (go to create-business)", () => {
+    expect(routeOnboarding('create')).toEqual({ kind: 'create' })
   })
 
-  it("'employee' → join (go to JoinByCode)", () => {
-    expect(routeRole('employee')).toEqual({ kind: 'join' })
+  it("'join' ('Business already registered') → { kind: 'join' } (go to JoinByCode)", () => {
+    expect(routeOnboarding('join')).toEqual({ kind: 'join' })
   })
 })
 
