@@ -448,7 +448,7 @@ export const EN = {
   // ---- Phase 11 — post-save share prompt ----
   'postsave.title': 'Bill saved',
   'postsave.share': 'Share receipt',
-  'postsave.done': 'Done',
+  'postsave.done': 'Back',
 } as const
 
 export type TKey = keyof typeof EN
@@ -894,7 +894,7 @@ export const HI: Record<TKey, string> = {
   // ---- Phase 11 — post-save share prompt ----
   'postsave.title': 'बही सहेज ली गई',
   'postsave.share': 'रसीद साझा करें',
-  'postsave.done': 'हो गया',
+  'postsave.done': 'वापस',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

@@ -64,7 +64,7 @@ Add paired keys to `frontend/src/lib/i18n/dictionary.ts`. The HI object is `Reco
 |-----|--------------|--------------|
 | `postsave.title` | Bill saved | बही सहेज ली गई |
 | `postsave.share` | Share receipt | रसीद साझा करें |
-| `postsave.done` | Done | हो गया |
+| `postsave.done` | Back | वापस |
 
 (Reuse the existing `share.*` keys inside `ReceiptShareSheet`; the only new keys are the three `postsave.*` above. Any additional label added during build must also be paired.)
 
