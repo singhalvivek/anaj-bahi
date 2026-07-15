@@ -85,6 +85,9 @@ async function createMultiGrainBill(page: Page) {
   await expect(page.getByTestId('bill-total')).toContainText(EXPECTED_TOTAL)
 
   await page.getByTestId('save-bill').click()
+  // Phase 11 — a post-save share prompt now appears instead of jumping straight home.
+  await expect(page.getByTestId('post-save-share-sheet')).toBeVisible()
+  await page.getByTestId('post-save-done-btn').click()
   await page.waitForURL(/\/app\/(\?.*)?$/)
 }
 
@@ -132,6 +135,9 @@ async function createThreeGrainBill(page: Page) {
   await expect(page.getByTestId('bill-total')).toContainText(THREE_GRAIN_TOTAL)
 
   await page.getByTestId('save-bill').click()
+  // Phase 11 — a post-save share prompt now appears instead of jumping straight home.
+  await expect(page.getByTestId('post-save-share-sheet')).toBeVisible()
+  await page.getByTestId('post-save-done-btn').click()
   await page.waitForURL(/\/app\/(\?.*)?$/)
 }
 

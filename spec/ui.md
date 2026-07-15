@@ -59,7 +59,7 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 6. **Live bill total** (`LiveTotals`, reused) — at the end of the form in normal flow (NOT sticky) = **Σ the entered line Amounts − paldari** (net payable). `data-testid="bill-total"` shows the **net** total; when paldari > 0 a subtle subtotal + paldari-deduction breakdown (`data-testid="paldari-line"`) renders just above the green box.
 7. **Save** (`data-testid="save-bill"`, reused) at the end of the form. **Enabled only when** farmer name + place + purchase date are set AND every line has grainType + price > 0 + total weight > 0 + amount > 0; disabled otherwise with an inline bilingual hint (same pattern as the fresh form). `sackCount`/`deductionKg`/`paldari` are never required.
 
-**On save:** assemble a `Bill` with `entryMode: 'summary'`, each line carrying `summary: { totalWeightKg, sackCount?, deductionKg?, amount }` (and `sackWeights: []`, `deductions: []`), plus `paldari` (only when > 0; omitted otherwise), call `repo.createBill`, navigate to `/`. In edit mode (`/bills/quick?edit=<id>`) it loads the summary bill, pre-fills (incl. paldari), and `updateBill` (respecting the edit-lock). No network.
+**On save:** assemble a `Bill` with `entryMode: 'summary'`, each line carrying `summary: { totalWeightKg, sackCount?, deductionKg?, amount }` (and `sackWeights: []`, `deductions: []`), plus `paldari` (only when > 0; omitted otherwise), call `repo.createBill`. **Phase 11 (create branch only):** capture the returned `Bill` and show the **Post-Save Share Prompt** (below) instead of navigating straight home; **Done** navigates to `/`. In edit mode (`/bills/quick?edit=<id>`) it loads the summary bill, pre-fills (incl. paldari), and `updateBill` (respecting the edit-lock), navigating to `/bill?id=…` **unchanged (no prompt)**. No network.
 
 ### Screen: New Bill (`/bills/new`) — slice-b
 
@@ -80,7 +80,18 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 6. **Live bill total** (`LiveTotals`) — rendered **at the end of the form in normal flow (NOT sticky/fixed)**, updates on every keystroke = **Σ line amounts − paldari** (net payable). `data-testid="bill-total"` shows the net; when paldari > 0 a subtle subtotal + paldari-deduction breakdown (`data-testid="paldari-line"`) shows just above the green box. It must **not** be pinned to the viewport: while the trader is entering sacks the on-screen keyboard already occupies the bottom (see the sack-entry rationale below), so a pinned total + Save would leave almost nothing of the input visible on a phone.
 7. **Save** (large primary button), **also at the end of the form in normal flow** (below the live total, not fixed). `data-testid="save-bill"`. Validation: ≥1 farmer, ≥1 grain line with ≥1 sack and a price > 0; disabled otherwise with an inline hint.
 
-**On save:** assemble the `Bill` (incl. `paldari` only when > 0, omitted otherwise), call `repo.createBill`, navigate to `/` (list). No network.
+**On save:** assemble the `Bill` (incl. `paldari` only when > 0, omitted otherwise), call `repo.createBill`. **Phase 11 (create branch only):** capture the returned `Bill` and show the **Post-Save Share Prompt** (below) instead of navigating straight to `/`; **Done** navigates to `/` (list). The **edit** branch navigates to `/bill?id=…` **unchanged (no prompt)**. No network.
+
+### Screen: Post-Save Share Prompt (Phase 11) — post-save-share
+
+**Purpose:** after a **successful create** in either flow (`/bills/new` sack OR `/bills/quick` summary), offer to share the receipt right away instead of forcing a reopen. See [post-save-share](capabilities/post-save-share.md).
+
+**Key elements:** a bottom-sheet `data-testid="post-save-share-sheet"` in the same visual language as the detail-page `SharePanel` sheet (positioned below the sticky top bar so the language toggle stays reachable), with:
+- A short title (`postsave.title`, e.g. "Bill saved / बही सहेज ली गई").
+- **Share receipt** — `data-testid="post-save-share-btn"` (`postsave.share`) → opens the reused **receipt preview + share** sheet (`ReceiptShareSheet`, testids `receipt-preview` / `receipt` / `share-image` / `share-close` / `share-fallback` / `share-error` — identical to the detail-page flow), which rasterises via `shareReceiptImage` → `navigator.share({files})` with a PNG-download fallback.
+- **Done** — `data-testid="post-save-done-btn"` (`postsave.done`) → navigates to `/` (home), the same destination as before Phase 11.
+
+**Behaviour rules:** shown **only on create success** (never on validation/save failure, never on edit); fully offline (no network added); receipt language/content follow the current toggle and the calc engine. The **detail-page** Share button (`share-receipt`) and its sheet are **unchanged** — this prompt reuses the same extracted `ReceiptShareSheet` without altering that flow.
 
 ### Screen: Bill Detail / Reopen (`/bill?id=<encoded id>`) — slice-c
 

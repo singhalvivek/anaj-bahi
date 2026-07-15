@@ -79,6 +79,12 @@ One file per capability. Phase 1 delivers the full local purchase-capture journe
 |-----------|------|
 | Activity Log (owner/partner audit trail) | [activity-log.md](activity-log.md) |
 
+## Phase 11 — Post-save share prompt (additive UX)
+
+| Capability | File | Slice |
+|-----------|------|-------|
+| Post-Save Share Prompt | [post-save-share.md](post-save-share.md) | a (single frontend slice) |
+
 ## Notes
 
 - This project uses **no agent framework / no LLM** — see [../agent.md](../agent.md). The Firebase redesign does not change this.
