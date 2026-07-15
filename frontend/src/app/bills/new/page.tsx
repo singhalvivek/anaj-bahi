@@ -29,6 +29,7 @@ import {
 import { FarmerPicker } from '@/components/bill-form/FarmerPicker'
 import { GrainLineEditor } from '@/components/bill-form/GrainLineEditor'
 import { LiveTotals } from '@/components/bill-form/LiveTotals'
+import PostSaveSharePrompt from '@/components/receipt/PostSaveSharePrompt'
 
 // ---- Draft (editor) types shared with the child components ----
 
@@ -114,7 +115,7 @@ function storedLineToDraft(line: StoredGrainLine): GrainLineDraft {
 // ---- screen ----
 
 function NewBillForm() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const router = useRouter()
   const searchParams = useSearchParams()
   const editId = searchParams.get('edit') ?? '' // Next already decodes query params.
@@ -134,6 +135,15 @@ function NewBillForm() {
   const [billId, setBillId] = useState<string>('')
   const [lines, setLines] = useState<GrainLineDraft[]>([newLineDraft('')])
   const [paldari, setPaldari] = useState('') // Phase 10 — bill-level labor charge (₹)
+  const [savedBill, setSavedBill] = useState<Bill | null>(null) // Phase 11 — post-save share prompt
+
+  // Resolve a grain-type id to its name in the current language (mirrors the detail
+  // page); feeds the post-save receipt preview. Falls back to the raw id (never blank).
+  const grainName = (gid: string): string => {
+    const g = grainTypes.find((gt) => gt.id === gid)
+    if (!g) return gid
+    return lang === 'hi' ? g.nameHi : g.nameEn
+  }
 
   // Seed + load grain types on mount; in edit mode also load and pre-fill the bill.
   useEffect(() => {
@@ -319,7 +329,7 @@ function NewBillForm() {
         )
       }
 
-      await createBill({
+      const saved = await createBill({
         id,
         farmerId,
         farmerName,
@@ -332,7 +342,10 @@ function NewBillForm() {
         paldari: paldariNum > 0 ? paldariNum : undefined,
       })
 
-      router.push('/')
+      // Phase 11 — offer to share the receipt right away instead of jumping to the
+      // list; Done (in the prompt) navigates home. The edit branch above is unchanged.
+      setSavedBill(saved)
+      setSaving(false)
     } catch (err) {
       if (err instanceof BillLockedError) {
         setLockError(true)
@@ -486,6 +499,16 @@ function NewBillForm() {
             {saving ? t('action.saving') : t('action.save')}
           </button>
         </footer>
+      )}
+
+      {/* Phase 11 — post-save share prompt (create success only). Done → home. */}
+      {savedBill && (
+        <PostSaveSharePrompt
+          bill={savedBill}
+          farmerPhone={farmer?.phone}
+          grainName={grainName}
+          onDone={() => router.push('/')}
+        />
       )}
     </div>
   )

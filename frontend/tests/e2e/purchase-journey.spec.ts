@@ -79,6 +79,9 @@ test('trader creates a bill, reopens it, and toggles language', async ({ page })
 
   // --- Step 7: save → back on home with the new card ---
   await page.getByTestId('save-bill').click()
+  // Phase 11 — a post-save share prompt now appears instead of jumping straight home.
+  await expect(page.getByTestId('post-save-share-sheet')).toBeVisible()
+  await page.getByTestId('post-save-done-btn').click()
   await page.waitForURL(/\/app\/(\?.*)?$/)
   const card = page.getByTestId('bill-card').first()
   await expect(card).toBeVisible()
@@ -145,6 +148,9 @@ test('sacks bill: paldari nets the bill total end-to-end', async ({ page }) => {
   await expect(page.getByTestId('bill-total')).toContainText('3000.00')
 
   await page.getByTestId('save-bill').click()
+  // Phase 11 — a post-save share prompt now appears instead of jumping straight home.
+  await expect(page.getByTestId('post-save-share-sheet')).toBeVisible()
+  await page.getByTestId('post-save-done-btn').click()
   await page.waitForURL(/\/app\/(\?.*)?$/)
   const card = page.getByTestId('bill-card').first()
   await expect(card).toContainText('Paldari Ramesh')
