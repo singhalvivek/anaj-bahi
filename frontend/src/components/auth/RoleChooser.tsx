@@ -20,31 +20,33 @@ function errorKey(err: unknown): string {
 
 interface RoleChooserProps {
   /**
-   * Called after `chooseRole` resolves, lifting the pure RoleRoute to the parent
-   * (OnboardingFlow): `{ kind:'create' }` (Owner → CreateBusiness) or
-   * `{ kind:'join' }` (Employee → JoinByCode).
+   * Called after `chooseOnboardingPath` resolves, lifting the pure RoleRoute to the
+   * parent (OnboardingFlow): `{ kind:'create' }` (New business → CreateBusiness) or
+   * `{ kind:'join' }` (Business already registered → JoinByCode).
    */
   onDecision: (route: RoleRoute) => void
 }
 
 /**
- * Onboarding role step: pick Owner or Employee. `chooseRole` is now a pure local
- * route (no phone→business lookup) — 'owner' → create a business, 'employee' →
- * join by invite code — so recognition of returning users is enforced upstream.
+ * Onboarding-path step — ROLE-FREE. Two choices: 'New business' (create path, the
+ * creator becomes owner) or 'Business already registered' (join path, the joiner's
+ * role — employee or partner — comes from the invite). `chooseOnboardingPath` is a
+ * pure local route (no phone→business lookup); one-person-one-business is enforced
+ * upstream. The words owner/partner/employee appear NOWHERE in onboarding.
  */
 export function RoleChooser({ onDecision }: RoleChooserProps) {
   const { t } = useI18n()
-  const { chooseRole } = useAuth()
+  const { chooseOnboardingPath } = useAuth()
 
-  const [busy, setBusy] = useState<'owner' | 'employee' | null>(null)
+  const [busy, setBusy] = useState<'create' | 'join' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function pick(role: 'owner' | 'employee') {
+  async function pick(choice: 'create' | 'join') {
     if (busy) return
     setError(null)
-    setBusy(role)
+    setBusy(choice)
     try {
-      const route = await chooseRole(role)
+      const route = await chooseOnboardingPath(choice)
       onDecision(route)
     } catch (err) {
       setError(t(errorKey(err)))
@@ -73,22 +75,22 @@ export function RoleChooser({ onDecision }: RoleChooserProps) {
         <div className="flex flex-col gap-4">
           <button
             type="button"
-            data-testid="role-owner"
-            onClick={() => pick('owner')}
+            data-testid="choose-new-business"
+            onClick={() => pick('create')}
             disabled={busy !== null}
             className={cardClass}
           >
-            {t('onboarding.role.owner')}
+            {t('onboarding.path.newBusiness')}
           </button>
 
           <button
             type="button"
-            data-testid="role-employee"
-            onClick={() => pick('employee')}
+            data-testid="choose-existing-business"
+            onClick={() => pick('join')}
             disabled={busy !== null}
             className={cardClass}
           >
-            {t('onboarding.role.employee')}
+            {t('onboarding.path.existingBusiness')}
           </button>
         </div>
       </div>

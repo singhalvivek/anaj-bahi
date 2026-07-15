@@ -24,11 +24,16 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState(false)
 
-  // The business profile is owner-only editable (Phase 8). Employees see it
-  // read-only, with the Save button hidden and a small note; Security Rules are
-  // the real boundary (owner-only business writes) — this UI gate is the friendly
-  // first line.
+  // The business profile is owner-only editable (Phase 8). Partners AND employees
+  // alike see it read-only, with the Save button hidden and a small note; Security
+  // Rules are the real boundary (owner-only business writes) — this UI gate is the
+  // friendly first line. (Editing the business profile is the one manager power a
+  // partner does NOT share.)
   const isOwner = user?.role === 'owner'
+  const isPartner = user?.role === 'partner'
+  // Managers (owner or partner) see the Members + Activity nav entries. Business-
+  // profile editing stays OWNER-only (a partner does NOT get it).
+  const canManage = isOwner || isPartner
   const canEditBusiness = isOwner && loaded
 
   useEffect(() => {
@@ -81,9 +86,10 @@ export default function SettingsPage() {
     <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-5 py-8">
       <h2 className="text-2xl font-semibold text-stone-800">{t('settings.title')}</h2>
 
-      {/* Account strip — greeting + business + role + Sign out. This used to sit
-          above every screen; it now lives HERE only, so the bill list gets the
-          full viewport. `home-*` / `sign-out-btn` testids are unchanged. */}
+      {/* Account strip — greeting + business + Sign out. This used to sit above every
+          screen; it now lives HERE only, so the bill list gets the full viewport.
+          NO role badge is shown (for anyone) — roles appear only in the Members
+          roster. `home-*` / `sign-out-btn` testids are unchanged. */}
       <section
         data-testid="account-strip"
         className="flex items-center justify-between gap-2 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"
@@ -101,16 +107,6 @@ export default function SettingsPage() {
               className="truncate text-base font-bold text-stone-900"
             >
               {profile.shopName || '—'}
-            </span>
-            <span
-              data-testid="home-role"
-              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                user?.role === 'employee'
-                  ? 'bg-sky-100 text-sky-700'
-                  : 'bg-green-100 text-green-700'
-              }`}
-            >
-              {t(user?.role === 'employee' ? 'home.role.employee' : 'home.role.owner')}
             </span>
           </div>
         </div>
@@ -230,8 +226,8 @@ export default function SettingsPage() {
         )}
       </section>
 
-      {/* Employees entry — owners only (the screen itself is owner-gated too) */}
-      {isOwner && (
+      {/* Members entry — owners + partners (the screen itself is manager-gated too) */}
+      {canManage && (
         <Link
           href="/employees"
           data-testid="employees-entry"
@@ -249,8 +245,8 @@ export default function SettingsPage() {
         </Link>
       )}
 
-      {/* Activity log entry — owners only (the screen itself is owner-gated too) */}
-      {isOwner && (
+      {/* Activity log entry — owners + partners (the screen itself is manager-gated too) */}
+      {canManage && (
         <Link
           href="/activity"
           data-testid="activity-entry"

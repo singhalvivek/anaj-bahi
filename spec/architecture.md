@@ -8,7 +8,7 @@
 
 Anaj Bahi is an installable **Next.js PWA** that runs on the trader's phone. In Phase 1 there is **no backend and no network dependency**: the browser is the whole runtime. The UI (React 19 client components) reads and writes an **IndexedDB** database via **Dexie**; a pure TypeScript **calc module** computes all weights and money; a **service worker** caches the app shell so it launches offline; a lightweight **i18n context** swaps Hindi/English. Phases 1–5 built this single-user local ledger (with an optional FastAPI + SQLite personal-backup backend in the now-**superseded** Phase 4).
 
-> **Firebase multi-tenant redesign (Phases 6–9).** The app is evolving from single-user-single-device into a **multi-tenant, multi-user** ledger: many independent **businesses**, each with **owners** and **employees** who share one ledger. The FastAPI + SQLite sync backend is **replaced entirely by Firebase** — **Firebase Auth (Google sign-in)** for identity and **Cloud Firestore (accessed directly from the client, with IndexedDB offline persistence as the store)** for the shared, business-scoped data. There is still **no server we run** (no FastAPI, no container) and — critically — **still no AI/LLM/agent** (see [agent.md](agent.md)). The full frozen contracts for this redesign are in [§ Firebase multi-tenant redesign — frozen contracts](#firebase-multi-tenant-redesign-phases-69--frozen-contracts) at the end of this file.
+> **Firebase multi-tenant redesign (Phases 6–9).** The app is evolving from single-user-single-device into a **multi-tenant, multi-user** ledger: many independent **businesses**, each with **owners**, **partners** (co-owners), and **employees** who share one ledger. The FastAPI + SQLite sync backend is **replaced entirely by Firebase** — **Firebase Auth (Google sign-in)** for identity and **Cloud Firestore (accessed directly from the client, with IndexedDB offline persistence as the store)** for the shared, business-scoped data. There is still **no server we run** (no FastAPI, no container) and — critically — **still no AI/LLM/agent** (see [agent.md](agent.md)). The full frozen contracts for this redesign are in [§ Firebase multi-tenant redesign — frozen contracts](#firebase-multi-tenant-redesign-phases-69--frozen-contracts) at the end of this file.
 
 ## Component Map
 
@@ -470,69 +470,96 @@ phoneKey rule: **E.164 with the leading `+` stripped** (digits only). `+91111111
 
 | Path | Doc id | Purpose | Access (Security Rules) |
 |------|--------|---------|-------------------------|
-| `users/{uid}` | Firebase Auth uid | The signed-in user's own record; **the sole basis for routing on sign-in** (`bizId` set → `ready`; else → onboarding). Fields: `{ uid, email, phone (E.164, set at onboarding), displayName, bizId \| null, role \| null, createdAt, updatedAt }` | read/write only when `uid == request.auth.uid` |
-| `invites/{code}` | one-time share **code** (6 uppercase chars, ambiguity-safe alphabet — no `O/0/I/1`) | **Owner-generated employee invite.** The owner creates it from the employee's **mobile alone** and shares the **code + mobile** out-of-band; the employee redeems it at first run, and their name is captured then from their Google login. Fields: `{ code, bizId, role: 'employee', assignedPhone (E.164), phoneKey (normalized digits), displayName (blank until claim), addedByUid, addedByName, status: 'unused'\|'claimed', claimedByUid \| null, createdAt (number), claimedAt (number \| null) }` | **get** (by-id, the code is a secret): any signed-in user; **list** (enumerate): an **owner** of `resource.data.bizId` only — so no one can enumerate another business's invites; **create/delete:** an **owner** of the business; **update:** an **owner**, OR the single-use `unused → claimed` transition stamped with `claimedByUid == request.auth.uid`. See [§ Security Rules — hardened invites + members model](#security-rules--hardened-invites--members-model-code-generator-edits-firestorerules) |
-| `businesses/{bizId}` | uuid | The business + its **business profile**. Fields: `{ id, shopName, traderName, phone, address?, createdByUid, createdByName, createdAt, updatedAt }` | read: any member of `bizId`; write: an **owner** of `bizId` |
-| `businesses/{bizId}/members/{uid}` | member uid | Per-business member (for in-app roster + rule membership checks — the **role source** for the rules). Fields: `{ uid, phone, displayName, role, addedByUid, addedByName, addedAt, status, inviteCode (string \| null — the code used at claim; null/omitted for the owner's own doc), phoneKey (normalized digits of the claimed mobile; owner: from own onboarding mobile) }` | read: any member; **create:** self **only** via the owner-bootstrap arm (role `owner` **and** the business does not yet exist) or the employee-claim arm (a matching **unused** `invites/{inviteCode}` tying `bizId` + `phoneKey`), OR an **owner** writing the roster; update: an **owner** or self; delete: an **owner** |
+| `users/{uid}` | Firebase Auth uid | The signed-in user's own record; **the sole basis for routing on sign-in** (`bizId` set → `ready`; else → onboarding). Fields: `{ uid, email, phone (E.164, set at onboarding), displayName, bizId \| null, role: 'owner'\|'partner'\|'employee' \| null, createdAt, updatedAt }` | read/write only when `uid == request.auth.uid` |
+| `invites/{code}` | one-time share **code** (6 uppercase chars, ambiguity-safe alphabet — no `O/0/I/1`) | **Manager-generated invite** (an owner **or a partner** mints it). The manager creates it from the new member's **mobile alone** plus a chosen **role (`employee` or `partner`)** and shares the **code + mobile** out-of-band; the member redeems it at first run, and their name is captured then from their Google login. Fields: `{ code, bizId, role: 'employee'\|'partner', assignedPhone (E.164), phoneKey (normalized digits), displayName (blank until claim), addedByUid, addedByName, status: 'unused'\|'claimed', claimedByUid \| null, createdAt (number), claimedAt (number \| null) }` | **get** (by-id, the code is a secret): any signed-in user; **list** (enumerate): a **manager** (`canManage`) of `resource.data.bizId` only — so no one can enumerate another business's invites; **create/delete:** a **manager** of the business (create requires `role in ['employee','partner']`); **update:** a **manager**, OR the single-use `unused → claimed` transition stamped with `claimedByUid == request.auth.uid`. See [§ Security Rules — hardened invites + members model](#security-rules--hardened-invites--members-model-code-generator-edits-firestorerules) |
+| `businesses/{bizId}` | uuid | The business + its **business profile**. Fields: `{ id, shopName, traderName, phone, address?, createdByUid, createdByName, createdAt, updatedAt }` | read: any member of `bizId`; **write: an owner of `bizId` only** (business-profile writes stay owner-only — a partner does **not** get this) |
+| `businesses/{bizId}/members/{uid}` | member uid | Per-business member (for in-app roster + rule membership checks — the **role source** for the rules). Fields: `{ uid, phone, displayName, role: 'owner'\|'partner'\|'employee', addedByUid, addedByName, addedAt, status, inviteCode (string \| null — the code used at claim; null/omitted for the owner's own doc), phoneKey (normalized digits of the claimed mobile; owner: from own onboarding mobile) }` | read: any member; **create:** self **only** via the owner-bootstrap arm (role `owner` **and** the business does not yet exist) or the claim arm (role `employee`/`partner` referencing a matching **unused** `invites/{inviteCode}` tying `bizId` + `phoneKey` **and the same `role`**), OR a **manager** writing the roster; update: an **owner** or self; **delete:** a **manager** (`canManage`) whose target's `role != 'owner'` (owners are never removable — a partner can never remove an owner) |
 | `businesses/{bizId}/bills/{billId}` | `DDMMYY/xxxxx` | Shared bill ledger (same `Bill` shape as [data.md](data.md); Phase 8 adds `createdBy` attribution snapshot) | read/write: any member of `bizId` (edit-lock still applies) |
 | `businesses/{bizId}/farmers/{farmerId}` | uuid | Shared farmers | read/write: any member of `bizId` |
 | `businesses/{bizId}/grainTypes/{grainTypeId}` | slug/uuid | Shared grain types (seeded + custom) | read/write: any member of `bizId` |
-| `businesses/{bizId}/activity/{activityId}` | uuid | **Append-only** activity log (bill-create, payment, edit/delete) — `{ id, type, billId?, actorUid, actorPhone, actorName (snapshot), at, summary }` | **read: OWNERS only**; write (create-only): any member; no update/delete |
+| `businesses/{bizId}/activity/{activityId}` | uuid | **Append-only** activity log (bill-create, payment, edit/delete) — `{ id, type, billId?, actorUid, actorPhone, actorName (snapshot), at, summary }` | **read: MANAGERS only** (owner or partner, `canManage`); write (create-only): any member; no update/delete |
 
 > **Name snapshots (attribution survives renames/removal):** `displayName`/`createdByName`/`actorName`/`addedByName` are **snapshots written at the time of the action**, never a live join to `users`. So an activity entry or a bill's `createdBy` still shows who did it even after that person renames themselves or is removed from the business.
+
+> **Role tag visibility (UI):** a member's role (Owner / Partner / Employee) is surfaced in **exactly one place** — the **Members roster** on the Members screen, reachable only by managers (owner or partner). The Settings identity strip (`home-role`) and the Settings personal profile (`personal-role`) **no longer show any role badge**, for owners, partners, and employees alike. An employee therefore never sees an owner/partner tag anywhere. See [employee-management](capabilities/employee-management.md) / [personal-profile](capabilities/personal-profile.md).
+
+> **Three roles + partner scope:** `role ∈ 'owner' | 'partner' | 'employee'`. A **partner** is a co-owner with **owner powers minus removing an owner and minus editing the business profile** — concretely: CAN add members (employees and partners) via invite codes, read all activity, and remove employees and other partners; CANNOT remove/downgrade an owner or write `businesses/{bizId}` (business-profile edits stay owner-only). A partner exists **only** by an owner/partner inviting them with the Partner role — there is no self-serve partner onboarding. The rules encode this with an `isPartner(bizId)` helper and `canManage(bizId)` = `isOwner(bizId) || isPartner(bizId)`.
 
 > **One-person-one-business** is enforced by the **`uid`**: once `users/{uid}.bizId` is set, sign-in routes the user straight to `ready` and they **never re-enter onboarding**, so they can never reach the create-business form or the join-by-code screen to acquire a second business. A user already in a business therefore cannot redeem an invite code (they never see JoinByCode). No phone-keyed lookup is involved.
 
 ### Security Rules — hardened `invites` + `members` model (code-generator edits `firestore.rules`)
 
-The `firestore.rules` file replaces its old `match /memberships/{phoneKey}` block with a `match /invites/{code}` block **and hardens the `members/{uid}` block** to close a tenant-isolation hole (an earlier draft's `read: signedIn()` granted LIST — letting any signed-in user enumerate every business's invites — and the old members `create` let any signed-in user self-create an `owner` member for **any** bizId, since the phone/invite match was only client-side; net = cross-tenant owner escalation). The `users`, `businesses`, `bills`/`farmers`/`grainTypes`, and `activity` blocks are **UNCHANGED**; the `isMember` / `isOwner` helpers are unchanged.
+The `firestore.rules` file replaces its old `match /memberships/{phoneKey}` block with a `match /invites/{code}` block **and hardens the `members/{uid}` block** to close a tenant-isolation hole (an earlier draft's `read: signedIn()` granted LIST — letting any signed-in user enumerate every business's invites — and the old members `create` let any signed-in user self-create an `owner` member for **any** bizId, since the phone/invite match was only client-side; net = cross-tenant owner escalation). The `users`, `businesses` (profile write), and `bills`/`farmers`/`grainTypes` blocks are **UNCHANGED**; the `isMember` / `isOwner` / `isSelf` helpers are unchanged.
+
+**Two new helpers** are added and the `invites`, `members`-delete, and `activity`-read boundaries widen from owner-only to **manager (owner-or-partner)**:
+
+```
+// role source is the caller's own members/{uid} doc within the business:
+function isPartner(bizId) {
+  return isMember(bizId)
+    && get(/databases/$(database)/documents/businesses/$(bizId)/members/$(request.auth.uid)).data.role == 'partner';
+}
+function canManage(bizId) { return isOwner(bizId) || isPartner(bizId); }  // owner OR partner
+```
 
 The design is **claim/create-bootstrap-safe under a single client `writeBatch`**: Firestore rules only see **committed** state during a batch, so each write in the batch is evaluated against the pre-batch snapshot. The `members`-create rule reads the invite's still-`'unused'` committed state, while the `invites`-update rule enforces the `unused → claimed` single-use transition — the two writes are therefore mutually consistent and cannot be replayed.
 
 ```
-// GET is by-id (the code is a shared secret an employee reads pre-membership); LIST is owner-only,
-// so no one can enumerate another business's invites. Only an owner mints/cancels; the sole non-owner
-// write is the single-use unused→claimed transition, stamped with the claimer's own uid.
+// GET is by-id (the code is a shared secret a member reads pre-membership); LIST is manager-only,
+// so no one can enumerate another business's invites. Only a MANAGER (owner or partner) mints/cancels;
+// create must carry role in ['employee','partner']. The sole non-manager write is the single-use
+// unused→claimed transition, stamped with the claimer's own uid.
 match /invites/{code} {
   allow get:    if signedIn();
-  allow list:   if signedIn() && isOwner(resource.data.bizId);
-  allow create: if signedIn() && isOwner(request.resource.data.bizId);
+  allow list:   if signedIn() && canManage(resource.data.bizId);
+  allow create: if signedIn() && canManage(request.resource.data.bizId)
+                   && request.resource.data.role in ['employee', 'partner'];
   allow update: if signedIn() && (
-    isOwner(resource.data.bizId) ||
+    canManage(resource.data.bizId) ||
     ( resource.data.status == 'unused'
       && request.resource.data.status == 'claimed'
       && request.resource.data.claimedByUid == request.auth.uid )
   );
-  allow delete: if signedIn() && isOwner(resource.data.bizId);
+  allow delete: if signedIn() && canManage(resource.data.bizId);
 }
 
 match /businesses/{bizId} {
-  // …businesses/bills/farmers/grainTypes/activity unchanged…
+  // …businesses (profile write = isOwner, UNCHANGED) / bills / farmers / grainTypes unchanged…
+  // activity read widens to managers (see below).
   match /members/{uid} {
     allow read: if isMember(bizId);
-    // Self-create is tightly gated to two legitimate bootstraps, else an owner writes roster docs:
+    // Self-create is tightly gated to two legitimate bootstraps, else a MANAGER writes roster docs:
     allow create: if signedIn() && request.auth.uid == uid && (
       // owner bootstrap — ONLY while the business does not yet exist in committed state (the create
       // batch), which blocks self-owning an already-existing business:
       ( request.resource.data.role == 'owner'
         && !exists(/databases/$(database)/documents/businesses/$(bizId)) )
       ||
-      // employee claim — gated on a REAL matching UNUSED invite (by code), tying bizId + phoneKey:
-      ( request.resource.data.role == 'employee'
+      // employee/partner claim — gated on a REAL matching UNUSED invite (by code), tying bizId +
+      // phoneKey AND the same role (an invite for 'employee' can only mint an 'employee' member, etc.):
+      ( request.resource.data.role in ['employee', 'partner']
         && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode))
         && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.bizId == bizId
         && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.phoneKey == request.resource.data.phoneKey
+        && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.role == request.resource.data.role
         && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.status == 'unused' )
-    ) || isOwner(bizId);
+    ) || canManage(bizId);
     allow update: if isOwner(bizId) || isSelf(uid);
-    allow delete: if isOwner(bizId);
+    // A manager may remove any NON-owner member (employee or partner). Owners are never removable
+    // through the roster, so a partner can never remove an owner and owner-to-owner removal stays out:
+    allow delete: if canManage(bizId) && resource.data.role != 'owner';
   }
 }
+
+// activity read widens from owner-only to manager (owner or partner); write/append unchanged:
+// allow read: if canManage(bizId);  (create-only append: any member; no update/delete)
 ```
 
-To satisfy the employee-claim rule, the **`members/{uid}` doc carries `inviteCode` + `phoneKey`** written at claim time (see the collection-path map). `createBusiness`'s owner member doc has `inviteCode: null` (or omitted) and `role: 'owner'`; its create passes the owner-bootstrap arm because `businesses/{bizId}` does not yet exist in committed state when the batch is evaluated. `claimInvite`'s single `writeBatch` — invite `unused→claimed` + `members/{uid}{…, inviteCode, phoneKey}` + `users/{uid}` — commits atomically and is rules-safe by the mutual-consistency argument above.
+To satisfy the claim rule, the **`members/{uid}` doc carries `inviteCode` + `phoneKey` + `role`** written at claim time (see the collection-path map), and the invite's `role` must equal the member doc's `role`. `createBusiness`'s owner member doc has `inviteCode: null` (or omitted) and `role: 'owner'`; its create passes the owner-bootstrap arm because `businesses/{bizId}` does not yet exist in committed state when the batch is evaluated. `claimInvite`'s single `writeBatch` — invite `unused→claimed` + `members/{uid}{…, inviteCode, phoneKey, role: invite.role}` + `users/{uid}{…, role: invite.role}` — commits atomically and is rules-safe by the mutual-consistency argument above.
 
-**Rules-unit test (required, `@firebase/rules-unit-testing`) must prove:** (1) a signed-in **non-owner cannot LIST** invites; (2) a signed-in user **cannot self-create an `owner`** member on an **already-existing** business; (3) a user **cannot claim-create an `employee`** member without a matching **unused** invite, or with a **mismatched `phoneKey`**; (4) the legit **owner-create** (fresh business) and **employee-claim** (matching unused invite) paths still **succeed**.
+**Business-profile writes stay owner-only:** the `businesses/{bizId}` `update`/`write` rule remains `isOwner(bizId)` — a partner does **not** get it. Partner parity is scoped to `invites` (create/list/delete), `members` delete (non-owner targets), and `activity` read.
+
+**Rules-unit test (required, `@firebase/rules-unit-testing`) must prove:** (1) a signed-in **non-manager (employee) cannot LIST** invites, but a **partner can**; (2) a signed-in user **cannot self-create an `owner`** member on an **already-existing** business; (3) a user **cannot claim-create** an `employee` **or** `partner` member without a matching **unused** invite, with a **mismatched `phoneKey`**, or with a **role that differs from the invite's role**; (4) the legit **owner-create** (fresh business), **employee-claim**, and **partner-claim** (matching unused invite of the same role) paths still **succeed**; (5) a **partner can delete** an employee member **and** another partner member, but **cannot delete an owner** member; (6) an **owner can delete a partner** member; (7) a **partner cannot write `businesses/{bizId}`** (business profile stays owner-only); (8) a **partner can read `activity`**, an **employee cannot**.
 
 **These rules must be published** by the user (Firebase console or `firebase deploy --only firestore:rules`).
 
@@ -548,7 +575,7 @@ export interface AppUser {
   phone: string | null          // E.164, captured at onboarding — PROFILE DATA, not an auth factor
   displayName: string | null
   bizId: string | null
-  role: 'owner' | 'employee' | null
+  role: 'owner' | 'partner' | 'employee' | null
 }
 // GoogleAuthProvider + signInWithPopup; LOCAL persistence. Throws a mapped, translatable AuthError.
 export function signInWithGoogle(): Promise<void>
@@ -565,16 +592,16 @@ export interface AuthContextValue {
   user: AppUser | null                                   // set while signed-in (onboarding or ready)
   signInWithGoogle(): Promise<void>                      // Google popup; loads/creates users/{uid}; sets status
   setDisplayName(name: string): Promise<void>            // onboarding step 1 (persists to users/{uid}); prefilled from Google
-  chooseRole(role: 'owner' | 'employee'): Promise<import('./membership').RoleRoute>  // routes: owner → create; employee → join
+  chooseOnboardingPath(choice: 'create' | 'join'): Promise<import('./membership').RoleRoute>  // role-free: 'New business' → create; 'Business already registered' → join
   createOwnerBusiness(input: import('../tenancy/business').NewBusinessInput): Promise<void> // createBusiness + seed the local BusinessProfile (shopName/traderName/phone) so Settings + receipt header show it; → status 'ready'
-  joinByCode(input: { code: string; phoneE164: string; name: string }): Promise<void> // claim invite → status 'ready'
+  joinByCode(input: { code: string; phoneE164: string; name: string }): Promise<void> // claim invite (role — employee|partner — taken from the invite) → status 'ready'
   signOut(): Promise<void>
 }
 export function AuthProvider(props: { children: React.ReactNode }): JSX.Element
 export function useAuth(): AuthContextValue
 ```
 
-Routing rule the `AuthGate` implements from `status`: `loading` → splash; `signed-out` → `<LoginScreen/>` (a single **Continue with Google** button); `onboarding` → `<OnboardingFlow/>` (name → role chooser → owner-create-business | employee-join-by-code); `ready` → the app (`{children}`) with the gated home header. **No new App-Router routes** — the gate swaps surfaces by conditional rendering (static-export-safe). Session persists across reloads (LOCAL persistence); on reload `status` resolves **purely from `users/{uid}.bizId`** without re-sign-in (no phone lookup).
+Routing rule the `AuthGate` implements from `status`: `loading` → splash; `signed-out` → `<LoginScreen/>` (a single **Continue with Google** button); `onboarding` → `<OnboardingFlow/>` (name → **role-free** onboarding-path chooser: **New business** → create-business (becomes owner) | **Business already registered** → join-by-code (role from the invite)); `ready` → the app (`{children}`) with the gated home header. **No new App-Router routes** — the gate swaps surfaces by conditional rendering (static-export-safe). Session persists across reloads (LOCAL persistence); on reload `status` resolves **purely from `users/{uid}.bizId`** without re-sign-in (no phone lookup).
 
 > **Removal-safety:** because recognition is now purely `users/{uid}.bizId`, a member an owner removed still has their `bizId` set but is no longer in `businesses/{bizId}/members`. When the AuthProvider resolves a user with a `bizId`, it confirms the `members/{uid}` doc still exists; if it is gone (removed), it clears the user's own `users/{uid}.{bizId, role}` (a permitted self-write) and returns them to onboarding rather than leaving them stuck at a `ready` screen whose reads the rules reject.
 
@@ -583,16 +610,20 @@ Routing rule the `AuthGate` implements from `status`: `loading` → splash; `sig
 Recognition of returning users happens **before** onboarding (via `users/{uid}.bizId`), so the role chooser only routes a genuinely-new user to the correct onboarding sub-screen. The invite-check and code-generation logic are pure and unit-tested (they are what the JoinByCode and Generate-code flows call).
 
 ```ts
-export type Role = 'owner' | 'employee'
+export type Role = 'owner' | 'partner' | 'employee'
 
-// Role chooser is now a trivial 2-way route (no phone lookup — one-person-one-business is
-// enforced upstream because a user with a bizId never reaches onboarding at all):
+// Onboarding is ROLE-FREE — the chooser is a trivial 2-way route on the create-vs-join CHOICE (no
+// role is named or picked; no phone lookup — one-person-one-business is enforced upstream because a
+// user with a bizId never reaches onboarding at all):
 export type RoleRoute = { kind: 'create' } | { kind: 'join' }
-export function routeRole(chosenRole: Role): RoleRoute   // 'owner' → 'create'; 'employee' → 'join'
+export function routeOnboarding(choice: 'create' | 'join'): RoleRoute
+//   'create' ('New business')                → { kind: 'create' }  (creator becomes owner)
+//   'join'   ('Business already registered') → { kind: 'join' }    (joiner's role comes from the invite)
 
-// Shape read from invites/{code} (see the collection-path map):
+// Shape read from invites/{code} (see the collection-path map). role is the role the joiner will
+// receive on claim — 'employee' or 'partner' (the owner/partner picked it when generating the code):
 export interface InviteRecord {
-  code: string; bizId: string; role: 'employee'
+  code: string; bizId: string; role: 'employee' | 'partner'
   assignedPhone: string; phoneKey: string; displayName: string
   addedByUid: string; addedByName: string
   status: 'unused' | 'claimed'; claimedByUid: string | null
@@ -618,21 +649,23 @@ export function checkInvite(invite: InviteRecord | null, enteredPhoneE164: strin
 // 6 chars from crypto.getRandomValues → uppercase, human-shareable, unbiased (reject-sample the RNG).
 export function generateInviteCode(): string
 
-// Owner creates an invite from a MOBILE ALONE (random code, retry on the rare id collision).
-// Writes invites/{code} with status:'unused' and a blank displayName (the employee's name is
-// captured at claim time from their Google login). Returns the record so the UI shows the code.
+// A MANAGER (owner or partner) creates an invite from a MOBILE + a chosen ROLE ('employee' | 'partner')
+// (random code, retry on the rare id collision). Writes invites/{code} with status:'unused', the chosen
+// role, and a blank displayName (the member's name is captured at claim time from their Google login).
+// Returns the record so the UI shows the code.
 export function createInvite(
-  owner: AppUser, bizId: string, employeePhoneE164: string,
+  actor: AppUser, bizId: string, memberPhoneE164: string, role: 'employee' | 'partner',
 ): Promise<InviteRecord>
 export function getInvite(code: string): Promise<InviteRecord | null>          // reads invites/{code}
 export function listPendingInvites(bizId: string): Promise<InviteRecord[]>      // status === 'unused', for the roster
-export function cancelInvite(code: string): Promise<void>                       // owner deletes an unused invite
+export function cancelInvite(code: string): Promise<void>                       // a manager deletes an unused invite
 // claimInvite runs the JoinByCode redemption in one atomic writeBatch (rules-safe: the members-create
 // rule reads the invite's still-COMMITTED 'unused' state; the invite-update rule enforces unused→claimed):
 //   - flip invites/{code} → status:'claimed', claimedByUid, claimedAt
-//   - write businesses/{bizId}/members/{uid} (employee, active; inviteCode:code, phoneKey:phoneKey(phoneE164);
-//     addedBy* + createdAt copied from the invite) — inviteCode + phoneKey are REQUIRED by the members rule
-//   - set users/{uid}.{ bizId, role:'employee', phone, email }
+//   - write businesses/{bizId}/members/{uid} (role: invite.role, active; inviteCode:code,
+//     phoneKey:phoneKey(phoneE164); addedBy* + createdAt copied from the invite) — inviteCode + phoneKey
+//     + role are REQUIRED by the members rule (invite.role must equal the member doc's role)
+//   - set users/{uid}.{ bizId, role: invite.role, phone, email }   // role = 'employee' | 'partner'
 // Pre-condition: checkInvite(getInvite(code), phoneE164).kind === 'ok'.
 export function claimInvite(user: AppUser, code: string, phoneE164: string): Promise<void>
 ```
@@ -648,11 +681,13 @@ export function phoneKey(phoneE164: string): string     // '+911111111111' → '
 // because businesses/{bizId} does not yet exist in committed state during the batch. There is NO owner
 // invite doc — the owner's own uid recognises them on any device. Returns the new bizId.
 export function createBusiness(owner: AppUser, input: NewBusinessInput): Promise<string>
-export function listMembers(bizId: string): Promise<MemberRecord[]>       // CLAIMED roster (members subcollection)
-// removeEmployee deletes businesses/{bizId}/members/{uid}. (The removed user's own users/{uid}.bizId is cleared
-// by that user's client on their next load — see the removal-safety note above — since rules forbid writing
-// another user's users doc.) Past attribution snapshots are left intact.
-export function removeEmployee(bizId: string, member: { uid: string; phone: string }): Promise<void>
+export function listMembers(bizId: string): Promise<MemberRecord[]>       // CLAIMED roster (members subcollection; each carries role)
+// removeMember deletes businesses/{bizId}/members/{uid}. Callable by a MANAGER (owner or partner) and
+// only for a NON-owner target (employee or partner) — the rules reject removing an owner, so a partner
+// can never remove an owner and owners are never removable through the roster. (The removed user's own
+// users/{uid}.bizId is cleared by that user's client on their next load — see the removal-safety note
+// above — since rules forbid writing another user's users doc.) Past attribution snapshots are left intact.
+export function removeMember(bizId: string, member: { uid: string; phone: string; role: 'employee' | 'partner' }): Promise<void>
 ```
 
 > **`memberships/{phoneKey}` is gone**, and with it `findMembershipByPhone` and `claimEmployeeMembership`. Employee onboarding is now the `invites/{code}` flow (`createInvite` → share code+mobile → `claimInvite`).
@@ -699,4 +734,5 @@ Automatic (Firestore handles it) **plus** a visible **online/sync status + "Sync
 - Auth + Firestore run on the **Firebase emulators** (Auth `9099`, Firestore `8080`, from `firebase.json`). The app connects to them when `NEXT_PUBLIC_FIREBASE_USE_EMULATORS=1` (set for the Playwright `webServer`'s `pnpm dev`). **No real Firebase project, no real Google account, no SMS, no service-account key.**
 - **Google sign-in is simulated by the Auth emulator's test-IdP popup:** `signInWithPopup(GoogleAuthProvider)` against the emulator opens the emulator's built-in "sign-in with Google" page where the test picks/creates a Google identity (email + display name); Playwright drives that popup. The same emulator email → the same stable `uid` across a run, so returning-user recognition (`users/{uid}.bizId`) is exercised for real.
 - Playwright **`global-setup`** clears the Firestore emulator before the run via its REST endpoint (`DELETE http://127.0.0.1:8080/emulator/v1/projects/<projectId>/databases/(default)/documents`) — the emulator equivalent of the old cloud reset, needing no Admin SDK. The whole suite is wrapped by `firebase emulators:exec --only auth,firestore "playwright test"`.
-- A shared helper **`tests/e2e/support/auth.ts` → `signInTestOwner(page, { bizName })`** drives Google-popup → (onboarding-if-shown: name → Owner → shop+mobile) → app so every retained journey spec authenticates first; a dedicated `auth-onboarding.spec.ts` (sorts first, `workers: 1`) asserts the full Google-sign-in → name → owner-creates-business → gated-home path, plus the **owner-generates-code → second Google identity joins by code** round-trip.
+- A shared helper **`tests/e2e/support/auth.ts` → `signInTestOwner(page, { bizName })`** drives Google-popup → (onboarding-if-shown: name → **New business** → shop+mobile) → app so every retained journey spec authenticates first; a dedicated `auth-onboarding.spec.ts` (sorts first, `workers: 1`) asserts the full Google-sign-in → name → **New-business** → gated-home path, plus the **manager-generates-code → second Google identity joins via "Business already registered"** round-trip. The onboarding assertions use the role-free labels (`choose-new-business` / `choose-existing-business`) and confirm **no owner/partner/employee wording** appears in onboarding.
+- **Partner journey (Phase 8):** a spec exercises an owner generating a **Partner** invite (role picker), a second Google identity claiming it and landing as a partner, then that **partner** reaching the Members + Activity screens, generating a further invite, and **removing an employee and another partner** — while a direct attempt by the partner to remove the **owner** (or to write `businesses/{bizId}`) is rejected. An **employee** identity is asserted to see **no role badge** on Settings and to be refused the Members + Activity screens.

@@ -3,6 +3,7 @@ import {
   signInTestOwner,
   signInGoogleUser,
   ownerGenerateInviteCode,
+  employeeJoinByCode,
   uniqueEmail,
 } from './support/auth'
 
@@ -119,7 +120,7 @@ test('owner invites by code → employee joins, shares the ledger, is attributed
     expect(landing).toBe('onboarding')
 
     // --- NEGATIVE: correct code, WRONG mobile → distinct phone-mismatch, no join ---
-    await page2.getByTestId('role-employee').click()
+    await page2.getByTestId('choose-existing-business').click()
     await expect(page2.getByTestId('join-by-code')).toBeVisible()
     await page2.getByTestId('join-code-input').fill(inviteCode)
     await page2.getByTestId('join-code-next').click()
@@ -142,10 +143,12 @@ test('owner invites by code → employee joins, shares the ledger, is attributed
 
     await expect(page2.getByTestId('gated-home')).toBeVisible({ timeout: 25_000 })
 
-    // The employee's role badge (on Settings) reads Employee; capture their rendered name.
+    // The employee sees NO role badge on Settings (roles show only in the Members
+    // roster). Capture their rendered name from the account strip.
     await page2.getByTestId('nav-settings').click()
     await page2.waitForURL('**/app/settings/**')
-    await expect(page2.getByTestId('home-role')).toBeVisible()
+    await expect(page2.getByTestId('home-user-name')).toBeVisible()
+    await expect(page2.getByTestId('home-role')).toHaveCount(0)
     const empName = ((await page2.getByTestId('home-user-name').textContent()) ?? '').trim() || EMP_NAME
     await page2.getByTestId('nav-bills').click()
 
@@ -200,5 +203,94 @@ test('owner invites by code → employee joins, shares the ledger, is attributed
     await expect(page2.getByTestId('employees-screen')).toHaveCount(0)
   } finally {
     await empContext.close()
+  }
+})
+
+const PARTNER_NAME = 'Partner One'
+const PARTNER_MOBILE_LOCAL = '9000000033'
+const PARTNER_EMP_MOBILE_LOCAL = '9000000044'
+
+test('owner invites a PARTNER (role picker) → partner joins, reaches Members + Activity, mints an invite, but cannot edit the business profile', async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(180_000)
+
+  // ============================================================
+  // Context A — OWNER: generate a PARTNER invite via the role picker
+  // ============================================================
+  await signInTestOwner(page)
+  await page.getByTestId('lang-toggle-en').click()
+
+  await page.getByTestId('nav-settings').click()
+  await page.waitForURL('**/app/settings/**')
+  await page.getByTestId('employees-entry').click()
+  await page.waitForURL('**/app/employees/**')
+  await expect(page.getByTestId('employees-screen')).toBeVisible()
+
+  // Pick the Partner role in the invite-role-select, then generate the code.
+  const partnerInvite = await ownerGenerateInviteCode(page, {
+    mobileLocal: PARTNER_MOBILE_LOCAL,
+    role: 'partner',
+  })
+
+  // ============================================================
+  // Context B — the invited PARTNER (a distinct Google identity)
+  // ============================================================
+  const partnerContext = await browser.newContext()
+  const page2 = await partnerContext.newPage()
+  try {
+    const landing = await signInGoogleUser(page2, {
+      email: uniqueEmail('roles-partner'),
+      displayName: PARTNER_NAME,
+    })
+    expect(landing).toBe('onboarding')
+
+    // "Business already registered" → redeem the partner invite (role from the invite).
+    await employeeJoinByCode(page2, {
+      code: partnerInvite,
+      mobileLocal: PARTNER_MOBILE_LOCAL,
+      name: PARTNER_NAME,
+    })
+    await expect(page2.getByTestId('gated-home')).toBeVisible({ timeout: 25_000 })
+
+    await page2.getByTestId('lang-toggle-en').click()
+
+    // --- Partner reaches Settings: NO role badge; Members + Activity entries visible ---
+    await page2.getByTestId('nav-settings').click()
+    await page2.waitForURL('**/app/settings/**')
+    await expect(page2.getByTestId('home-role')).toHaveCount(0)
+    await expect(page2.getByTestId('employees-entry')).toBeVisible()
+    await expect(page2.getByTestId('activity-entry')).toBeVisible()
+
+    // --- Partner sees the business profile READ-ONLY (owner-only edit) ---
+    await expect(page2.getByTestId('business-readonly-note')).toBeVisible()
+    await expect(page2.getByTestId('settings-shop')).toBeDisabled()
+    await expect(page2.getByTestId('settings-save')).toHaveCount(0)
+
+    // --- Partner reaches the Members screen and can MINT a further invite ---
+    await page2.getByTestId('employees-entry').click()
+    await page2.waitForURL('**/app/employees/**')
+    await expect(page2.getByTestId('employees-screen')).toBeVisible()
+    const partnerMintedCode = await ownerGenerateInviteCode(page2, {
+      mobileLocal: PARTNER_EMP_MOBILE_LOCAL,
+    })
+    expect(partnerMintedCode).toMatch(/^[A-Z2-9]{6}$/)
+
+    // --- Partner reaches the Activity screen (manager read) ---
+    await page2.getByTestId('nav-settings').click()
+    await page2.waitForURL('**/app/settings/**')
+    await page2.getByTestId('activity-entry').click()
+    await page2.waitForURL('**/app/activity/**')
+    await expect(page2.getByTestId('activity-screen')).toBeVisible()
+    await expect(page2.getByTestId('activity-forbidden')).toHaveCount(0)
+
+    // --- Back on the OWNER: the roster shows the partner with a Partner badge ---
+    await page.goto('./employees/')
+    const partnerRow = page.getByTestId('employee-row').filter({ hasText: PARTNER_NAME })
+    await expect(partnerRow).toBeVisible({ timeout: 25_000 })
+    await expect(partnerRow.getByTestId('member-role')).toContainText(/partner/i)
+  } finally {
+    await partnerContext.close()
   }
 })

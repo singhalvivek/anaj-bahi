@@ -7,7 +7,7 @@
 // sub-screen. One-person-one-business is enforced upstream (a user with a bizId
 // never reaches onboarding), so no phone→business lookup happens here anymore.
 
-export type Role = 'owner' | 'employee'
+export type Role = 'owner' | 'partner' | 'employee'
 
 /**
  * E.164 → digits-only (leading `+` stripped). `'+911111111111'` → `'911111111111'`.
@@ -19,20 +19,27 @@ export function phoneKey(phoneE164: string): string {
   return phoneE164.replace(/^\+/, '').replace(/\D/g, '')
 }
 
-// Role chooser is a trivial 2-way route (no phone lookup): 'owner' → create a
-// business; 'employee' → join an existing business by invite code.
+// Onboarding is ROLE-FREE — the chooser is a trivial 2-way route on the create-vs-join
+// CHOICE (no role is named or picked): 'New business' → create a business (creator
+// becomes owner); 'Business already registered' → join an existing business by invite
+// code (the joiner's role — employee or partner — comes from the invite, not this
+// choice). One-person-one-business is enforced upstream, so no phone lookup happens here.
 export type RoleRoute = { kind: 'create' } | { kind: 'join' }
 
-/** 'owner' → { kind:'create' } (create-business); 'employee' → { kind:'join' } (JoinByCode). */
-export function routeRole(chosenRole: Role): RoleRoute {
-  return chosenRole === 'owner' ? { kind: 'create' } : { kind: 'join' }
+/**
+ * Route the onboarding-path choice.
+ *   'create' ('New business')                → { kind: 'create' }  (creator becomes owner)
+ *   'join'   ('Business already registered') → { kind: 'join' }    (role comes from the invite)
+ */
+export function routeOnboarding(choice: 'create' | 'join'): RoleRoute {
+  return choice === 'create' ? { kind: 'create' } : { kind: 'join' }
 }
 
 /** Shape read from `invites/{code}` (see the collection-path map). */
 export interface InviteRecord {
   code: string
   bizId: string
-  role: 'employee'
+  role: 'employee' | 'partner'
   assignedPhone: string
   phoneKey: string
   displayName: string

@@ -2,41 +2,46 @@ rules_version = '2';
 
 // Anaj Bahi — Firestore Security Rules
 //
-// PHASE 8 (role boundaries) + PHASE 9 (finalized/hardened). Phase 8 replaced the
-// earlier interim "any signed-in user" rules with real per-role boundaries; Phase 9
-// FINALIZES them — the activity path is append-only (create-only, no update/delete)
-// with OWNER-only reads, and all other boundaries below are the confirmed final pass.
+// THREE-ROLE model (owner | partner | employee). A PARTNER is a co-owner with owner
+// powers MINUS removing an owner and MINUS editing the business profile. Managers
+// (owner OR partner, `canManage`) mint/list/cancel invites, remove non-owner members,
+// and read the activity log; owner-only powers are limited to writing the business
+// profile (`businesses/{bizId}`) and are unchanged.
+//
 // Drawn from the frozen model in
-// spec/architecture.md § "Firestore data model — frozen collection-path map":
+// spec/architecture.md § "Security Rules — hardened invites + members model":
 //   - users/{uid}                      → only the owner (uid == request.auth.uid)
-//   - invites/{code}                   → read: any signed-in user (an employee reads
-//                                         the invite to verify code+mobile before they
-//                                         are a member); create/update: an owner of the
-//                                         invite's bizId OR the claimer stamping their
-//                                         own uid; delete: an owner of the business
-//   - businesses/{bizId}               → read: any member; write: an owner
+//   - invites/{code}                   → get: any signed-in user (a member reads their
+//                                         one secret code to verify code+mobile before
+//                                         they are a member); list/create/delete: a
+//                                         MANAGER (owner or partner) of the invite's
+//                                         bizId; create requires role in
+//                                         ['employee','partner']; update: a manager OR
+//                                         the claimer stamping their own uid
+//                                         (unused → claimed)
+//   - businesses/{bizId}               → read: any member; write: an OWNER (profile
+//                                         writes stay owner-only — a partner does NOT
+//                                         get this)
 //   - businesses/{bizId}/members/{uid} → read: any member; create: self ONLY via the
 //                                         owner-bootstrap arm (role owner + business not
-//                                         yet existing) or the employee-claim arm (a
-//                                         matching UNUSED invites/{inviteCode} tying
-//                                         bizId + phoneKey), OR an owner; update: owner
-//                                         or self; delete: owner
+//                                         yet existing) or the claim arm (a matching
+//                                         UNUSED invites/{inviteCode} tying bizId +
+//                                         phoneKey + the SAME role), OR a MANAGER;
+//                                         update: owner or self; delete: a MANAGER whose
+//                                         target's role != 'owner' (owners are never
+//                                         removable — a partner can never remove an owner)
 //   - businesses/{bizId}/bills|farmers|grainTypes → read/write: any member of bizId
-//   - businesses/{bizId}/activity      → read: OWNERS only; create-only for members;
-//                                         no update/delete (Phase 9 — final append-only)
+//   - businesses/{bizId}/activity      → read: MANAGERS (owner or partner); create-only
+//                                         for members; no update/delete (append-only)
 //
 // These rules are claim-bootstrap-safe: verified against the onboarding writeBatch
 // in lib/tenancy/business.ts (createBusiness) and lib/tenancy/invite.ts (claimInvite)
-// — the owner and employee self-create their own member docs before any membership
+// — the owner and joiner self-create their own member docs before any membership
 // exists to check, so members create allows `request.auth.uid == uid`, and the invite
 // claim update allows `claimedByUid == request.auth.uid`.
 //
-// NOTE: the activity match block below is UNCHANGED from Phase 8 (it was already the
-// hardened target: create-only for members, owner-only read, update/delete forbidden).
-// Phase 9 slice-a only updated these COMMENTS — the enforced rules are byte-identical,
-// so NO re-publish is required for this change. (These rules must, of course, have been
-// PUBLISHED once — via the Firebase console or `firebase deploy --only firestore:rules`
-// — for the app and the slice-c role E2E (activity-log.spec.ts) to enforce them.)
+// These rules must be PUBLISHED (Firebase console or `firebase deploy --only
+// firestore:rules`) for the app and the role E2E to enforce them.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -45,63 +50,75 @@ service cloud.firestore {
     function memberDoc(bizId) { return /databases/$(database)/documents/businesses/$(bizId)/members/$(request.auth.uid); }
     function isMember(bizId) { return signedIn() && exists(memberDoc(bizId)); }
     function isOwner(bizId) { return isMember(bizId) && get(memberDoc(bizId)).data.role == 'owner'; }
+    // A partner is a co-owner (manager) — the role source is the caller's own member doc.
+    function isPartner(bizId) { return isMember(bizId) && get(memberDoc(bizId)).data.role == 'partner'; }
+    // canManage = owner OR partner. Gates invites, non-owner member removal, activity read.
+    function canManage(bizId) { return isOwner(bizId) || isPartner(bizId); }
 
     match /users/{uid} {
       allow read, write: if isSelf(uid);
     }
 
-    // Owner-generated one-time employee invites (invites/{code}). GET is by-id (the
-    // code is a shared secret an employee reads pre-membership); LIST is owner-only,
-    // so no one can enumerate another business's invites. Only an owner mints/cancels;
-    // the sole non-owner write is the single-use unused→claimed transition, stamped
-    // with the claimer's own uid.
+    // Manager-generated one-time invites (invites/{code}) carrying a chosen role
+    // (employee or partner). GET is by-id (the code is a shared secret a member reads
+    // pre-membership); LIST is manager-only, so no one can enumerate another business's
+    // invites. Only a MANAGER mints/cancels; create must carry role in
+    // ['employee','partner']. The sole non-manager write is the single-use
+    // unused→claimed transition, stamped with the claimer's own uid.
     match /invites/{code} {
       allow get:    if signedIn();
-      allow list:   if signedIn() && isOwner(resource.data.bizId);
-      allow create: if signedIn() && isOwner(request.resource.data.bizId);
+      allow list:   if signedIn() && canManage(resource.data.bizId);
+      allow create: if signedIn() && canManage(request.resource.data.bizId)
+                       && request.resource.data.role in ['employee', 'partner'];
       allow update: if signedIn() && (
-        isOwner(resource.data.bizId) ||
+        canManage(resource.data.bizId) ||
         ( resource.data.status == 'unused'
           && request.resource.data.status == 'claimed'
           && request.resource.data.claimedByUid == request.auth.uid )
       );
-      allow delete: if signedIn() && isOwner(resource.data.bizId);
+      allow delete: if signedIn() && canManage(resource.data.bizId);
     }
 
     match /businesses/{bizId} {
       allow read: if isMember(bizId);
       allow create: if signedIn() && request.resource.data.createdByUid == request.auth.uid;
+      // Business-profile writes stay OWNER-only — a partner does NOT get this.
       allow update: if isOwner(bizId);
       allow delete: if false;
 
       match /members/{uid} {
         allow read: if isMember(bizId);
-        // Self-create is tightly gated to two legitimate bootstraps, else an owner
+        // Self-create is tightly gated to two legitimate bootstraps, else a MANAGER
         // writes roster docs. Rules see only COMMITTED state during a client batch,
         // so the owner-bootstrap arm reads businesses/{bizId} as still-absent, and the
-        // employee-claim arm reads the invite as still-'unused'.
+        // claim arm reads the invite as still-'unused'.
         allow create: if signedIn() && request.auth.uid == uid && (
           // owner bootstrap — ONLY while the business does not yet exist (create batch),
           // which blocks self-owning an already-existing business:
           ( request.resource.data.role == 'owner'
             && !exists(/databases/$(database)/documents/businesses/$(bizId)) )
           ||
-          // employee claim — gated on a REAL matching UNUSED invite (by code), tying
-          // bizId + phoneKey:
-          ( request.resource.data.role == 'employee'
+          // employee/partner claim — gated on a REAL matching UNUSED invite (by code),
+          // tying bizId + phoneKey AND the same role (an 'employee' invite can only mint
+          // an 'employee' member, a 'partner' invite only a 'partner' member):
+          ( request.resource.data.role in ['employee', 'partner']
             && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode))
             && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.bizId == bizId
             && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.phoneKey == request.resource.data.phoneKey
+            && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.role == request.resource.data.role
             && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.status == 'unused' )
-        ) || isOwner(bizId);
+        ) || canManage(bizId);
         allow update: if isOwner(bizId) || isSelf(uid);
-        allow delete: if isOwner(bizId);
+        // A MANAGER may remove any NON-owner member (employee or partner). Owners are
+        // never removable through the roster, so a partner can never remove an owner:
+        allow delete: if canManage(bizId) && resource.data.role != 'owner';
       }
       match /bills/{billId}      { allow read, write: if isMember(bizId); }
       match /farmers/{farmerId}  { allow read, write: if isMember(bizId); }
       match /grainTypes/{gtId}   { allow read, write: if isMember(bizId); }
       match /activity/{activityId} {
-        allow read: if isOwner(bizId);
+        // MANAGER-only read (owner or partner); create-only append for any member.
+        allow read: if canManage(bizId);
         allow create: if isMember(bizId);
         allow update, delete: if false;
       }

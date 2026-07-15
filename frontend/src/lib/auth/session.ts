@@ -16,7 +16,7 @@ export interface AppUser {
   phone: string | null // E.164, captured at onboarding — PROFILE DATA, not an auth factor
   displayName: string | null
   bizId: string | null
-  role: 'owner' | 'employee' | null
+  role: 'owner' | 'partner' | 'employee' | null
 }
 
 /**

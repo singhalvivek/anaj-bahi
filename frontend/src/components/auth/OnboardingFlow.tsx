@@ -14,10 +14,12 @@ import { JoinByCode } from './JoinByCode'
  * up front — the name is captured inline (prefilled, editable) in whichever form
  * the role choice routes to.
  *
- * Steps:
- *   1. RoleChooser    — Owner / Employee → lifts a pure RoleRoute here.
- *   2a. CreateBusiness — route `{ kind:'create' }` (Owner): name + shop + mobile.
- *   2b. JoinByCode     — route `{ kind:'join' }`  (Employee): code → mobile → name.
+ * Steps (role-free onboarding — no owner/partner/employee wording):
+ *   1. RoleChooser    — New business / Business already registered → lifts a RoleRoute.
+ *   2a. CreateBusiness — route `{ kind:'create' }` (New business): name + shop + mobile;
+ *                        the creator becomes owner.
+ *   2b. JoinByCode     — route `{ kind:'join' }` (Business already registered): code →
+ *                        mobile → name; the joiner's role comes from the invite.
  *
  * On the create/join success the AuthProvider flips `status` → `ready`, so this
  * component simply unmounts (the AuthGate switches surfaces).

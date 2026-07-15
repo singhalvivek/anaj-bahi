@@ -20,9 +20,10 @@ import {
  * Runs FIRST (it sorts alphabetically before the journey/roles specs; workers:1 +
  * fullyParallel:false make spec files run serially), so it sees the CLEAN emulator
  * state that global-setup just reset — and therefore drives the FULL onboarding
- * once: Google sign-in (via the Auth-emulator test-IdP popup) → RoleChooser → Owner
- * → create business (name PREFILLED from Google + editable, shop, mobile) → gated
- * home. It then asserts the real Firestore/Auth writes (users/{uid}, businesses/
+ * once: Google sign-in (via the Auth-emulator test-IdP popup) → role-free path chooser
+ * → New business → create business (name PREFILLED from Google + editable, shop,
+ * mobile) → gated home. It then asserts the real Firestore/Auth writes (users/{uid},
+ * businesses/
  * {bizId}, members/{uid}) straight from the emulators, session persistence across a
  * reload, and sign-out.
  *
@@ -51,11 +52,16 @@ test('clean user: Google sign-in → owner creates business → gated home; docs
   // --- Continue with Google → the Auth-emulator test-IdP popup → new identity ---
   await signInWithGoogleEmulator(page, { email: OWNER_EMAIL, displayName: OWNER_NAME })
 
-  // --- Onboarding step 1: RoleChooser → Owner (no standalone name prompt) ---
+  // --- Onboarding step 1: role-free path chooser → New business (no standalone name
+  // prompt). The chooser must show NO owner/partner/employee wording. ---
   // Generous: the FIRST Firestore-emulator read of the run (cold JVM) can be slow.
   await expect(page.getByTestId('onboarding-flow')).toBeVisible({ timeout: 40_000 })
   await expect(page.getByTestId('role-chooser')).toBeVisible()
-  await page.getByTestId('role-owner').click()
+  await expect(page.getByTestId('choose-new-business')).toBeVisible()
+  await expect(page.getByTestId('choose-existing-business')).toBeVisible()
+  // Role-free: no owner/partner/employee wording anywhere in onboarding.
+  await expect(page.getByTestId('role-chooser')).not.toContainText(/owner|partner|employee|मालिक|साझेदार|कर्मचारी/i)
+  await page.getByTestId('choose-new-business').click()
 
   // --- Onboarding step 2: create the business ---
   await expect(page.getByTestId('create-business')).toBeVisible()
@@ -102,7 +108,8 @@ test('clean user: Google sign-in → owner creates business → gated home; docs
   await page.getByTestId('nav-settings').click()
   await page.waitForURL('**/app/settings/**')
   await expect(page.getByTestId('home-user-name')).toContainText(OWNER_NAME)
-  await expect(page.getByTestId('home-role')).toContainText(/owner|मालिक/i)
+  // No role badge anywhere in Settings — roles show only in the Members roster.
+  await expect(page.getByTestId('home-role')).toHaveCount(0)
   await expect(page.getByTestId('sign-out-btn')).toBeVisible()
   // NOTE: the account-strip `home-business-name` reflects the LOCAL Dexie business
   // *profile* (lib/settings/profile → receipt header, default "My Shop"), which is a

@@ -1,4 +1,5 @@
-// Invite-code helpers — owner-generated one-time employee invites.
+// Invite-code helpers — manager-generated (owner or partner) one-time invites
+// carrying a chosen role (employee or partner).
 //
 // Contract: architecture.md § Invite-code generation — lib/tenancy/invite.ts and
 // § Firestore data model (invites/{code}). `generateInviteCode` is pure and
@@ -51,16 +52,18 @@ function normalizeCode(code: string): string {
 }
 
 /**
- * Owner creates a one-time employee invite from a mobile number alone. Generates a
- * random code, retries on the rare id collision, and writes `invites/{code}` with
- * `status:'unused'`. The employee's NAME is NOT collected here — it is captured from
- * their Google login when they claim the code (see `claimInvite`), so `displayName`
- * starts blank. Returns the created record so the UI can show the code large to copy.
+ * A MANAGER (owner or partner) creates a one-time invite from a mobile number alone
+ * plus a chosen `role` (`'employee'` or `'partner'`). Generates a random code, retries
+ * on the rare id collision, and writes `invites/{code}` with `status:'unused'` and the
+ * chosen role. The member's NAME is NOT collected here — it is captured from their
+ * Google login when they claim the code (see `claimInvite`), so `displayName` starts
+ * blank. Returns the created record so the UI can show the code large to copy.
  */
 export async function createInvite(
   owner: AppUser,
   bizId: string,
   employeePhoneE164: string,
+  role: 'employee' | 'partner',
 ): Promise<InviteRecord> {
   const ts = Date.now()
   const key = phoneKey(employeePhoneE164)
@@ -75,7 +78,7 @@ export async function createInvite(
     const record: InviteRecord = {
       code,
       bizId,
-      role: 'employee',
+      role,
       assignedPhone: employeePhoneE164,
       phoneKey: key,
       displayName: '', // filled with the employee's own name at claim time
@@ -117,15 +120,16 @@ export async function cancelInvite(code: string): Promise<void> {
 }
 
 /**
- * Employee redeems an invite in one atomic `writeBatch`:
+ * The invited member redeems an invite in one atomic `writeBatch`:
  *   - flip `invites/{code}` → `status:'claimed'`, `claimedByUid`, `claimedAt`
- *   - write `businesses/{bizId}/members/{uid}` (employee, active; attribution copied
- *     from the invite)
- *   - set `users/{uid}` → `{ bizId, role:'employee', phone, email, displayName }`
+ *   - write `businesses/{bizId}/members/{uid}` (`role: invite.role` — employee or
+ *     partner — active; attribution copied from the invite)
+ *   - set `users/{uid}` → `{ bizId, role: invite.role, phone, email, displayName }`
  *
- * Pre-condition (enforced by the caller): checkInvite(getInvite(code), phoneE164)
- * resolved to `{ kind:'ok' }`. The employee's chosen name is taken from
- * `user.displayName` (set in the JoinByCode name step before this call).
+ * The member doc MUST carry the same `role` as the invite — the hardened members-create
+ * rule verifies `invite.role == member.role`. Pre-condition (enforced by the caller):
+ * checkInvite(getInvite(code), phoneE164) resolved to `{ kind:'ok' }`. The member's
+ * chosen name is taken from `user.displayName` (set in the JoinByCode name step).
  */
 export async function claimInvite(user: AppUser, code: string, phoneE164: string): Promise<void> {
   const normalized = normalizeCode(code)
@@ -153,7 +157,7 @@ export async function claimInvite(user: AppUser, code: string, phoneE164: string
     uid: user.uid,
     phone: phoneE164,
     displayName: name,
-    role: 'employee',
+    role: invite.role,
     addedByUid: invite.addedByUid,
     addedByName: invite.addedByName,
     addedAt: invite.createdAt,
@@ -162,13 +166,13 @@ export async function claimInvite(user: AppUser, code: string, phoneE164: string
     phoneKey: phoneKey(phoneE164),
   })
 
-  // users/{uid} — routes the employee into the shared business
+  // users/{uid} — routes the member into the shared business with the invite's role
   batch.set(
     doc(firestore, 'users', user.uid),
     {
       uid: user.uid,
       bizId: invite.bizId,
-      role: 'employee',
+      role: invite.role,
       phone: phoneE164,
       email: user.email ?? null,
       displayName: name,

@@ -1,10 +1,10 @@
 'use client'
 
-// Owner-only Activity-log screen (Phase 9). Renders inside the AuthGate's `ready`
-// branch as the `/activity` route (static-export-safe, mirrors `/employees`).
-// Employees are refused the feed and see a labelled "owner only" notice; Security
-// Rules are the real boundary (activity reads are owner-only) — this UI gate is
-// the friendly first line.
+// Activity-log screen — owner OR partner (managers) (Phase 9). Renders inside the
+// AuthGate's `ready` branch as the `/activity` route (static-export-safe, mirrors
+// `/employees`). Employees are refused the feed and see a labelled "owners & partners
+// only" notice; Security Rules are the real boundary (activity reads are manager-only,
+// `canManage`) — this UI gate is the friendly first line.
 
 import Link from 'next/link'
 import { useI18n } from '@/lib/i18n/context'
@@ -19,7 +19,8 @@ export default function ActivityPage() {
   // guard for the type and bail cleanly if it is somehow absent.
   if (!user) return null
 
-  if (user.role !== 'owner') {
+  const canManage = user.role === 'owner' || user.role === 'partner'
+  if (!canManage) {
     return (
       <div
         data-testid="activity-forbidden"

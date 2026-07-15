@@ -43,8 +43,6 @@ export function PersonalProfile() {
   }, [user?.phone])
 
   const trimmed = name.trim()
-  const isEmployee = user?.role === 'employee'
-  const roleLabel = isEmployee ? t('personal.roleEmployee') : t('personal.roleOwner')
 
   async function onSave() {
     if (!trimmed) return
@@ -94,16 +92,9 @@ export function PersonalProfile() {
       data-testid="personal-profile"
       className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm"
     >
+      {/* No role badge — roles are shown only in the Members roster (managers-only). */}
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-lg font-semibold text-stone-800">{t('personal.title')}</h3>
-        <span
-          data-testid="personal-role"
-          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
-            isEmployee ? 'bg-sky-100 text-sky-700' : 'bg-green-100 text-green-700'
-          }`}
-        >
-          {roleLabel}
-        </span>
       </div>
 
       {error && (

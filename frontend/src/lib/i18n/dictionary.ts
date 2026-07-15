@@ -252,10 +252,10 @@ export const EN = {
   'onboarding.name.continue': 'Continue',
   'onboarding.name.required': 'Please enter your name',
 
-  // onboarding — role chooser
+  // onboarding — role-free path chooser (New business / Business already registered)
   'onboarding.role.title': 'How will you use Anaj Bahi?',
-  'onboarding.role.owner': 'I am an Owner',
-  'onboarding.role.employee': 'I am an Employee',
+  'onboarding.path.newBusiness': 'New business',
+  'onboarding.path.existingBusiness': 'Business already registered',
 
   // onboarding — create business (owner)
   'onboarding.createBusiness.title': 'Create your business',
@@ -274,10 +274,8 @@ export const EN = {
   'onboarding.askOwner.yourPhone': 'Your phone number',
   'onboarding.askOwner.signOut': 'Sign out',
 
-  // gated home header (name + business + role + sign out)
+  // gated home header (name + business + sign out — NO role badge)
   'home.greeting': 'Namaste',
-  'home.role.owner': 'Owner',
-  'home.role.employee': 'Employee',
   'home.signOut': 'Sign out',
 
   // "shared cloud & roles — coming soon" banner
@@ -337,8 +335,8 @@ export const EN = {
   'syncStatus.syncedNow': 'Synced',
 
   // ---- Phase 8 — employee management (owner-only Employees screen) ----
-  'employees.title': 'Employees',
-  'employees.addTitle': 'Add an employee',
+  'employees.title': 'Members',
+  'employees.addTitle': 'Add a member',
   'employees.phoneLabel': 'Phone number',
   'employees.nameLabel': 'Name',
   'employees.add': 'Add',
@@ -348,9 +346,13 @@ export const EN = {
   'employees.empty': 'No employees yet — add one above',
   'employees.remove': 'Remove',
   'employees.removing': 'Removing…',
-  'employees.ownerOnly': 'Only the owner can manage employees',
+  'employees.ownerOnly': 'Only an owner or partner can manage members',
   'employees.roleOwner': 'Owner',
+  'employees.rolePartner': 'Partner',
   'employees.roleEmployee': 'Employee',
+  'employees.roleSelectLabel': 'Role',
+  'employees.optionEmployee': 'Employee',
+  'employees.optionPartner': 'Partner',
   'employees.back': 'Back',
   'employees.invited': 'Invited',
   'employees.active': 'Active',
@@ -359,20 +361,17 @@ export const EN = {
   'personal.title': 'Your profile',
   'personal.nameLabel': 'Your name',
   'personal.phoneLabel': 'Phone',
-  'personal.roleLabel': 'Role',
   'personal.save': 'Save name',
   'personal.saving': 'Saving…',
   'personal.saved': 'Name saved',
-  'personal.roleOwner': 'Owner',
-  'personal.roleEmployee': 'Employee',
-  'settings.employeesEntry': 'Manage employees',
+  'settings.employeesEntry': 'Manage members',
   'settings.businessReadonly': 'Only owners can edit the business profile',
   'settings.activityComingSoon': 'Activity log — coming soon',
 
   // ---- Phase 9 — owner-only activity log ----
   'activity.title': 'Activity log',
   'activity.empty': 'No activity yet',
-  'activity.ownerOnly': 'Only the owner can view the activity log',
+  'activity.ownerOnly': 'Only an owner or partner can view the activity log',
   'activity.back': 'Back',
   'activity.action.billCreate': 'Created a bill',
   'activity.action.payment': 'Recorded a payment',
@@ -697,8 +696,8 @@ export const HI: Record<TKey, string> = {
 
   // onboarding — role chooser
   'onboarding.role.title': 'आप अनाज बही कैसे इस्तेमाल करेंगे?',
-  'onboarding.role.owner': 'मैं मालिक हूँ',
-  'onboarding.role.employee': 'मैं कर्मचारी हूँ',
+  'onboarding.path.newBusiness': 'व्यापार नया है',
+  'onboarding.path.existingBusiness': 'व्यापार पहले से पंजीकृत है',
 
   // onboarding — create business (owner)
   'onboarding.createBusiness.title': 'अपना व्यापार बनाएँ',
@@ -719,8 +718,6 @@ export const HI: Record<TKey, string> = {
 
   // gated home header (name + business + role + sign out)
   'home.greeting': 'नमस्ते',
-  'home.role.owner': 'मालिक',
-  'home.role.employee': 'कर्मचारी',
   'home.signOut': 'साइन आउट',
 
   // "shared cloud & roles — coming soon" banner
@@ -779,8 +776,8 @@ export const HI: Record<TKey, string> = {
   'syncStatus.syncedNow': 'सिंक हो गया',
 
   // ---- Phase 8 — employee management (owner-only Employees screen) ----
-  'employees.title': 'कर्मचारी',
-  'employees.addTitle': 'कर्मचारी जोड़ें',
+  'employees.title': 'सदस्य',
+  'employees.addTitle': 'सदस्य जोड़ें',
   'employees.phoneLabel': 'फ़ोन नंबर',
   'employees.nameLabel': 'नाम',
   'employees.add': 'जोड़ें',
@@ -790,9 +787,13 @@ export const HI: Record<TKey, string> = {
   'employees.empty': 'अभी कोई कर्मचारी नहीं — ऊपर से जोड़ें',
   'employees.remove': 'हटाएँ',
   'employees.removing': 'हटाया जा रहा है…',
-  'employees.ownerOnly': 'केवल मालिक ही कर्मचारी प्रबंधित कर सकते हैं',
+  'employees.ownerOnly': 'केवल मालिक या साझेदार ही सदस्य प्रबंधित कर सकते हैं',
   'employees.roleOwner': 'मालिक',
+  'employees.rolePartner': 'साझेदार',
   'employees.roleEmployee': 'कर्मचारी',
+  'employees.roleSelectLabel': 'भूमिका',
+  'employees.optionEmployee': 'कर्मचारी',
+  'employees.optionPartner': 'साझेदार',
   'employees.back': 'वापस',
   'employees.invited': 'आमंत्रित',
   'employees.active': 'सक्रिय',
@@ -801,20 +802,17 @@ export const HI: Record<TKey, string> = {
   'personal.title': 'आपकी जानकारी',
   'personal.nameLabel': 'आपका नाम',
   'personal.phoneLabel': 'फ़ोन',
-  'personal.roleLabel': 'भूमिका',
   'personal.save': 'नाम सहेजें',
   'personal.saving': 'सहेजा जा रहा है…',
   'personal.saved': 'नाम सहेजा गया',
-  'personal.roleOwner': 'मालिक',
-  'personal.roleEmployee': 'कर्मचारी',
-  'settings.employeesEntry': 'कर्मचारी प्रबंधित करें',
+  'settings.employeesEntry': 'सदस्य प्रबंधित करें',
   'settings.businessReadonly': 'केवल मालिक ही व्यापार की जानकारी बदल सकते हैं',
   'settings.activityComingSoon': 'गतिविधि लॉग — जल्द आ रहा है',
 
   // ---- Phase 9 — owner-only activity log ----
   'activity.title': 'गतिविधि लॉग',
   'activity.empty': 'अभी कोई गतिविधि नहीं',
-  'activity.ownerOnly': 'केवल मालिक ही गतिविधि लॉग देख सकते हैं',
+  'activity.ownerOnly': 'केवल मालिक या साझेदार ही गतिविधि लॉग देख सकते हैं',
   'activity.back': 'वापस',
   'activity.action.billCreate': 'बही बनाई',
   'activity.action.payment': 'भुगतान दर्ज किया',
