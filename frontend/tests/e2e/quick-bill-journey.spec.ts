@@ -107,9 +107,6 @@ test('trader transcribes a summary bill, reopens the totals-only detail, and sha
 
   // --- Step 7: save → back on home with the new card at the sum-of-amounts total ---
   await page.getByTestId('save-bill').click()
-  // Phase 11 — a post-save share prompt now appears instead of jumping straight home.
-  await expect(page.getByTestId('post-save-share-sheet')).toBeVisible()
-  await page.getByTestId('post-save-done-btn').click()
   await page.waitForURL(/\/app\/(\?.*)?$/)
   const card = page.getByTestId('bill-card').first()
   await expect(card).toBeVisible()
@@ -211,9 +208,6 @@ test('quick bill: amount auto-computes (and is overridable) + paldari nets the t
 
   // --- Save → reopen → detail shows the net total + the paldari deduction ---
   await page.getByTestId('save-bill').click()
-  // Phase 11 — a post-save share prompt now appears instead of jumping straight home.
-  await expect(page.getByTestId('post-save-share-sheet')).toBeVisible()
-  await page.getByTestId('post-save-done-btn').click()
   await page.waitForURL(/\/app\/(\?.*)?$/)
   const card = page.getByTestId('bill-card').first()
   await expect(card).toContainText('Paldari Farmer')

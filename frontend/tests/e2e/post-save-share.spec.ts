@@ -4,9 +4,10 @@ import { signInTestOwner } from './support/auth'
 /**
  * Phase 11 — post-save share prompt E2E.
  *
- * After a trader SAVES A NEW BILL in either create flow (fresh sack OR quick/
- * summary), the app shows a `post-save-share-sheet` prompt (Share receipt / Done)
- * instead of jumping straight to the home list. This spec drives BOTH flows:
+ * After a trader SAVES A NEW BILL in the from-scratch (fresh sack) create flow,
+ * the app shows a `post-save-share-sheet` prompt (Share receipt / Done) instead
+ * of jumping straight to the home list. (Quick/summary bills do NOT show it.)
+ * This spec drives that flow:
  *   create a bill → the prompt appears (page did NOT navigate home) →
  *   tap Share receipt → the receipt preview opens → tap the share button →
  *   a PNG File reaches the (stubbed) navigator.share → tap Done → land on `/`.
@@ -127,33 +128,6 @@ test('fresh sack bill: save shows the post-save share prompt, shares a PNG, Done
   await page.getByTestId('save-bill').click()
   await expect(page.getByTestId('post-save-share-sheet')).toBeVisible()
   expect(page.url()).toContain('/app/bills/new/')
-
-  await shareThenDone(page)
-})
-
-test('quick/summary bill: save shows the post-save share prompt, shares a PNG, Done → home', async ({
-  page,
-}) => {
-  await stubNativeShare(page)
-  await prepare(page)
-
-  // Create a minimal quick (summary) bill.
-  await page.getByTestId('new-bill-btn').click()
-  await page.waitForURL('**/app/bills/choose/**')
-  await page.getByTestId('choice-quick').click()
-  await page.waitForURL('**/app/bills/quick/**')
-
-  await page.getByTestId('farmer-input').fill('Girdhari')
-  await page.getByLabel('Place / Village').fill('Kheri')
-  await page.getByTestId('grain-type-select').nth(0).selectOption({ label: 'Wheat' })
-  await page.getByTestId('price-input').nth(0).fill('2000')
-  await page.getByTestId('total-weight-input').nth(0).fill('585')
-  await page.getByTestId('amount-input').nth(0).fill('3741.72')
-
-  // Save → the prompt appears; the page did NOT jump to home.
-  await page.getByTestId('save-bill').click()
-  await expect(page.getByTestId('post-save-share-sheet')).toBeVisible()
-  expect(page.url()).toContain('/app/bills/quick/')
 
   await shareThenDone(page)
 })

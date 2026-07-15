@@ -3,13 +3,13 @@
 _Target phase: **Phase 11** · one frontend slice._
 
 ## What It Does
-Immediately after a trader **saves a new bill** (in either create flow), offers a **"Share receipt"** action (and a **"Done"** dismiss that goes home) — so sharing no longer requires reopening the bill and tapping Share. Purely additive, back-compatible, frontend-only, offline; **no LLM, no backend, no live/public link**.
+Immediately after a trader **saves a new bill** (the from-scratch / fresh-sack create flow only — **not** quick entry), offers a **"Share receipt"** action (and a **"Done"** dismiss that goes home) — so sharing no longer requires reopening the bill and tapping Share. Purely additive, back-compatible, frontend-only, offline; **no LLM, no backend, no live/public link**.
 
 ## Why
 Today both create flows call `router.push('/')` on a successful create and land on the home list; to share, the trader must reopen the bill and tap **Share** on the detail page. Offering the share option right after saving removes that round-trip for the most common next action (sending the farmer his receipt).
 
-## Scope: CREATE only
-The prompt appears **only on the create branch** of each flow — the `router.push('/')` after `createBill(...)`. The **edit** branch (which navigates to `/bill?id=...` after `updateBill`) is **unchanged**: editing an existing bill still returns to the detail screen, no prompt.
+## Scope: fresh-sack CREATE only
+The prompt appears **only in the from-scratch (fresh sack) flow** (`bills/new`), and **only on its create branch** — the `router.push('/')` after `createBill(...)`. **Quick/summary entry (`bills/quick`) does NOT show the prompt** — a quick bill transcribes a paper bill the farmer already holds, so a save-time receipt is redundant; it keeps its original `router.push('/')`. The **edit** branch (which navigates to `/bill?id=...` after `updateBill`) is **unchanged**: editing an existing bill still returns to the detail screen, no prompt.
 
 ## Inputs
 | Input | Type | Source | Required |
@@ -52,10 +52,10 @@ Extract the receipt-preview + share body from the detail page's `SharePanel` int
 
 > If, in implementation, extracting `ReceiptShareSheet` is judged to risk the frozen detail behavior, the acceptable fallback is a focused **new** component that reuses `Receipt` + `shareReceiptImage` + `getProfile` directly (no change to `SharePanel`). Either way, the detail-page Share flow stays byte-for-byte and `receipt-share.spec.ts` stays green unchanged.
 
-## Call-site integration (both create flows)
+## Call-site integration (fresh-sack create flow only)
 - **`frontend/src/app/bills/new/page.tsx`** (sack flow; `handleSave` ~253–344): in the **create** branch (~322–335) capture `const saved = await createBill({...})`; instead of `router.push('/')` (~335), set state (e.g. `setSavedBill(saved)`) so the page renders `<PostSaveSharePrompt bill={savedBill} farmerPhone={farmer?.phone} grainName={grainName} onDone={() => router.push('/')} />`.
-- **`frontend/src/app/bills/quick/page.tsx`** (summary flow; `handleSave` ~264–364): identical change in the **create** branch (~341–355) — capture the returned `Bill`, show the prompt, `onDone` → `/`. The saved bill carries `entryMode: 'summary'`, so the reused `Receipt` renders it totals-only (existing summary behavior, unchanged).
-- Both pages already hold `grainTypes` state and `useI18n()` (for `lang`) to build the resolver, and `farmer` state for the phone.
+- **`frontend/src/app/bills/quick/page.tsx`** (summary flow) is **unchanged** — it keeps its original `router.push('/')` on create; no prompt.
+- The `bills/new` page already holds `grainTypes` state and `useI18n()` (for `lang`) to build the resolver, and `farmer` state for the phone.
 
 ## Bilingual keys (EN + HI, type-enforced)
 Add paired keys to `frontend/src/lib/i18n/dictionary.ts`. The HI object is `Record<TKey, string>` (`TKey = keyof typeof EN`), so **every new EN key requires its HI counterpart or the build fails**:
@@ -83,10 +83,10 @@ Add paired keys to `frontend/src/lib/i18n/dictionary.ts`. The HI object is `Reco
 
 ## Success Criteria
 - [ ] After saving a **new sack bill**, the `post-save-share-sheet` appears (the page does not jump straight to home).
-- [ ] After saving a **new quick/summary bill**, the same `post-save-share-sheet` appears.
+- [ ] After saving a **new quick/summary bill**, **no** prompt appears — it lands on the home list as before.
 - [ ] Tapping **Share receipt** opens the receipt preview and `share-image` rasterises a PNG `File` handed to `navigator.share` (stubbed in E2E), with the download fallback + `share-fallback` note when native share is unsupported.
 - [ ] Tapping **Done** navigates to `/`.
-- [ ] The **detail-page** Share button/flow is unchanged — `frontend/tests/e2e/receipt-share.spec.ts` passes **without edits**.
+- [ ] The **detail-page** Share button/flow is unchanged in behavior/DOM/testids. `frontend/tests/e2e/receipt-share.spec.ts` needs only a small edit because its bill-creation helpers use the **fresh-sack** flow (which now shows the prompt): they tap `post-save-done-btn` after save; the detail-page share assertions themselves are unchanged.
 - [ ] Every new EN i18n key has an HI counterpart (build type-checks).
 - [ ] The whole prompt + share path works offline (no new network call).
 
