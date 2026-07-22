@@ -98,12 +98,12 @@ describe('searchBills — filters', () => {
   })
 })
 
-describe('listDueBills — outstanding grouping (by balance, not by due date)', () => {
+describe('listDueBills — dated outstanding grouping (overdue / dueSoon / upcoming)', () => {
   const today = '2026-07-06'
   // A bill of total 3741.72; a single payment of 3741.72 fully settles it.
   const FULL_PAYMENT = 3741.72
 
-  it('inclusion is by balance: overdue / dueSoon / upcoming / undated all appear; only fully-paid is excluded', () => {
+  it('groups dated outstanding bills; fully-paid and undated bills are excluded', () => {
     const bills: Bill[] = [
       // Overdue: dueDate before today, still owes.
       makeBill({ id: '060726/over1', dueDate: '2026-07-01' }),
@@ -111,37 +111,37 @@ describe('listDueBills — outstanding grouping (by balance, not by due date)', 
       makeBill({ id: '060726/soon1', dueDate: '2026-07-09' }),
       // Fully-paid with a past due date → excluded from every bucket.
       makeBill({ id: '060726/paid1', dueDate: '2026-07-01', payments: [payment(FULL_PAYMENT, '2026-07-02')] }),
-      // Outstanding but no due date → now appears under `undated`.
+      // Outstanding but no due date → excluded (the Due screen only shows dated bills).
       makeBill({ id: '060726/nodue', dueDate: undefined }),
-      // Far-future due date (beyond the 7-day window), still owes → now appears under `upcoming`.
+      // Far-future due date (beyond the 7-day window), still owes → appears under `upcoming`.
       makeBill({ id: '060726/far01', dueDate: '2026-08-15' }),
     ]
 
-    const { overdue, dueSoon, upcoming, undated } = listDueBills(bills, today)
+    const { overdue, dueSoon, upcoming } = listDueBills(bills, today)
     expect(overdue.map((b) => b.id)).toEqual(['060726/over1'])
     expect(dueSoon.map((b) => b.id)).toEqual(['060726/soon1'])
     expect(upcoming.map((b) => b.id)).toEqual(['060726/far01'])
-    expect(undated.map((b) => b.id)).toEqual(['060726/nodue'])
-    // The fully-paid bill is in no bucket.
-    const allShown = [...overdue, ...dueSoon, ...upcoming, ...undated].map((b) => b.id)
+    // Neither the fully-paid nor the undated bill appears in any bucket.
+    const allShown = [...overdue, ...dueSoon, ...upcoming].map((b) => b.id)
     expect(allShown).not.toContain('060726/paid1')
+    expect(allShown).not.toContain('060726/nodue')
   })
 
-  it('REGRESSION — a newly-created bill with no due date and an outstanding balance appears on the Due list', () => {
-    // Reproduces "bills are not coming in due after creating the bills": the common
-    // case is a bill saved with the optional due-date field left blank. It has a
-    // balance, so it MUST be visible (previously it was dropped entirely).
-    const freshBill = makeBill({ id: '060726/fresh1', dueDate: undefined })
+  it('REGRESSION — a bill with a due date after today appears right away (not just within the soon window)', () => {
+    // The reported bug: a bill created with a due date more than `soonDays` out
+    // was computed as `upcoming` but never rendered, so it never showed as due.
+    const dated = makeBill({ id: '060726/fresh1', dueDate: '2026-08-01' }) // ~4 weeks out
 
-    const buckets = listDueBills([freshBill], today)
-    expect(buckets.undated.map((b) => b.id)).toEqual(['060726/fresh1'])
+    const buckets = listDueBills([dated], today)
+    expect(buckets.upcoming.map((b) => b.id)).toEqual(['060726/fresh1'])
     // It is not lost: exactly one bucket holds it.
-    const total =
-      buckets.overdue.length +
-      buckets.dueSoon.length +
-      buckets.upcoming.length +
-      buckets.undated.length
+    const total = buckets.overdue.length + buckets.dueSoon.length + buckets.upcoming.length
     expect(total).toBe(1)
+  })
+
+  it('a bill with no due date never appears on the Due screen', () => {
+    const undated = makeBill({ id: '060726/nodue2', dueDate: undefined })
+    expect(listDueBills([undated], today)).toEqual({ overdue: [], dueSoon: [], upcoming: [] })
   })
 
   it('dated groups sort by dueDate ascending (most pressing first)', () => {
@@ -160,13 +160,6 @@ describe('listDueBills — outstanding grouping (by balance, not by due date)', 
     expect(upcoming.map((b) => b.dueDate)).toEqual(['2026-08-01', '2026-09-01'])
   })
 
-  it('undated bills sort newest-created first', () => {
-    const older = makeBill({ id: '060726/undOld', dueDate: undefined }) // built first → lower createdAt
-    const newer = makeBill({ id: '060726/undNew', dueDate: undefined }) // built second → higher createdAt
-    const { undated } = listDueBills([older, newer], today)
-    expect(undated.map((b) => b.id)).toEqual(['060726/undNew', '060726/undOld'])
-  })
-
   it('paying a bill in full removes it from every bucket', () => {
     const unpaid = makeBill({ id: '060726/pay01', dueDate: '2026-07-01' })
     expect(listDueBills([unpaid], today).overdue.map((b) => b.id)).toEqual(['060726/pay01'])
@@ -176,21 +169,6 @@ describe('listDueBills — outstanding grouping (by balance, not by due date)', 
     expect(buckets.overdue).toEqual([])
     expect(buckets.dueSoon).toEqual([])
     expect(buckets.upcoming).toEqual([])
-    expect(buckets.undated).toEqual([])
-  })
-
-  it('a fully-paid bill with NO due date is still excluded (balance rules, not date)', () => {
-    const paidNoDue = makeBill({
-      id: '060726/paidNoDue',
-      dueDate: undefined,
-      payments: [payment(FULL_PAYMENT, '2026-07-05')],
-    })
-    expect(listDueBills([paidNoDue], today)).toEqual({
-      overdue: [],
-      dueSoon: [],
-      upcoming: [],
-      undated: [],
-    })
   })
 
   it('empty store → empty buckets', () => {
@@ -198,7 +176,6 @@ describe('listDueBills — outstanding grouping (by balance, not by due date)', 
       overdue: [],
       dueSoon: [],
       upcoming: [],
-      undated: [],
     })
   })
 

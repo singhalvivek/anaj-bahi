@@ -50,33 +50,26 @@ export interface DueBuckets {
   overdue: Bill[]
   dueSoon: Bill[]
   upcoming: Bill[]
-  undated: Bill[]
 }
 
 /**
- * Group an in-memory bill list by due state. **Inclusion is by balance, not by due
- * date:** every bill that still owes money (`outstanding > 0`) appears in exactly
- * one bucket — a blank due date never hides a bill. Fully-paid bills
- * (`outstanding <= 0`) are excluded from every bucket.
+ * Group an in-memory bill list by due state. A bill is shown only if it still owes
+ * money (`outstanding > 0`) **and** carries a due date — a bill with no due date
+ * never appears here. Fully-paid bills (`outstanding <= 0`) are excluded too.
  *
  *   overdue  → has a due date before today, still owes (sorted by dueDate asc)
  *   dueSoon  → has a due date within `soonDays` (default 7), still owes (dueDate asc)
  *   upcoming → has a due date beyond the soon window, still owes (dueDate asc)
- *   undated  → still owes but has NO due date (sorted newest-created first)
  */
 export function listDueBills(bills: Bill[], today: string, soonDays = 7): DueBuckets {
   const overdue: Bill[] = []
   const dueSoon: Bill[] = []
   const upcoming: Bill[] = []
-  const undated: Bill[] = []
 
   for (const bill of bills) {
+    if (!bill.dueDate) continue
     const { outstanding } = billBalance(bill)
     if (outstanding <= 0) continue
-    if (!bill.dueDate) {
-      undated.push(bill)
-      continue
-    }
     const status = dueStatus(bill.dueDate, outstanding, today, soonDays)
     if (status === 'overdue') overdue.push(bill)
     else if (status === 'due_soon') dueSoon.push(bill)
@@ -88,8 +81,5 @@ export function listDueBills(bills: Bill[], today: string, soonDays = 7): DueBuc
   overdue.sort(byDueDateAsc)
   dueSoon.sort(byDueDateAsc)
   upcoming.sort(byDueDateAsc)
-  // Undated bills have no dueDate to order by → newest-created first (consistent
-  // with listBills()).
-  undated.sort((a, b) => b.createdAt - a.createdAt)
-  return { overdue, dueSoon, upcoming, undated }
+  return { overdue, dueSoon, upcoming }
 }
