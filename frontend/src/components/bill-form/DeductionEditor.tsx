@@ -75,6 +75,7 @@ export function DeductionEditor({ deductions, onChange }: DeductionEditorProps) 
             }
             placeholder={t('deduction.value')}
             aria-label={t('deduction.value')}
+            enterKeyHint="done"
             className="h-12 w-24 rounded-lg border border-gray-300 px-3 text-base focus:border-emerald-500 focus:outline-none"
           />
           <button
