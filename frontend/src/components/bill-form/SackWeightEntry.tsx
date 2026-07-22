@@ -106,6 +106,12 @@ export function SackWeightEntry({ sackWeights, onChange }: SackWeightEntryProps)
           data-testid="sack-input"
           type="text"
           inputMode="decimal"
+          // Make the phone keyboard's action key "Done" (↵) instead of the
+          // default "Next" (→|). "Next" would move focus straight to the Paldari
+          // field WITHOUT firing an Enter keypress, so addSack() never ran; "Done"
+          // fires Enter, which handleKeyDown turns into an Add and re-focuses here
+          // for rapid one-handed sack entry.
+          enterKeyHint="done"
           value={value}
           onChange={(e) => setValue(sanitizeDecimal(e.target.value))}
           onKeyDown={handleKeyDown}
