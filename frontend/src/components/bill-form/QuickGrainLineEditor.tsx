@@ -189,6 +189,8 @@ export function QuickGrainLineEditor({
           value={line.price}
           onChange={(e) => patch({ price: sanitizeDecimal(e.target.value) })}
           placeholder={t('grain.price')}
+          // Chain: Price → Total sacks → Total weight.
+          enterKeyHint="next"
           className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
       </div>
@@ -203,6 +205,7 @@ export function QuickGrainLineEditor({
           value={line.sackCount}
           onChange={(e) => onChange({ ...line, sackCount: sanitizeInt(e.target.value) })}
           placeholder={t('quick.sackCount')}
+          enterKeyHint="next"
           className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
       </div>
@@ -217,6 +220,8 @@ export function QuickGrainLineEditor({
           value={line.totalWeight}
           onChange={(e) => patch({ totalWeight: sanitizeDecimal(e.target.value) })}
           placeholder={t('quick.totalWeight')}
+          // End of the required chain — Amount auto-fills from this.
+          enterKeyHint="done"
           className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
       </div>
@@ -231,6 +236,7 @@ export function QuickGrainLineEditor({
           value={line.deductionKg}
           onChange={(e) => patch({ deductionKg: sanitizeDecimal(e.target.value) })}
           placeholder={t('quick.deductionKg')}
+          enterKeyHint="done"
           className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
       </div>
@@ -248,6 +254,7 @@ export function QuickGrainLineEditor({
             onChange({ ...line, amount: sanitizeDecimal(e.target.value), amountTouched: true })
           }
           placeholder={t('quick.amount')}
+          enterKeyHint="done"
           className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
         <p className="text-xs text-gray-500">{t('quick.amountAuto')}</p>

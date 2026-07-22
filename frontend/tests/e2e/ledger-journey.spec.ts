@@ -71,6 +71,9 @@ async function createWheatBill(
   await page.getByTestId('due-date-input').fill(dueDate)
 
   await page.getByTestId('save-bill').click()
+  // Phase 11 — a post-save share prompt now appears instead of jumping straight home.
+  await expect(page.getByTestId('post-save-share-sheet')).toBeVisible()
+  await page.getByTestId('post-save-done-btn').click()
   await page.waitForURL(/\/app\/(\?.*)?$/)
 }
 

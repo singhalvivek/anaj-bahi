@@ -54,6 +54,9 @@ interface PhoneFieldProps {
   placeholder?: string
   disabled?: boolean
   readOnly?: boolean
+  /** Soft-keyboard action key for the number input (e.g. 'done' to end a field
+   *  chain, 'next' to advance). Omitted → the browser's default. */
+  enterKeyHint?: 'enter' | 'done' | 'go' | 'next' | 'previous' | 'search' | 'send'
   /** Classes for the OUTER field box (border/height/rounding) so each call-site
    *  keeps its existing look; text size set here is inherited by the input. */
   className?: string
@@ -74,6 +77,7 @@ export function PhoneField({
   placeholder,
   disabled,
   readOnly,
+  enterKeyHint,
   className = '',
 }: PhoneFieldProps) {
   const local = displayLocal(value)
@@ -99,6 +103,7 @@ export function PhoneField({
         placeholder={placeholder}
         disabled={disabled}
         readOnly={readOnly}
+        enterKeyHint={enterKeyHint}
         onChange={(e) => onChange(toE164(e.target.value))}
         className="min-w-0 flex-1 bg-transparent px-4 outline-none"
       />

@@ -103,6 +103,8 @@ export function FarmerPicker({ value, onChange }: FarmerPickerProps) {
           onFocus={() => setOpen(true)}
           placeholder={t('farmer.searchHint')}
           autoComplete="off"
+          // Soft-keyboard chain: Name → Place → Mobile (Mobile ends with Done).
+          enterKeyHint="next"
           className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
 
@@ -139,6 +141,7 @@ export function FarmerPicker({ value, onChange }: FarmerPickerProps) {
         onChange={(e) => setPlace(e.target.value)}
         placeholder={t('farmer.place')}
         aria-label={t('farmer.place')}
+        enterKeyHint="next"
         className="h-12 w-full rounded-lg border border-gray-300 px-4 text-base focus:border-emerald-500 focus:outline-none"
       />
       <PhoneField
@@ -146,6 +149,9 @@ export function FarmerPicker({ value, onChange }: FarmerPickerProps) {
         onChange={setPhone}
         ariaLabel={t('farmer.phone')}
         placeholder={t('farmer.phone')}
+        // Last field in the farmer block — Done closes the keyboard so it never
+        // jumps into the (independent) date pickers.
+        enterKeyHint="done"
         className="h-12 rounded-lg border border-gray-300 text-base focus-within:border-emerald-500"
       />
 

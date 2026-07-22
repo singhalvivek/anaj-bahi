@@ -154,6 +154,8 @@ export function GrainLineEditor({
           value={line.price}
           onChange={(e) => onChange({ ...line, price: sanitizeDecimal(e.target.value) })}
           placeholder={t('grain.price')}
+          // Advance to the sack-weight box (the next input in DOM order).
+          enterKeyHint="next"
           className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
       </div>
