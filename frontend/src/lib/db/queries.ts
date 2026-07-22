@@ -49,17 +49,22 @@ export function searchBills(bills: Bill[], filter: BillFilter = {}): Bill[] {
 export interface DueBuckets {
   overdue: Bill[]
   dueSoon: Bill[]
+  upcoming: Bill[]
 }
 
 /**
- * Group an in-memory bill list into overdue / dueSoon: bills that still owe money
- * AND carry a due date, each sorted by dueDate ascending (most pressing first).
- * Fully-paid bills, bills without a due date, and bills whose due date is beyond
- * the soon window are excluded. `soonDays` is the due-soon window (default 7).
+ * Group an in-memory bill list by due state. A bill is shown only if it still owes
+ * money (`outstanding > 0`) **and** carries a due date — a bill with no due date
+ * never appears here. Fully-paid bills (`outstanding <= 0`) are excluded too.
+ *
+ *   overdue  → has a due date before today, still owes (sorted by dueDate asc)
+ *   dueSoon  → has a due date within `soonDays` (default 7), still owes (dueDate asc)
+ *   upcoming → has a due date beyond the soon window, still owes (dueDate asc)
  */
 export function listDueBills(bills: Bill[], today: string, soonDays = 7): DueBuckets {
   const overdue: Bill[] = []
   const dueSoon: Bill[] = []
+  const upcoming: Bill[] = []
 
   for (const bill of bills) {
     if (!bill.dueDate) continue
@@ -68,11 +73,13 @@ export function listDueBills(bills: Bill[], today: string, soonDays = 7): DueBuc
     const status = dueStatus(bill.dueDate, outstanding, today, soonDays)
     if (status === 'overdue') overdue.push(bill)
     else if (status === 'due_soon') dueSoon.push(bill)
+    else if (status === 'upcoming') upcoming.push(bill)
   }
 
   const byDueDateAsc = (a: Bill, b: Bill): number =>
     a.dueDate! < b.dueDate! ? -1 : a.dueDate! > b.dueDate! ? 1 : 0
   overdue.sort(byDueDateAsc)
   dueSoon.sort(byDueDateAsc)
-  return { overdue, dueSoon }
+  upcoming.sort(byDueDateAsc)
+  return { overdue, dueSoon, upcoming }
 }

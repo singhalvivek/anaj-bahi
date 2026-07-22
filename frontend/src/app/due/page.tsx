@@ -56,8 +56,8 @@ export default function DuePage() {
     )
   }
 
-  const { overdue, dueSoon } = buckets
-  const empty = overdue.length === 0 && dueSoon.length === 0
+  const { overdue, dueSoon, upcoming } = buckets
+  const empty = overdue.length === 0 && dueSoon.length === 0 && upcoming.length === 0
 
   return (
     <div data-testid="due-list" className="flex flex-col gap-6 px-4 py-6">
@@ -95,6 +95,17 @@ export default function DuePage() {
                 ⏳ {t('due.soon')} ({dueSoon.length})
               </h3>
               {dueSoon.map((bill) => (
+                <DueRow key={bill.id} bill={bill} />
+              ))}
+            </section>
+          )}
+
+          {upcoming.length > 0 && (
+            <section data-testid="due-upcoming" className="flex flex-col gap-3">
+              <h3 className="flex items-center gap-2 text-base font-semibold text-stone-600">
+                📅 {t('due.upcoming')} ({upcoming.length})
+              </h3>
+              {upcoming.map((bill) => (
                 <DueRow key={bill.id} bill={bill} />
               ))}
             </section>

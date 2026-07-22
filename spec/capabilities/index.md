@@ -19,7 +19,7 @@ One file per capability. Phase 1 delivers the full local purchase-capture journe
 | Capability | File |
 |-----------|------|
 | Payments & Outstanding Balance | [payments.md](payments.md) |
-| Due-Soon / Overdue List | [due-list.md](due-list.md) |
+| Due / Outstanding List | [due-list.md](due-list.md) |
 | Bill Edit-Lock Rule | [bill-edit-lock.md](bill-edit-lock.md) |
 | Search & Filter Bills | [search-filters.md](search-filters.md) |
 
