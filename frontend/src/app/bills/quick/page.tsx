@@ -20,12 +20,7 @@ import {
 } from '@/lib/db/repo'
 import type { GrainLineSummary } from '@/lib/db/schema'
 import { generateBillId } from '@/lib/db/id'
-import {
-  computeGrainLine,
-  computeBillTotal,
-  roundRupees,
-  type GrainLineInput,
-} from '@/lib/calc'
+import { addDaysIso, computeBillTotal, computeGrainLine, roundRupees, type GrainLineInput } from '@/lib/calc'
 import type { FarmerValue } from '@/app/bills/new/page'
 import { FarmerPicker } from '@/components/bill-form/FarmerPicker'
 import { QuickGrainLineEditor } from '@/components/bill-form/QuickGrainLineEditor'
@@ -46,6 +41,10 @@ export interface QuickGrainLineDraft {
 }
 
 // ---- helpers ----
+
+
+/** Phase 12 — the due date pre-fills this many days after the purchase date. */
+const DUE_DAYS = 15
 
 /** Keep digits and at most one decimal point; strip everything else. */
 function sanitizeDecimal(raw: string): string {
@@ -133,7 +132,14 @@ function QuickBillForm() {
   const [original, setOriginal] = useState<Bill | null>(null) // loaded bill in edit mode
   const [farmer, setFarmer] = useState<FarmerValue | null>(null)
   const [purchaseDate, setPurchaseDate] = useState<string>(todayIso())
-  const [dueDate, setDueDate] = useState<string>('')
+  // Phase 12 — the due date is REQUIRED and pre-filled at purchaseDate + 15 days.
+  // Seeded in the initializer (not an effect) so it is non-empty on the very first
+  // render: `valid` reads it immediately, and every shipped spec that saves a bill
+  // without touching this field must keep passing.
+  const [dueDate, setDueDate] = useState<string>(() => addDaysIso(todayIso(), DUE_DAYS))
+  // Mirrors the shipped `amountTouched` pattern: once he sets a date by hand we
+  // stop re-deriving it from the purchase date.
+  const [dueDateTouched, setDueDateTouched] = useState(false)
   const [billId, setBillId] = useState<string>('')
   const [lines, setLines] = useState<QuickGrainLineDraft[]>([newLineDraft('')])
   const [paldari, setPaldari] = useState('') // Phase 10 — bill-level labor charge (₹)
@@ -162,7 +168,12 @@ function QuickBillForm() {
               phone: f?.phone,
             })
             setPurchaseDate(bill.purchaseDate)
-            setDueDate(bill.dueDate ?? '')
+            // A legacy bill may carry no due date; leave the derived prefill in that
+            // case so this screen can repair it.
+            if (bill.dueDate) {
+              setDueDate(bill.dueDate)
+              setDueDateTouched(true)
+            }
             setBillId(bill.id)
             setLines(bill.lines.map(storedLineToDraft))
             setPaldari(bill.paldari != null ? String(bill.paldari) : '')
@@ -219,6 +230,11 @@ function QuickBillForm() {
   const paldariNum = Number(paldari) || 0
   const netTotal = roundRupees(linesTotal - paldariNum)
 
+  // Keep the due date trailing the purchase date by DUE_DAYS until he edits it.
+  useEffect(() => {
+    if (!dueDateTouched && purchaseDate) setDueDate(addDaysIso(purchaseDate, DUE_DAYS))
+  }, [purchaseDate, dueDateTouched])
+
   // ---- validation ----
   const farmerReady = !!farmer && !!farmer.name.trim() && !!farmer.place.trim()
   const dateReady = !!purchaseDate
@@ -231,7 +247,7 @@ function QuickBillForm() {
         (Number(l.totalWeight) || 0) > 0 &&
         (Number(l.amount) || 0) > 0,
     )
-  const valid = farmerReady && dateReady && linesReady
+  const valid = farmerReady && dateReady && linesReady && !!dueDate
 
   let hint = ''
   if (!farmerReady) hint = t('validation.farmerRequired')
@@ -421,9 +437,13 @@ function QuickBillForm() {
                 data-testid="due-date-input"
                 type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => {
+                  setDueDate(e.target.value)
+                  setDueDateTouched(true)
+                }}
                 className="h-14 w-full rounded-lg border border-gray-300 px-4 text-lg focus:border-emerald-500 focus:outline-none"
               />
+              <p className="text-sm text-gray-500">{t('dueDate.hint')}</p>
 
               {billId && (
                 <p className="text-sm text-gray-500">
