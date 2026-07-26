@@ -85,6 +85,17 @@ One file per capability. Phase 1 delivers the full local purchase-capture journe
 |-----------|------|-------|
 | Post-Save Share Prompt | [post-save-share.md](post-save-share.md) | a (single frontend slice) |
 
+## Phase 12 — Pilot readiness (first cross-bill figures + the fast default path)
+
+> The pilot (3–5 real traders, two weeks) needs exactly two things true: **entry is fast**, and **something visible comes back after every entry**. These two capabilities are the smallest set that makes that true. Still no AI/LLM, no backend, offline-first, bilingual, **no schema change**.
+
+| Capability | File | Slice |
+|-----------|------|-------|
+| Home Rollups (this month · today · not-backed-up) | [home-rollups.md](home-rollups.md) | a (pure rollup + Indian-format helpers + unsynced count) + b (home surfaces + `/rollup` drill-down) |
+| Entry Defaults (quick-first chooser · mandatory due date) | [entry-defaults.md](entry-defaults.md) | a (queries/repo extension + i18n) + c (chooser, both entry forms, Due screen, E2E) |
+
+**Why two capability files and not one:** they share the phase goal but nothing else. The rollups are **derived-read + display** (their failure mode is a wrong number that destroys trust in every number); the entry defaults are **write-path + validation** (their failure mode is a blocked or mis-defaulted save). Disjoint surfaces, disjoint success criteria, disjoint slices — so each generator owns exactly one capability file.
+
 ## Notes
 
 - This project uses **no agent framework / no LLM** — see [../agent.md](../agent.md). The Firebase redesign does not change this.

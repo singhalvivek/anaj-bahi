@@ -124,6 +124,8 @@ No network, no server, no keys anywhere in this flow.
 | Unit test command | **Unchanged:** `pnpm test` → `vitest run` (cwd `frontend/`) — covers invite-code generation + the pure invite-check / role-route decision modules. |
 | E2E / UI test command | `pnpm test:e2e` → **`firebase emulators:exec --only auth,firestore "playwright test"`** (cwd `frontend/`), so the Auth + Firestore emulators are up for the whole run. Playwright's `webServer` runs `pnpm dev` (with `NEXT_PUBLIC_FIREBASE_USE_EMULATORS=1`); `global-setup` clears the Firestore emulator via its REST endpoint. Google sign-in is driven through the **Auth emulator's test-IdP popup**. |
 | **Phase-6 gate** | `pnpm install && pnpm test && pnpm build && pnpm test:e2e` (cwd `frontend/`), **with `frontend/.env.local` present** (the 6 `NEXT_PUBLIC_FIREBASE_*` values). E2E runs entirely on the **emulators** — no real Google account, no SMS, no secret key. Frontend-only — **no `uv`, no backend**. |
+| **Phase-12 gate** | Same shape as Phase 6/11: `pnpm install && pnpm test && pnpm build && pnpm test:e2e` (cwd `frontend/`), with `frontend/.env.local` present. **No new dependency, no new env var.** `pnpm test` additionally covers the Phase-12 rollup/format/queries units (see [roadmap Phase 12](roadmap.md#phase-12--pilot-readiness-first-cross-bill-figures--the-fast-default-path)); `pnpm build` type-checks the new `/rollup` route and every new EN+HI i18n key. |
+| **Phase-12 scoped gate (while iterating)** | A full E2E pass is ~30–40 min, so iterate on the subset and run the full suite **once** before finalising the PR: `pnpm test && pnpm build`, then `firebase emulators:exec --only auth,firestore --project demo-anaj-bahi --config ../firebase.json "playwright test tests/e2e/auth-onboarding.spec.ts tests/e2e/ledger-journey.spec.ts tests/e2e/pilot-readiness.spec.ts tests/e2e/post-save-share.spec.ts tests/e2e/purchase-journey.spec.ts tests/e2e/quick-bill-journey.spec.ts tests/e2e/receipt-share.spec.ts"` (cwd `frontend/`). The full `pnpm test:e2e` is still the binding gate. |
 
 **`package.json` deps to add (owned by Phase-6 slice-a):** `firebase` (^11) in `dependencies`; `firebase-tools` in `devDependencies` (emulator runner for E2E). **`firebase-admin` is NOT needed** (emulator reset is a REST call).
 
@@ -736,3 +738,246 @@ Automatic (Firestore handles it) **plus** a visible **online/sync status + "Sync
 - Playwright **`global-setup`** clears the Firestore emulator before the run via its REST endpoint (`DELETE http://127.0.0.1:8080/emulator/v1/projects/<projectId>/databases/(default)/documents`) — the emulator equivalent of the old cloud reset, needing no Admin SDK. The whole suite is wrapped by `firebase emulators:exec --only auth,firestore "playwright test"`.
 - A shared helper **`tests/e2e/support/auth.ts` → `signInTestOwner(page, { bizName })`** drives Google-popup → (onboarding-if-shown: name → **New business** → shop+mobile) → app so every retained journey spec authenticates first; a dedicated `auth-onboarding.spec.ts` (sorts first, `workers: 1`) asserts the full Google-sign-in → name → **New-business** → gated-home path, plus the **manager-generates-code → second Google identity joins via "Business already registered"** round-trip. The onboarding assertions use the role-free labels (`choose-new-business` / `choose-existing-business`) and confirm **no owner/partner/employee wording** appears in onboarding.
 - **Partner journey (Phase 8):** a spec exercises an owner generating a **Partner** invite (role picker), a second Google identity claiming it and landing as a partner, then that **partner** reaching the Members + Activity screens, generating a further invite, and **removing an employee and another partner** — while a direct attempt by the partner to remove the **owner** (or to write `businesses/{bizId}`) is rejected. An **employee** identity is asserted to see **no role badge** on Settings and to be refused the Members + Activity screens.
+
+---
+
+## Phase-12 pilot-readiness contract (frozen)
+
+> **Frozen so slices b and c compile against these signatures in parallel, without waiting for slice-a's implementation.** Everything here is **additive** to the shipped app: no new dependency, no schema change, no new Firestore collection/index/query, no `firestore.rules` change, no LLM (this project still has none — see [agent.md](agent.md)). Product rationale + the exact aggregate definitions are in [home-rollups](capabilities/home-rollups.md) and [entry-defaults](capabilities/entry-defaults.md); the canonical worked fixture is in [data.md § Phase-12 derived aggregates](data.md#phase-12-derived-aggregates-no-schema-change).
+
+### Explicitly UNCHANGED (frozen — do not edit these)
+
+| Surface | Why it must not change |
+|---------|------------------------|
+| `frontend/src/components/format.ts` → **`formatRupees`** | It is exactly `` `₹${amount.toFixed(2)}` `` — **no thousands separators**. Shipped E2E specs assert that literal (e.g. `₹7101.72`) and the rasterised receipt depends on it. The Indian-grouped formatter is a **new, separately-named export in a new file** (below). This file is not touched at all. |
+| `lib/calc/index.ts` | All money/weight math, `billBalance`, `dueStatus`, `todayIso`, `addDaysIso` are **reused as-is**. Phase 12 adds **no** calc function and writes **no** new date arithmetic. |
+| `lib/db/schema.ts` | No new field, no new `ActivityType`. `Bill.dueDate` already exists as an optional ISO string. |
+| `BillFilter` + `searchBills` (`lib/db/queries.ts`) | **Deliberately NOT extended** — see the decision note below. `SearchBar` and `ledger-journey.spec.ts` depend on their exact current behaviour. |
+| `firestore.rules` | `businesses/{bizId}/bills` is already read/write for any member; nothing new is read or written outside it. |
+| `components/SyncStatus.tsx` | Keeps its DOM and testids (`sync-status`, `sync-pending-indicator`, `sync-online-indicator`, `sync-now-btn`) byte-for-byte; only the module it calls is refactored beneath it. |
+| `app/bill/page.tsx`, `components/receipt/*`, `components/bill-form/*` | Untouched. Per-bill figures stay 2-dp via `formatRupees`. |
+
+> **Decision — `BillFilter` is not extended (and the drill-down is a dedicated route instead).** Drilling into "this month" / "today" / "still outstanding" was considered as `BillFilter { from?, to?, outstandingOnly? }`. **Rejected**, because (1) `paid(month)` matches bills by **the payment's own date** and its row figure is the bill's *in-period payment sum* — not expressible as a bill filter that also yields the right per-row number; (2) the drill-down must display, per row, the **exact contribution** that sums to the headline, which is a projection, not a filter; (3) an `outstandingOnly` flag would be dead code on the only caller (`SearchBar`), and any edit to `searchBills` risks the shipped search specs. Instead, `lib/reports/rollup.ts` returns both the totals **and** the contribution rows (below), and a new `/rollup` route renders them. `queries.ts` changes for **exactly one** reason: the additive `listDueBills` bucket.
+
+### `lib/reports/format.ts` (**new** — pure, no I/O, no `Intl`)
+
+```ts
+/**
+ * Half-up to a whole rupee, on the absolute value so the sign never skews it.
+ * roundToRupee(1200.55) === 1201 ; roundToRupee(4000.30) === 4000 ;
+ * roundToRupee(-258.28) === -258 ; roundToRupee(0) === 0
+ */
+export function roundToRupee(amount: number): number
+
+/**
+ * Indian digit grouping, HAND-ROLLED (last 3 digits, then pairs) — deliberately NOT
+ * `Intl.NumberFormat('en-IN')`, so it is deterministic in Vitest/jsdom and independent
+ * of the ICU data available on a low-end Android WebView. Integer input only.
+ *   0 → '0' | 999 → '999' | 1000 → '1,000' | 100000 → '1,00,000'
+ *   420000 → '4,20,000' | 12345678 → '1,23,45,678' | -420000 → '-4,20,000'
+ */
+export function groupIndian(whole: number): string
+
+/**
+ * The ONLY money formatter used on Phase-12 rollup surfaces: whole rupees, Indian
+ * grouping, no paise. `formatRupeesIndian(420000) === '₹4,20,000'`.
+ * Rounds internally, so it is idempotent on the already-integer rollup figures.
+ * `formatRupees` (2 dp, no separators) stays the formatter for per-bill surfaces.
+ */
+export function formatRupeesIndian(amount: number): string
+```
+
+### `lib/reports/rollup.ts` (**new** — pure over `Bill[]`, no I/O)
+
+```ts
+import type { Bill } from '@/lib/db/schema'
+
+/** 'yyyy-mm' from an ISO 'yyyy-mm-dd' — a STRING prefix compare, no Date, no timezone risk. */
+export function monthKeyOf(iso: string): string        // '2026-07-26' → '2026-07'
+
+/** All figures are WHOLE RUPEES (integers), each = Σ of already-rounded per-bill contributions. */
+export interface MonthRollup {
+  monthKey: string        // 'yyyy-mm'
+  billCount: number       // bills whose purchaseDate is in the month
+  bought: number          // Σ roundToRupee(billBalance(b).total)  over bills in the month (net of paldari, NOT clamped)
+  paid: number            // Σ roundToRupee(Σ in-month payment amounts)  over ALL BILLS, matched by PAYMENT date
+  dueAllTime: number      // Σ roundToRupee(max(0, billBalance(b).outstanding)) over ALL BILLS — ALL-TIME, CLAMPED PER BILL
+}
+
+export interface DayRollup {
+  date: string            // ISO 'yyyy-mm-dd'
+  billCount: number       // bills whose purchaseDate === date
+  bought: number          // Σ roundToRupee(billBalance(b).total)  over bills on that date
+  paid: number            // Σ roundToRupee(Σ payments dated that day)  over ALL BILLS
+  pending: number         // Σ roundToRupee(max(0, outstanding))  over bills on that date (CLAMPED PER BILL)
+}
+
+export function monthRollup(bills: Bill[], monthKey: string): MonthRollup
+export function dayRollup(bills: Bill[], date: string): DayRollup
+
+/**
+ * `dueAllTime` is NAMED for its scope on purpose: it is ALL-TIME outstanding exposure,
+ * NOT the month's. Clamping is PER BILL — an overpaid bill contributes 0, never a
+ * negative, so an advance on one bill can never reduce reported exposure elsewhere.
+ * `paid` is matched by the PAYMENT's own date over EVERY bill, so a June bill's July
+ * payment counts in July's `paid` and NOT in July's `bought`. Both asymmetries are
+ * intended; see capabilities/home-rollups.md.
+ */
+
+/** The metrics that have a drill-down screen. (`unsynced` is not a money metric — the page handles it.) */
+export type RollupMetric = 'bought-month' | 'paid-month' | 'due-all' | 'bought-today'
+
+/** One drill-down row = one contributing bill, carrying its EXACT whole-rupee contribution. */
+export interface Contribution {
+  billId: string
+  farmerName: string
+  farmerPlace: string
+  date: string            // purchaseDate for bought-*/due-all; the LATEST in-period payment date for paid-month
+  amount: number          // whole rupees — the same integer that went into the total
+}
+
+/**
+ * INVARIANT (unit-tested): for every metric,
+ *   Σ rollupContributions(bills, m, p).amount  ===  the matching rollup figure
+ * because each total is DEFINED as the sum of these rounded contributions.
+ * Also: rollupContributions(…, 'bought-month').length === monthRollup(...).billCount.
+ *
+ * Zero rows: excluded for 'paid-month' and 'due-all' (a bill with no in-period payment /
+ * nothing outstanding is not a contributor); INCLUDED for 'bought-month'/'bought-today'
+ * (the bill IS in the period, and the row count must equal billCount).
+ * Order: 'due-all' → amount DESC (biggest exposure first); all others → date DESC then
+ * createdAt DESC (newest first, matching the home list).
+ */
+export function rollupContributions(
+  bills: Bill[],
+  metric: RollupMetric,
+  period: { monthKey: string; today: string },
+): Contribution[]
+```
+
+### `lib/db/queries.ts` — additive fourth due bucket (existing three unchanged)
+
+```ts
+export interface DueBuckets {
+  overdue: Bill[]
+  dueSoon: Bill[]
+  upcoming: Bill[]
+  /**
+   * Phase 12 — ADDITIVE. Pre-Phase-12 legacy rows only: no `dueDate` AND
+   * billBalance(bill).outstanding > 0. Sorted purchaseDate ASC (oldest first,
+   * ties by createdAt ASC). The three buckets above keep their exact membership
+   * rules, contents and ordering — `due-overdue`/`due-soon`/`due-upcoming` and the
+   * shipped due assertions are unaffected.
+   */
+  noDueDate: Bill[]
+}
+export function listDueBills(bills: Bill[], today: string, soonDays?: number): DueBuckets
+```
+
+Implementation note: today's `if (!bill.dueDate) continue` becomes "compute `billBalance` first, then route an undated bill into `noDueDate` when `outstanding > 0`, else skip". `searchBills`/`BillFilter` are untouched.
+
+### `lib/db/sync-status.ts` — a COUNT, with exactly one source of truth
+
+```ts
+export interface UnsyncedBills {
+  count: number       // bills whose OWN doc has locally-pending writes
+  billIds: string[]   // their `Bill.id` values (`DDMMYY/xxxxx`), for the drill-down
+}
+
+/**
+ * Phase 12 — the primitive. `onSnapshot(bills, { includeMetadataChanges: true })`, then
+ * count/collect the docs whose own `doc.metadata.hasPendingWrites` is true (the existing
+ * helper only exposed the QUERY-level boolean). No active business, or a listen error →
+ * `{ count: 0, billIds: [] }` + a no-op unsubscribe. Never throws. Costs no extra
+ * document read (same collection already listened to) and works offline — pending-write
+ * metadata is local.
+ */
+export function subscribeUnsyncedBills(cb: (state: UnsyncedBills) => void): () => void
+
+/**
+ * UNCHANGED SIGNATURE + SEMANTICS, now DERIVED: `subscribeUnsyncedBills(s => cb(s.count > 0))`.
+ * There is therefore exactly ONE sync-state implementation. Equivalent to the old
+ * query-level `snap.metadata.hasPendingWrites` because the app has no delete-bill
+ * mutation, so a pending write always belongs to a doc present in `snap.docs`.
+ * `SyncStatus.tsx` keeps its DOM/testids unchanged.
+ */
+export function subscribePendingWrites(cb: (hasPending: boolean) => void): () => void
+
+/** Unchanged. */
+export function waitForSync(): Promise<void>
+```
+
+**Anti-flicker (owned by slice-b, not by this module):** `UNSYNCED_BADGE_DELAY_MS = 1500`, a module const **inside `components/rollup/UnsyncedBadge.tsx`**. A write is briefly pending on every save even when online, so the badge **shows** only after `count > 0` has held continuously for that long and **hides immediately** at 0. `sync-status.ts` itself stays a plain, undebounced subscription (the Settings indicator wants the raw signal).
+
+### `lib/db/repo.ts` — one narrow addition
+
+```ts
+/**
+ * Phase 12 — set ONLY a bill's `dueDate` (+ `updatedAt`). DELIBERATELY NOT gated by the
+ * edit-lock: the lock protects PURCHASE figures after money has moved, and `billBalance`
+ * never reads `dueDate`, so this can change no total, no payment and no outstanding.
+ * Without it, pre-Phase-12 bills that have a payment AND no due date would keep their
+ * outstanding money hidden forever — the exact failure the mandatory due date prevents.
+ * Appends a best-effort activity entry using the EXISTING `type: 'bill-edit'`
+ * (no new ActivityType). Local-first: succeeds offline and syncs on reconnect.
+ * Throws `BillNotFoundError` for an unknown id. `updateBill`'s lock is unchanged.
+ */
+export function setBillDueDate(billId: string, dueDate: string): Promise<Bill>
+```
+
+### Routes & navigation (Phase 12)
+
+| Route | Purpose | testids |
+|-------|---------|---------|
+| `/` (edit) | The three new surfaces mount **above** the existing `SearchBar`, in order: `unsynced-badge` (only when count > 0) → `month-strip` → `today-card`. The bill list and its testids are untouched, and the new surfaces sit **outside** the `bill-list` container (which doubles as the empty-state container). | `month-strip`, `month-bought`, `month-paid`, `month-due`, `month-empty`, `today-card`, `today-count`, `today-bought`, `today-paid`, `today-pending`, `today-empty`, `unsynced-badge` |
+| `/rollup?metric=…` (**new**) | The drill-down. `metric ∈ 'bought-month' \| 'paid-month' \| 'due-all' \| 'bought-today' \| 'unsynced'`. Reads `useBills()` (+ `subscribeUnsyncedBills` for `unsynced`), renders one headline + its contribution rows + a back link. Query-param driven (like `/bill?id=`) and **wrapped in `<Suspense>`** for `useSearchParams` under static export, exactly as `/bills/quick` does. An unknown/missing `metric` falls back to `bought-month`. | `rollup-screen`, `rollup-headline`, `rollup-count`, `rollup-row`, `rollup-row-amount`, `rollup-empty` |
+| `/bills/choose` (edit) | `choice-quick` renders **first** and primary with a "Recommended" pill; `choice-fresh` second. Testids, targets and both journeys preserved. | `new-bill-choice`, `choice-quick`, `choice-quick-badge`, `choice-fresh` (all preserved except the new badge) |
+| `/bills/new`, `/bills/quick` (edit) | Due date **required**, pre-filled `addDaysIso(purchaseDate, 15)`, `dueDateTouched` tracking (mirrors the shipped `amountTouched`), added to the save-enabled validation **last** so existing hint precedence is unchanged. No ordering constraint vs `purchaseDate`. | `due-date-input`, `purchase-date`, `save-bill` (all preserved) |
+| `/due` (edit) | A fourth section `due-no-date` (legacy rows), additional to and visually distinct from the three existing buckets, each row carrying an inline pre-filled date input + **Set date** → `setBillDueDate`. The `empty` state now requires all **four** buckets empty. | `due-list`, `due-row`, `due-overdue`, `due-soon`, `due-upcoming` (preserved) + `due-no-date`, `due-set-date-input`, `due-set-date-btn` |
+
+**Testability rule (frozen):** every rollup money figure renders a numeric **`data-amount`** attribute (whole rupees) and every count a numeric **`data-count`**, on the strip, the today line, the badge, the drill-down headline and every drill-down row — so E2E asserts `Σ rows === headline` and month/day deltas numerically, never by parsing grouped, translated text.
+
+### `lib/i18n/dictionary.ts` — the complete Phase-12 key set (owned by slice-a)
+
+> The dictionary is **one shared ~911-line file** and `HI` is typed `Record<TKey, string>`, so **every EN key must have an HI counterpart or `pnpm build` fails** (this has bitten previous phases). Slice-a adds **all** of these — for slice-b's and slice-c's surfaces too — so parallel slices never conflict on the file. Values below are the frozen defaults; a build may polish wording but must keep both languages paired.
+
+| Key | EN | HI |
+|-----|----|----|
+| `rollup.month.title` | This month | इस महीना |
+| `rollup.today.title` | Today | आज |
+| `rollup.bought` | Bought | खरीद |
+| `rollup.paid` | Paid | भुगतान |
+| `rollup.due` | Due (all) | कुल बकाया |
+| `rollup.pending` | Pending | बाकी |
+| `rollup.bills` | bills | बही |
+| `rollup.month.empty` | No bills this month yet — add one and these numbers fill up. | इस महीने अभी कोई बही नहीं — एक जोड़ें, ये आँकड़े भर जाएँगे। |
+| `rollup.today.empty` | No bills entered today yet. | आज अभी कोई बही नहीं भरी। |
+| `rollup.addsUp` | These add up to the total above. | ये जोड़कर ऊपर का कुल बनता है। |
+| `rollup.empty` | Nothing here yet. | यहाँ अभी कुछ नहीं। |
+| `rollup.title.boughtMonth` | Bought this month | इस महीने की खरीद |
+| `rollup.title.paidMonth` | Paid this month | इस महीने का भुगतान |
+| `rollup.title.dueAll` | All outstanding | कुल बकाया |
+| `rollup.title.boughtToday` | Today's bills | आज की बही |
+| `rollup.title.unsynced` | Not backed up yet | बैकअप बाकी |
+| `unsynced.bills` | bills not yet backed up | बही का बैकअप बाकी |
+| `unsynced.hint` | These are saved on this phone. They upload automatically when you are online. | ये इसी फ़ोन पर सुरक्षित हैं। ऑनलाइन होते ही अपने-आप अपलोड हो जाएँगी। |
+| `unsynced.tapToSee` | Tap to see which ones | देखें कौन-कौन सी |
+| `choice.quick.hint` (**changed value**) | The usual way — copy the totals from your paper bill | रोज़ का तरीक़ा — काग़ज़ की बही से कुल आँकड़े भरें |
+| `choice.fresh.hint` (**changed value**) | When the farmer wants every sack listed | जब किसान को हर बोरे का हिसाब चाहिए |
+| `choice.recommended` | Recommended | सुझाया गया |
+| `dueDate.hint` | Defaults to 15 days after the purchase date — change it if needed. | खरीद तारीख से 15 दिन बाद अपने-आप — ज़रूरत हो तो बदलें। |
+| `validation.dueDateRequired` | Set a due date | देय तारीख भरें |
+| `due.noDate` | No due date — set one | देय तारीख नहीं — तय करें |
+| `due.noDate.hint` | These older bills still owe money but have no due date. | इन पुरानी बहियों का पैसा बाकी है पर देय तारीख नहीं है। |
+| `due.setDate` | Set date | तारीख तय करें |
+| `due.dateSet` | Due date saved | देय तारीख सहेजी गई |
+
+`choice.quick.title`, `choice.fresh.title`, `dueDate.label` and every other existing key keep their current values. No key is removed.
+
+### E2E determinism for Phase 12 (frozen)
+
+- The Firestore emulator is cleared **once per run** by `global-setup`, **not per spec**, and Playwright runs with `retries: 1`. Therefore the Phase-12 spec **asserts deltas against a baseline it reads at the start of the test**, never absolute totals — this makes it immune both to bills left behind by earlier specs and to its own first attempt on a retry.
+- `frontend/tests/e2e/support/emulator.ts` gains two helpers (built on the existing `getUidByEmail` / `getDocFields` / `str` / `FIRESTORE_DOCS_BASE` + `Bearer owner` admin token):
+  - `getOwnerBizId(): Promise<string>` — `getUidByEmail(OWNER_EMAIL)` → `users/{uid}.bizId`.
+  - `clearBillDueDate(bizId: string, billId: string): Promise<void>` — `PATCH .../businesses/{bizId}/bills/{billId.replace(/\//g,'_')}?updateMask.fieldPaths=dueDate` with body `{"fields":{}}`, which **deletes** the field. This is how the spec manufactures a **pre-Phase-12 legacy row**, since the UI can no longer create one. Reload the page after it so the client picks up the change deterministically. **Accepted fallback if the field-delete PATCH proves awkward:** write the field as an explicit null — body `{"fields":{"dueDate":{"nullValue":null}}}` with the same `updateMask` — because `!bill.dueDate` is true for `null` as well as for a missing key, so the bucket rule behaves identically. (`DueRow` already renders `bill.dueDate ? … : '—'`.) Either form is acceptable; do not add production code to make this testable.
+- The offline segment uses `context.setOffline(true/false)`, the same mechanism the shipped `shared-ledger.spec.ts` already relies on.

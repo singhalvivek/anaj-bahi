@@ -29,14 +29,17 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 
 **Actions:** tap **+ New Bill** → `/bills/choose` (the Phase-5 chooser; was `/bills/new`); tap a card → `/bill?id=<encoded id>`. Card totals use `computeBillTotal`, which is summary-aware, so a summary bill's card shows the sum of its entered amounts with no code change.
 
-### Screen: New Bill Chooser (`/bills/choose`) — slice-b _(Phase 5)_
+**Phase 12 — three surfaces mount ABOVE the existing `SearchBar`**, in this order, all **outside** the `bill-list` container (which doubles as the empty-state container): `unsynced-badge` (only when count > 0) → `month-strip` → `today-card`. The bill list, `bill-list`, `bill-card`, `new-bill-btn`, `SearchBar` and `search-no-results` are otherwise **untouched**. See [Phase-12 rollup surfaces](#phase-12-rollup-surfaces-home--rollup) below.
+
+### Screen: New Bill Chooser (`/bills/choose`) — slice-b _(Phase 5; reordered Phase 12)_
 
 **Purpose:** let the trader pick how to create a bill. `+ New Bill` (`new-bill-btn`) now routes here instead of straight to the fresh form.
 
 **Key elements:**
-- Two large, thumb-reachable, bilingual choice cards (≥56 px tall, big touch targets), stacked vertically in a container `data-testid="new-bill-choice"`:
-  1. **Fresh bill** (`data-testid="choice-fresh"`, a `Link` to `/bills/new`) — title + one-line hint "Enter each sack weight / हर बोरे का वज़न भरें". Lands in **exactly today's unchanged sack form**.
-  2. **Quick entry** (`data-testid="choice-quick"`, a `Link` to `/bills/quick`) — title + one-line hint "From a bill already written on paper / काग़ज़ पर लिखी बही से". Opens the summary form.
+- Two large, thumb-reachable, bilingual choice cards (≥56 px tall, big touch targets), stacked vertically in a container `data-testid="new-bill-choice"`. **Phase 12 reorders them — quick entry is the default path** (sack weights are the *farmer's* proof, not the trader's ledger — see [entry-defaults](capabilities/entry-defaults.md)):
+  1. **Quick entry** — **FIRST and primary** (`data-testid="choice-quick"`, a `Link` to `/bills/quick`), visually emphasised, with a small **"Recommended" / "सुझाया गया"** pill `data-testid="choice-quick-badge"`. Hint reworded to "The usual way — copy the totals from your paper bill / रोज़ का तरीक़ा — काग़ज़ की बही से कुल आँकड़े भरें". Opens the summary form.
+  2. **Fresh bill** — **second and secondary** (`data-testid="choice-fresh"`, a `Link` to `/bills/new`). Hint reworded to "When the farmer wants every sack listed / जब किसान को हर बोरे का हिसाब चाहिए". Lands in **exactly today's unchanged sack form**.
+- **Titles are unchanged** ("Quick entry / झटपट प्रविष्टि", "Fresh bill / पूरी बही") and **both testids and both link targets are preserved verbatim** — only DOM order, emphasis, the new badge and the two hint strings change. Both journeys keep working end-to-end.
 - Back link to home. No stubs; both options are live.
 
 ### Screen: Quick-Entry Bill (`/bills/quick`) — slice-b _(Phase 5)_
@@ -45,7 +48,7 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 
 **Layout (top → bottom, single scroll) — mirrors the fresh form's bill-level chrome:**
 1. **Farmer picker** (`FarmerPicker`, reused) — name **required**, place/village **required**, phone optional; same autocomplete. `data-testid="farmer-input"`.
-2. **Purchase date** (defaults today, required) `data-testid="purchase-date"`; **Due date** (optional) `data-testid="due-date-input"`.
+2. **Purchase date** (defaults today, required) `data-testid="purchase-date"`; **Due date** `data-testid="due-date-input"` — **Phase 12: REQUIRED**, pre-filled to `addDaysIso(purchaseDate, 15)`, freely editable, re-derived when the purchase date changes **until** the trader hand-edits it (`dueDateTouched`, mirroring the `amountTouched` pattern below). Hint `dueDate.hint`. See [Phase-12 due-date behaviour](#phase-12-due-date-behaviour-both-entry-forms).
 3. **Bill id preview** — read-only `DDMMYY/xxxxx`, finalised on save (same scheme as fresh).
 4. **Grain lines** — one card per line, **≥1**, `+ Add another grain` (`grain.addAnother`). Per line (`QuickGrainLineEditor`), fields in this exact order **(Phase 10 reorder)**:
    - **Grain type** selector (seeded + add-custom, reused) — **required**. `data-testid="grain-type-select"`.
@@ -67,7 +70,7 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 
 **Layout (top → bottom, single scroll):**
 1. **Farmer picker** (`FarmerPicker`) — a text input with **autocomplete** against saved farmers (see [farmer-autocomplete](capabilities/farmer-autocomplete.md)). Selecting fills farmer; if new, an inline "add farmer" mini-form (name required, place required, phone optional). `data-testid="farmer-input"`, suggestion items `data-testid="farmer-suggestion"`.
-2. **Purchase date** — date field defaulting to **today**. `data-testid="purchase-date"`.
+2. **Purchase date** — date field defaulting to **today**. `data-testid="purchase-date"`. **Due date** `data-testid="due-date-input"` — **Phase 12: REQUIRED**, pre-filled to `addDaysIso(purchaseDate, 15)`, freely editable, re-derived on purchase-date change until hand-edited (`dueDateTouched`). Hint `dueDate.hint`. See [Phase-12 due-date behaviour](#phase-12-due-date-behaviour-both-entry-forms).
 3. **Bill id preview** — shown read-only once date is set (`DDMMYY/xxxxx`), finalised on save.
 4. **Grain lines** (`GrainLineEditor`, one card per line, **≥1**):
    - Grain type selector (seeded list + "add custom") — labels shown in current language. `data-testid="grain-type-select"`.
@@ -184,6 +187,100 @@ The Settings nav entries that link to the **Members** and **Activity** screens a
 ### Screen: Activity log (owner or partner) — Phase 9
 
 `data-testid="activity-log"` (managers only — owner or partner): a reverse-chronological list of activity entries `data-testid="activity-row"` — each shows actor name (snapshot), action (bill-create / payment / edit / delete), the bill id, and time. Read-only; append-only source. Employees never see it (enforced by Security Rules; a non-manager reaching it sees a "owners & partners only" message, not raw data).
+
+---
+
+## Phase-12 pilot-readiness surfaces
+
+> The reader is a **50–60 year old grain trader on a low-end Android, in Hindi, one-handed**. These are the first screens in the app that show a figure spanning more than one bill, so readability and trust are the whole point. Product rationale: [home-rollups](capabilities/home-rollups.md), [entry-defaults](capabilities/entry-defaults.md); frozen signatures: [architecture.md § Phase-12 contract](architecture.md#phase-12-pilot-readiness-contract-frozen).
+
+### Display rules — non-negotiable
+
+- **Big numbers, Indian digit grouping** (`₹4,20,000`) via the **new** `formatRupeesIndian`. **`formatRupees` (2 dp, no separators) is unchanged** and stays the formatter for the bill card, bill detail, payments and the receipt.
+- **Whole rupees on every rollup surface.** No paise anywhere in this phase's figures.
+- **No lakh/crore shorthand** (`₹8.4L`, `₹1.2Cr`) anywhere — strategy §10 floats it, and it is **rejected here**: an abbreviated figure cannot be added by hand and would break the sum-of-visible-parts invariant that the whole feature's credibility rests on. Full grouped figures only.
+- **Type size floor:** rollup figures render at `text-xl`/`text-2xl` bold with `tabular-nums` (labels small, above). A figure must **never** shrink below `text-lg` to fit — if three grouped values will not fit one row on a 390 px-wide portrait viewport, the strip **wraps to a second row** rather than shrinking the type.
+- **Any visible total must equal the sum of the visible parts.** Each per-bill figure is rounded to a whole rupee **first**, then the rounded figures are added — never `round(true sum)`. He adds the column by hand; a ₹1 mismatch kills every number on the screen. (Same discipline as [data.md § Rounding decision](data.md#rounding-decision).)
+- **Number density:** at most **three hero-sized figures** on home (the month strip). Today's four figures render as **one compact secondary line**. The badge is a status chip, not a figure.
+- **≥48 px touch targets** (primary actions ≥56 px), thumb-reachable, mobile-first portrait, existing **stone/green** visual language. **No charts, no graphs, no sparklines.**
+- **Never an empty screen.** A period with no data says so warmly in one line — never blank, never a bare zero with no context.
+- **Never a misleading zero.** While `useBills()` is `undefined` ("not loaded yet") every figure renders a **skeleton bar** (matching the home list's existing skeleton), never `₹0`.
+- **All** new strings go through `t()` with **both EN and HI** keys in `lib/i18n/dictionary.ts` (typed `Record<TKey,string>` — a missing HI key **fails the build**).
+- **Every money figure carries a numeric `data-amount`** (whole rupees) and **every count a numeric `data-count`**, so E2E asserts values and the sum-equals-headline invariant without parsing grouped, translated text.
+
+### Phase-12 rollup surfaces (Home + `/rollup`)
+
+#### Surface: Unsynced badge — `data-testid="unsynced-badge"` (home, topmost)
+
+Rendered **only when** the unsynced bill count is `> 0`, at the very top of home so it cannot be missed. Amber chip in the existing warning language, full width, ≥48 px, tappable:
+- Text: `"<n> " + t('unsynced.bills')` ("3 bills not yet backed up / 3 बही का बैकअप बाकी") plus the reassurance line `unsynced.hint` ("These are saved on this phone. They upload automatically when you are online.") and `unsynced.tapToSee`.
+- `data-count="<n>"`.
+- **Clears only at zero** — no dismiss control, no snooze.
+- **Anti-flicker:** appears only once `count > 0` has held continuously for `UNSYNCED_BADGE_DELAY_MS` (1500 ms), hides **immediately** at 0 — otherwise every save flashes a scary "not backed up" chip while online.
+- Tap → `/rollup?metric=unsynced`.
+- The Settings **Sync** section (`sync-status` and its testids) is **unchanged**.
+
+#### Surface: "This month" strip — `data-testid="month-strip"` (home)
+
+The hero block: a heading `rollup.month.title` ("This month / इस महीना") over **three** large figures, side by side, each an independent ≥48 px tap target with a `data-amount`:
+
+| Element | Label | Value | Taps to |
+|---------|-------|-------|---------|
+| `month-bought` | `rollup.bought` ("Bought / खरीद") | `bought(current month)` | `/rollup?metric=bought-month` |
+| `month-paid` | `rollup.paid` ("Paid / भुगतान") | `paid(current month)` | `/rollup?metric=paid-month` |
+| `month-due` | `rollup.due` (**"Due (all) / कुल बकाया"** — the all-time scope is on the label, deliberately) | `due` (**all-time**, clamped per bill) | `/rollup?metric=due-all` |
+
+- When the month has no bills: the three figures still read `₹0` **plus** a warm one-liner `month-empty` (`rollup.month.empty` — "No bills this month yet — add one and these numbers fill up"). The strip **never silently substitutes another month** — a strip labelled "This month" showing other numbers would be actively misleading. Period switching is Phase 13.
+
+#### Surface: Close-of-day line — `data-testid="today-card"` (home)
+
+**One compact secondary line** (not four tiles), exactly as strategy §9-P0.4 phrases it: `Today · 3 bills · ₹7,689 bought · ₹6,742 paid · ₹1,201 pending`, heading `rollup.today.title`. Elements `today-count` (`data-count`), `today-bought`, `today-paid`, `today-pending` (each `data-amount`). **The whole line is a single tap target** → `/rollup?metric=bought-today` (four sub-targets would each be under 48 px). With no bills today it shows the warm line `today-empty` (`rollup.today.empty`).
+
+`paid(today)` and `pending(today)` have **no drill-down of their own**, by decision: their drillable counterparts `paid-month` and `due-all` are strict supersets containing the same bills, so every figure on home is either itself drillable or fully contained in one that is.
+
+#### Screen: Rollup drill-down (`/rollup?metric=…`) — **new**
+
+**Purpose:** the trust surface. *He will not believe a total he cannot check* (strategy §10). Query-param driven like `/bill?id=`, wrapped in `<Suspense>` for `useSearchParams` under static export (as `/bills/quick` does). Container `data-testid="rollup-screen"`.
+
+`metric ∈ bought-month | paid-month | due-all | bought-today | unsynced`; an unknown or missing value falls back to `bought-month`.
+
+**Layout (top → bottom):**
+1. Sub-header: back link (`action.back`) + the metric's title (`rollup.title.boughtMonth` / `.paidMonth` / `.dueAll` / `.boughtToday` / `.unsynced`).
+2. **`rollup-headline`** — the figure, hero-sized, Indian-grouped, with `data-amount`. For `unsynced` it is the **count** (`data-count`), not money.
+3. **`rollup-count`** — "N bills" (`rollup.bills`), the honesty signal next to every total.
+4. A one-line trust note `rollup.addsUp` ("These add up to the total above / ये जोड़कर ऊपर का कुल बनता है").
+5. The rows — one `rollup-row` per contributing bill: farmer name + place, bill id + date, and **`rollup-row-amount`** (`data-amount`) on the right. Each row is a `Link` to `/bill?id=<encoded id>`. For `unsynced` the row amount is the bill's payable total (identification only, no sum invariant).
+6. `rollup-empty` — a warm one-liner (`rollup.empty`) when there are no contributing rows. Never blank.
+
+**Invariant, asserted in E2E:** `Σ (rollup-row-amount data-amount) === rollup-headline data-amount`, exactly, for every money metric — and the headline equals the `data-amount` of the home figure that was tapped.
+
+Row order: `due-all` → amount descending (biggest exposure first); all others → newest first (matching the home list).
+
+### Phase-12 due-date behaviour (both entry forms)
+
+Identical on `/bills/new` (sack) and `/bills/quick` (summary). This is a **behaviour** change to an existing field — `due-date-input` and the `dueDate.label` key already ship on both forms.
+
+- **Required.** Added to the save-enabled condition, appended **last** so the precedence and wording of every existing validation hint is unchanged. Its hint is `validation.dueDateRequired` ("Set a due date / देय तारीख भरें"), shown inline in the current language with `save-bill` disabled — the existing pattern.
+- **Pre-filled** to `addDaysIso(purchaseDate, 15)` on mount (create), and **re-derived** whenever `purchaseDate` changes — **unless** the trader has hand-edited it (`dueDateTouched`, the same shape as the shipped `amountTouched` on the quick form's amount field). In edit mode a **stored** due date loads verbatim and is treated as touched (never auto-overwritten); a legacy bill with no stored due date pre-fills from its own `purchaseDate + 15`.
+- **Freely editable, with no ordering constraint** — a due date **earlier** than the purchase date is accepted and saves. Bills are often transcribed days late with a date already past, and refusing that would block a real transaction (the shipped ledger E2E files bills due `2020-01-01`).
+- Hint under the field: `dueDate.hint` ("Defaults to 15 days after the purchase date — change it if needed").
+- The phone-keyboard **Next/Done** (`enterKeyHint`) wiring shipped in `#14` is **not touched** — the due date is a native `type="date"` picker, outside that chain.
+
+### Screen: Due (`/due`) — Phase-12 legacy no-due-date group
+
+The Due screen keeps its **dated-only** principle and its **three** existing buckets — `due-overdue`, `due-soon`, `due-upcoming` — with unchanged membership, contents, ordering and testids (a deliberate product decision from commit `bb0b6a3` that **stands**). Phase 12 adds **one additional, visually distinct section**:
+
+- **`data-testid="due-no-date"`** — heading `due.noDate` ("No due date — set one / देय तारीख नहीं — तय करें") plus the explanatory line `due.noDate.hint` ("These older bills still owe money but have no due date"). Contains only **pre-Phase-12** bills: no `dueDate` **and** `outstanding > 0`, oldest `purchaseDate` first. From Phase 12 on nothing can create a new undated bill, so this group self-empties as he works through it.
+- Each row shows the same identity + outstanding figure as a `due-row`, plus an inline repair control (`SetDueDateRow`): a compact `type="date"` input **`due-set-date-input`** pre-filled to `addDaysIso(bill.purchaseDate, 15)` and a ≥48 px **Set date** button **`due-set-date-btn`** (`due.setDate`) → `setBillDueDate`. On success a brief `due.dateSet` confirmation shows and the row **leaves this group and reappears in the correct dated bucket** automatically (the screen reads the live `useBills()` snapshot) — a visible, satisfying confirmation.
+- **This works on a payment-locked bill**, deliberately: a due date changes no money figure, and a legacy bill with a partial payment is exactly the case whose outstanding money must not stay hidden.
+- Inline repair is on the Due row itself (not behind a navigation to the bill) because forcing a navigate-away-and-back per bill is the difference between repairing twelve legacy bills and repairing none.
+- The Due screen's **empty** state now requires **all four** buckets to be empty.
+
+### Phase-12 testid summary
+
+**New:** `month-strip`, `month-bought`, `month-paid`, `month-due`, `month-empty`, `today-card`, `today-count`, `today-bought`, `today-paid`, `today-pending`, `today-empty`, `unsynced-badge`, `rollup-screen`, `rollup-headline`, `rollup-count`, `rollup-row`, `rollup-row-amount`, `rollup-empty`, `choice-quick-badge`, `due-no-date`, `due-set-date-input`, `due-set-date-btn`.
+
+**Preserved unchanged (must all still pass):** `choice-quick`, `choice-fresh`, `new-bill-choice`, `due-date-input`, `purchase-date`, `bill-list`, `bill-card`, `new-bill-btn`, `search-input`, `search-clear`, `search-no-results`, `filter-grain`, `due-list`, `due-row`, `due-overdue`, `due-soon`, `due-upcoming`, `sync-status`, `sync-pending-indicator`, `sync-online-indicator`, `sync-now-btn`, `save-bill`, `bill-total`, `paldari-input`, `post-save-share-sheet`, `post-save-done-btn`, `detail-bill-total`, `outstanding-balance`, `paid-total`, `edit-locked`, `payment-amount`, `payment-date`, `payment-add`.
 
 ---
 
