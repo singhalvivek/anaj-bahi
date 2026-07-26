@@ -50,26 +50,49 @@ export interface DueBuckets {
   overdue: Bill[]
   dueSoon: Bill[]
   upcoming: Bill[]
+  /**
+   * **Phase 12, additive.** Legacy bills (created before the due date became
+   * mandatory) that carry **no** due date but still owe money. They are not
+   * "due" — nothing dates them — but their money is real and must not be
+   * invisible, so they surface here instead of in a dated group.
+   */
+  noDueDate: Bill[]
 }
 
 /**
- * Group an in-memory bill list by due state. A bill is shown only if it still owes
- * money (`outstanding > 0`) **and** carries a due date — a bill with no due date
- * never appears here. Fully-paid bills (`outstanding <= 0`) are excluded too.
+ * Group an in-memory bill list by due state. Every bucket requires the bill to
+ * still owe money (`outstanding > 0`); fully-paid bills appear nowhere.
  *
- *   overdue  → has a due date before today, still owes (sorted by dueDate asc)
- *   dueSoon  → has a due date within `soonDays` (default 7), still owes (dueDate asc)
- *   upcoming → has a due date beyond the soon window, still owes (dueDate asc)
+ *   overdue   → due date before today (sorted by dueDate asc)
+ *   dueSoon   → due date within `soonDays` (default 7) (dueDate asc)
+ *   upcoming  → due date beyond the soon window (dueDate asc)
+ *   noDueDate → **no** due date at all (oldest purchaseDate first, then createdAt asc)
+ *
+ * The three DATED buckets keep the dated-only rule exactly as before — an
+ * undated bill can never enter one of them. `noDueDate` is **purely additive**:
+ * adding undated rows to the input leaves overdue/dueSoon/upcoming byte-for-byte
+ * identical. Since Phase 12 makes the due date mandatory at creation, this
+ * bucket only ever holds pre-Phase-12 rows and drains to empty as they are
+ * repaired (see `setBillDueDate`, which can date a payment-locked bill that
+ * `updateBill` would refuse).
  */
 export function listDueBills(bills: Bill[], today: string, soonDays = 7): DueBuckets {
   const overdue: Bill[] = []
   const dueSoon: Bill[] = []
   const upcoming: Bill[] = []
+  const noDueDate: Bill[] = []
 
   for (const bill of bills) {
-    if (!bill.dueDate) continue
     const { outstanding } = billBalance(bill)
     if (outstanding <= 0) continue
+
+    // Undated but still owing: real money, so never dropped — but it is not
+    // "due", so it stays out of the dated groups.
+    if (!bill.dueDate) {
+      noDueDate.push(bill)
+      continue
+    }
+
     const status = dueStatus(bill.dueDate, outstanding, today, soonDays)
     if (status === 'overdue') overdue.push(bill)
     else if (status === 'due_soon') dueSoon.push(bill)
@@ -81,5 +104,15 @@ export function listDueBills(bills: Bill[], today: string, soonDays = 7): DueBuc
   overdue.sort(byDueDateAsc)
   dueSoon.sort(byDueDateAsc)
   upcoming.sort(byDueDateAsc)
-  return { overdue, dueSoon, upcoming }
+
+  // Oldest purchase first — the longest-unresolved row is the one to repair next.
+  noDueDate.sort((a, b) =>
+    a.purchaseDate < b.purchaseDate
+      ? -1
+      : a.purchaseDate > b.purchaseDate
+        ? 1
+        : a.createdAt - b.createdAt,
+  )
+
+  return { overdue, dueSoon, upcoming, noDueDate }
 }

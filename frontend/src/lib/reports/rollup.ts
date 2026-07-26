@@ -71,12 +71,13 @@ export interface RollupPeriod {
  * equals the headline by construction — that invariant is what makes the number
  * checkable, and it is unit-tested for every metric.
  */
-export interface RollupContribution {
+export interface Contribution {
   billId: string
   farmerName: string
   farmerPlace: string
   /** Purchase date for bought/due metrics; the LATEST in-period payment date for paid. */
   date: string
+  /** Whole rupees — the same integer that went into the total. */
   amount: number
 }
 
@@ -149,7 +150,7 @@ export function dayRollup(bills: Bill[], date: string): DayRollup {
 }
 
 /** Internal row shape — `createdAt` is the sort tiebreak and is stripped before returning. */
-interface SortableContribution extends RollupContribution {
+interface SortableContribution extends Contribution {
   createdAt: number
 }
 
@@ -157,7 +158,7 @@ export function rollupContributions(
   bills: Bill[],
   metric: RollupMetric,
   period: RollupPeriod,
-): RollupContribution[] {
+): Contribution[] {
   const rows: SortableContribution[] = []
 
   for (const bill of bills) {
