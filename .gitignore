@@ -29,3 +29,6 @@ playwright-report/
 serviceAccount*.json
 **/serviceAccount*.json
 firebase-service-account*.json
+
+# local product/strategy notes — thinking space, not part of the spec
+strategy/
