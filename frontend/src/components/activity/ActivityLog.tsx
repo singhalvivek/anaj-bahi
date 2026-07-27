@@ -5,12 +5,12 @@
 // empty (also the fail-safe value a non-owner listener resolves to). Each row
 // shows the actor, a translated action label, the summary, and the time.
 
-import { useI18n } from '@/lib/i18n/context'
+import { useI18n, type TKey } from '@/lib/i18n/context'
 import { useActivity } from '@/lib/db/hooks'
 import type { ActivityType } from '@/lib/db/schema'
 
 // Map each activity type to its translation key (labels live in the dictionary).
-const ACTION_KEY: Record<ActivityType, string> = {
+const ACTION_KEY: Record<ActivityType, TKey> = {
   'bill-create': 'activity.action.billCreate',
   payment: 'activity.action.payment',
   'bill-edit': 'activity.action.billEdit',

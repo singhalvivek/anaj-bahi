@@ -7,6 +7,9 @@ import { useBills, useGrainTypes } from '@/lib/db/hooks'
 import { searchBills, type BillFilter } from '@/lib/db/queries'
 import { billBalance } from '@/lib/calc'
 import { SearchBar } from '@/components/SearchBar'
+import { UnsyncedBadge } from '@/components/rollup/UnsyncedBadge'
+import { MonthStrip } from '@/components/rollup/MonthStrip'
+import { TodayLine } from '@/components/rollup/TodayLine'
 import { formatRupees, formatDate } from '@/components/format'
 
 export default function HomePage() {
@@ -31,6 +34,14 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4">
+      {/* Phase-12 rollups — the first figures that span more than one bill. They read
+          the UNFILTERED live snapshot (`allBills`), sit ABOVE the search bar and
+          OUTSIDE the `bill-list` container, and each figure taps through to the bills
+          behind it. The badge renders nothing while everything is backed up. */}
+      <UnsyncedBadge />
+      <MonthStrip bills={allBills} />
+      <TodayLine bills={allBills} />
+
       {/* Search / Filter — real Phase-2 feature (replaces the Phase-1 stub) */}
       <SearchBar onChange={setFilter} />
 

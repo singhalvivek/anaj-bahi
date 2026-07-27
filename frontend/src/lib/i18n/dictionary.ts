@@ -210,9 +210,9 @@ export const EN = {
   // new-bill chooser (/bills/choose)
   'choice.title': 'New Bill',
   'choice.fresh.title': 'Fresh bill',
-  'choice.fresh.hint': 'Enter each sack weight',
+  'choice.fresh.hint': 'When the farmer wants every sack listed',
   'choice.quick.title': 'Quick entry',
-  'choice.quick.hint': 'From a bill already written on paper',
+  'choice.quick.hint': 'The usual way — copy the totals from your paper bill',
 
   // quick-entry summary form (/bills/quick)
   'quick.title': 'Quick Entry',
@@ -450,6 +450,43 @@ export const EN = {
   'postsave.title': 'Bill saved',
   'postsave.share': 'Share receipt',
   'postsave.done': 'Back',
+
+  // ---- Phase 12 — cross-bill rollups (home strip, close-of-day, drill-down) ----
+  'rollup.month.title': 'This month',
+  'rollup.today.title': 'Today',
+  'rollup.bought': 'Bought',
+  'rollup.paid': 'Paid',
+  'rollup.due': 'Due (all)',
+  'rollup.pending': 'Pending',
+  'rollup.bills': 'bills',
+  'rollup.month.empty': 'No bills this month yet — add one and these numbers fill up.',
+  'rollup.today.empty': 'No bills entered today yet.',
+  'rollup.addsUp': 'These add up to the total above.',
+  'rollup.empty': 'Nothing here yet.',
+  'rollup.title.boughtMonth': 'Bought this month',
+  'rollup.title.paidMonth': 'Paid this month',
+  'rollup.title.dueAll': 'All outstanding',
+  'rollup.title.boughtToday': "Today's bills",
+  'rollup.title.unsynced': 'Not backed up yet',
+
+  // ---- Phase 12 — un-synced (not-yet-backed-up) bills ----
+  'unsynced.bills': 'bills not yet backed up',
+  'unsynced.hint':
+    'These are saved on this phone. They upload automatically when you are online.',
+  'unsynced.tapToSee': 'Tap to see which ones',
+
+  // ---- Phase 12 — quick entry is now the recommended default ----
+  'choice.recommended': 'Recommended',
+
+  // ---- Phase 12 — mandatory due date (+15 days) ----
+  'dueDate.hint': 'Defaults to 15 days after the purchase date — change it if needed.',
+  'validation.dueDateRequired': 'Set a due date',
+
+  // ---- Phase 12 — legacy undated bills on the Due screen ----
+  'due.noDate': 'No due date — set one',
+  'due.noDate.hint': 'These older bills still owe money but have no due date.',
+  'due.setDate': 'Set date',
+  'due.dateSet': 'Due date saved',
 } as const
 
 export type TKey = keyof typeof EN
@@ -658,9 +695,9 @@ export const HI: Record<TKey, string> = {
   // new-bill chooser (/bills/choose)
   'choice.title': 'नई बही',
   'choice.fresh.title': 'पूरी बही',
-  'choice.fresh.hint': 'हर बोरे का वज़न भरें',
+  'choice.fresh.hint': 'जब किसान को हर बोरे का हिसाब चाहिए',
   'choice.quick.title': 'झटपट प्रविष्टि',
-  'choice.quick.hint': 'काग़ज़ पर लिखी बही से',
+  'choice.quick.hint': 'रोज़ का तरीक़ा — काग़ज़ की बही से कुल आँकड़े भरें',
 
   // quick-entry summary form (/bills/quick)
   'quick.title': 'झटपट बही',
@@ -897,6 +934,42 @@ export const HI: Record<TKey, string> = {
   'postsave.title': 'बही सहेज ली गई',
   'postsave.share': 'रसीद साझा करें',
   'postsave.done': 'वापस',
+
+  // ---- Phase 12 — cross-bill rollups (home strip, close-of-day, drill-down) ----
+  'rollup.month.title': 'इस महीना',
+  'rollup.today.title': 'आज',
+  'rollup.bought': 'खरीद',
+  'rollup.paid': 'भुगतान',
+  'rollup.due': 'कुल बकाया',
+  'rollup.pending': 'बाकी',
+  'rollup.bills': 'बही',
+  'rollup.month.empty': 'इस महीने अभी कोई बही नहीं — एक जोड़ें, ये आँकड़े भर जाएँगे।',
+  'rollup.today.empty': 'आज अभी कोई बही नहीं भरी।',
+  'rollup.addsUp': 'ये जोड़कर ऊपर का कुल बनता है।',
+  'rollup.empty': 'यहाँ अभी कुछ नहीं।',
+  'rollup.title.boughtMonth': 'इस महीने की खरीद',
+  'rollup.title.paidMonth': 'इस महीने का भुगतान',
+  'rollup.title.dueAll': 'कुल बकाया',
+  'rollup.title.boughtToday': 'आज की बही',
+  'rollup.title.unsynced': 'बैकअप बाकी',
+
+  // ---- Phase 12 — un-synced (not-yet-backed-up) bills ----
+  'unsynced.bills': 'बही का बैकअप बाकी',
+  'unsynced.hint': 'ये इसी फ़ोन पर सुरक्षित हैं। ऑनलाइन होते ही अपने-आप अपलोड हो जाएँगी।',
+  'unsynced.tapToSee': 'देखें कौन-कौन सी',
+
+  // ---- Phase 12 — quick entry is now the recommended default ----
+  'choice.recommended': 'सुझाया गया',
+
+  // ---- Phase 12 — mandatory due date (+15 days) ----
+  'dueDate.hint': 'खरीद तारीख से 15 दिन बाद अपने-आप — ज़रूरत हो तो बदलें।',
+  'validation.dueDateRequired': 'देय तारीख भरें',
+
+  // ---- Phase 12 — legacy undated bills on the Due screen ----
+  'due.noDate': 'देय तारीख नहीं — तय करें',
+  'due.noDate.hint': 'इन पुरानी बहियों का पैसा बाकी है पर देय तारीख नहीं है।',
+  'due.setDate': 'तारीख तय करें',
+  'due.dateSet': 'देय तारीख सहेजी गई',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {
@@ -904,8 +977,18 @@ export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {
   hi: HI,
 }
 
-/** Translate a key for a language; falls back to the key itself if somehow missing. */
-export function translate(lang: Lang, key: string): string {
+/**
+ * Translate a key for a language.
+ *
+ * `key` is `TKey`, not `string`, and that is load-bearing: an unknown key would
+ * otherwise fall through to the `?? key` branch and render the raw key text
+ * ("rollup.month.title") to the user, with nothing failing the build. Typing it
+ * narrowly turns that into a compile error at the CALL SITE instead.
+ *
+ * The runtime fallback is kept only as a defence against a bad cast at a dynamic
+ * call site; it should be unreachable in typed code.
+ */
+export function translate(lang: Lang, key: TKey): string {
   const dict = DICTIONARIES[lang]
   return (dict as Record<string, string>)[key] ?? key
 }

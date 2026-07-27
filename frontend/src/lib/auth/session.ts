@@ -9,6 +9,7 @@
 
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase/app'
+import type { TKey } from '@/lib/i18n/dictionary'
 
 export interface AppUser {
   uid: string
@@ -22,11 +23,15 @@ export interface AppUser {
 /**
  * A translatable auth failure. `messageKey` is an i18n key (see dictionary.ts
  * `auth.error.*`) the UI passes to `t(...)`, so errors render bilingually.
+ *
+ * Typed `TKey`, not `string`: this is the SOURCE of the keys every auth screen
+ * feeds straight into `t()`, so constraining it here means a bad key is caught
+ * once, at the throw site, instead of five components casting it back.
  */
 export class AuthError extends Error {
   readonly code: string
-  readonly messageKey: string
-  constructor(code: string, messageKey: string) {
+  readonly messageKey: TKey
+  constructor(code: string, messageKey: TKey) {
     super(messageKey)
     this.name = 'AuthError'
     this.code = code
@@ -34,7 +39,7 @@ export class AuthError extends Error {
   }
 }
 
-const AUTH_ERROR_KEYS: Record<string, string> = {
+const AUTH_ERROR_KEYS: Record<string, TKey> = {
   // The user dismissed / cancelled the Google popup — a benign, retryable action.
   'auth/popup-closed-by-user': 'auth.error.popupClosed',
   'auth/cancelled-popup-request': 'auth.error.popupClosed',

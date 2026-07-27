@@ -245,10 +245,81 @@ outstanding       = roundRupees(payableBillTotal − paid)
 
 **Example 6 — paldari subtracted:** a bill whose lines total **₹7101.72** (Example 3) with `paldari 200` → **payable ₹6901.72**; a ₹1000 payment leaves outstanding **₹5901.72**. Absent paldari → payable === linesTotal (existing bills unchanged). Unit-tested.
 
+## Phase-12 derived aggregates (NO schema change)
+
+> **Nothing is added to any entity in this phase.** No new field, no new collection, no new index, no new `ActivityType`, no Dexie/Firestore migration, and **no new Firestore read** — every figure below is derived on the device from the bills the home screen has already loaded (the live `useBills()` snapshot), so it all works offline. `Bill.dueDate` already exists as an optional ISO string; Phase 12 only makes the **entry forms** always populate it (see [entry-defaults](capabilities/entry-defaults.md)). Product rationale and the drill-down contract are in [home-rollups](capabilities/home-rollups.md); the frozen signatures are in [architecture.md § Phase-12 contract](architecture.md#phase-12-pilot-readiness-contract-frozen).
+
+### Display rounding for aggregates — round first, then add
+
+The Phase-1 [Rounding decision](#rounding-decision) says: line amounts are rounded, and the bill total is the sum of the **already-rounded** lines, so the printed total always equals the printed lines. Phase 12 applies the **same discipline one level up**:
+
+- `roundToRupee(x)` = half-up to a **whole rupee**, on the absolute value (`1200.55 → 1201`, `4000.30 → 4000`, `−258.28 → −258`).
+- **Every aggregate is DEFINED as `Σ` of its already-rounded per-bill contributions** — never `roundToRupee(true sum)`. The drill-down list therefore adds up to the headline as an invariant of the arithmetic, not a coincidence of the UI.
+- **Aggregate surfaces are whole-rupee only** (paise are noise at month scale and kill big-number readability). Per-bill surfaces — bill card, bill detail, receipt — keep the **unchanged** 2-dp `formatRupees`. A bill's whole-rupee drill-down row may therefore differ by ≤ ₹0.50 from the 2-dp figure on that bill's own card; there is **never** a mismatch *within* one screen, which is the invariant that matters.
+- Rationale: he adds the column by hand. A ₹1 disagreement kills not just that number but every number on the screen.
+
+### The three definitions
+
+Notation: `total(b) = billBalance(b).total` (payable, **net of paldari**, not clamped); `outstanding(b) = billBalance(b).outstanding`; `inMonth(iso, m) = iso.slice(0,7) === m` (pure ISO string prefix compare — no `Date`, no timezone/DST hazard).
+
+```
+bought(m)   = Σ roundToRupee(total(b))                       over b where inMonth(b.purchaseDate, m)
+paid(m)     = Σ roundToRupee(Σ p.amount for p in b.payments  // matched by the PAYMENT's own date,
+                             where inMonth(p.date, m))       //   over ** ALL BILLS **
+due         = Σ roundToRupee(max(0, outstanding(b)))         over ** ALL BILLS **  — ALL-TIME, CLAMPED PER BILL
+
+billCount(d) = count of b where b.purchaseDate === d
+bought(d)    = Σ roundToRupee(total(b))                      over b where b.purchaseDate === d
+paid(d)      = Σ roundToRupee(Σ p.amount where p.date === d) over ** ALL BILLS **
+pending(d)   = Σ roundToRupee(max(0, outstanding(b)))        over b where b.purchaseDate === d
+```
+
+Two properties that a generator must not "tidy up":
+
+1. **The bought/paid asymmetry is intended.** `bought` selects **bills** by the bill's `purchaseDate`; `paid` selects **payments** by the payment's own `date` across **every** bill. So a June bill paid in July counts in July's `paid` and **not** in July's `bought`. They are a purchasing figure and a cash-out figure, not two views of one set.
+2. **The `due`/`pending` clamp is PER BILL.** `billBalance` returns a **negative** `outstanding` when a bill is overpaid (an advance — the detail screen already shows it as `advance-credit`). Clamping each bill at 0 before summing stops an advance on one bill from silently reducing reported exposure on unrelated bills. Displaying advances is out of scope in Phase 12, but they must not distort this figure.
+
+### Canonical fixture (unit tests assert these exact numbers)
+
+`today = 2026-07-26`, `monthKey = 2026-07`. All money in ₹.
+
+| Bill | purchaseDate | linesTotal | paldari | `total` | payments (amount @ date) | `outstanding` |
+|------|--------------|-----------:|--------:|--------:|--------------------------|--------------:|
+| A | 2026-06-28 (**last month**) | 10000.40 | — | 10000.40 | 4000.30 @ 2026-07-02 (**this month**) | 6000.10 |
+| B | 2026-07-01 | 7101.72 | 200 | 6901.72 | 1000.00 @ 2026-07-01; **500.00 @ 2026-08-03 (next month)** | 5401.72 |
+| C | 2026-07-26 (**today**) | 3741.72 | — | 3741.72 | 3741.72 @ 2026-07-26 | 0.00 |
+| D | 2026-07-26 (**today**) | 2745.88 | — | 2745.88 | **3000.00 @ 2026-07-26 (overpaid)** | **−254.12** |
+| E | 2026-08-02 (**next month**) | 5000.00 | — | 5000.00 | — | 5000.00 |
+| F | 2026-07-26 (**today**) | 1200.55 | — | 1200.55 | — | 1200.55 |
+
+**Example 7 — `bought(2026-07)` and why round-then-add matters.** In-month bills are B, C, D, F:
+`6902 + 3742 + 2746 + 1201 = ` **₹14,591**, and `billCount = 4`.
+The true unrounded sum is `6901.72 + 3741.72 + 2745.88 + 1200.55 = 14589.87`, so `roundToRupee(true sum) = 14590` — **₹1 lower**. The spec figure is **14591**; a unit test asserts both numbers so the round-then-add rule cannot silently regress. Bill A (June) and E (August) are excluded.
+
+**Example 8 — `paid(2026-07)` and the asymmetry, in both directions.** Over **all** bills, payments dated in July:
+`A 4000 (4000.30) + B 1000 + C 3742 + D 3000 = ` **₹11,742**.
+- **A contributes** although A is a **June** bill — its payment is dated July (and A does **not** appear in `bought(2026-07)`).
+- **B's 500.00 is excluded** although B is a **July** bill — that payment is dated **August**.
+- E and F have no payments and contribute nothing.
+
+**Example 9 — `due` (all-time) and the per-bill clamp.** Over all bills, each clamped at 0:
+`A 6000 + B 5402 + C 0 + D 0 (max(0, −254.12)) + E 5000 + F 1201 = ` **₹17,603**.
+Without the per-bill clamp, D would contribute `−254` and the figure would read **₹17,349** — a **₹254 understatement of real exposure**. Both values are asserted so the clamp is proven by value, not by inspection. The drill-down for this metric has **4 rows** (A, B, E, F); C and D are zero contributors and are excluded.
+
+**Example 10 — the day rollup for 2026-07-26.** Bills dated today are C, D, F:
+`billCount = 3`; `bought = 3742 + 2746 + 1201 = ` **₹7,689**; `paid = 3742 (C) + 3000 (D) = ` **₹6,742**; `pending = 0 + 0 + 1201 = ` **₹1,201**.
+`paid` here (6742) includes D's **overpayment** of 3000 against a 2745.88 bill, and on another day `paid` may legitimately **exceed** `bought` entirely (settling old bills). Neither is a bug and neither must be "corrected" by capping a payment or by netting advances.
+
+**Example 11 — month and year boundaries.** With `monthKey = 2026-07`: `2026-06-30` excluded, `2026-07-01` included, `2026-07-31` included, `2026-08-01` excluded. With `monthKey = 2025-12`: `2025-12-31` included, `2026-01-01` excluded. Membership is a string prefix compare, so no timezone or DST case exists.
+
+### Due buckets — the additive fourth group
+
+`listDueBills` gains `noDueDate` = bills with **no `dueDate`** and `outstanding > 0`, sorted `purchaseDate` ascending (oldest first; ties by `createdAt` ascending). The three existing buckets (`overdue` / `dueSoon` / `upcoming`) keep their exact membership rules, contents and ordering. This group exists **only** for pre-Phase-12 rows — from Phase 12 on, both entry forms require a due date, so nothing can create a new undated bill. Repairing one uses `setBillDueDate`, which writes only `dueDate` + `updatedAt` and is deliberately **not** gated by the edit-lock (a due date changes no money figure — `billBalance` never reads it). See [entry-defaults](capabilities/entry-defaults.md).
+
 ## Data Lifecycle
 
 - **Create:** farmer on first use; grain seeds on first app run (idempotent); bill on Save.
-- **Update:** a bill is **fully editable in Phase 1** (no payments exist yet). **Phase 2 edit-lock rule:** once `payments.length > 0`, the bill's purchase data locks; only new payments may be added. `updatedAt` set on every write.
+- **Update:** a bill is **fully editable in Phase 1** (no payments exist yet). **Phase 2 edit-lock rule:** once `payments.length > 0`, the bill's purchase data locks; only new payments may be added. `updatedAt` set on every write. **Phase 12 — one narrow, deliberate exception:** `setBillDueDate` may set a bill's **`dueDate`** (and `updatedAt`) even on a locked bill, because the lock protects **purchase figures** after money has moved and `billBalance` never reads `dueDate` — so it can change no total, no payment and no outstanding. It exists so a pre-Phase-12 bill with a payment and no due date cannot keep its outstanding money hidden. Every other purchase-data edit stays locked, and this is the **only** lock exception.
 - **Delete:** not offered in Phase 1 (avoids accidental data loss on the tested path); a guarded delete may come later.
 - **Retention:** nothing is time-boxed or archived; the ledger is permanent local history (Phase 4 adds cloud backup).
 

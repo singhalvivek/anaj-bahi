@@ -117,3 +117,44 @@ export async function getUidByEmail(email: string): Promise<string | null> {
   const match = accounts.find((a) => (a.email ?? '').toLowerCase() === email.toLowerCase())
   return match?.localId ?? null
 }
+
+// --- Phase 12 helpers -------------------------------------------------------
+
+/**
+ * Resolve the business a signed-in test identity belongs to (`users/{uid}.bizId`).
+ * Takes the email explicitly rather than importing `OWNER_EMAIL`, so this Node-side
+ * module never has to depend on the Playwright-side auth helpers.
+ */
+export async function getOwnerBizId(email: string): Promise<string> {
+  const uid = await getUidByEmail(email)
+  if (!uid) throw new Error(`No emulator account for ${email}`)
+  const bizId = str(await getDocFields(`users/${uid}`), 'bizId')
+  if (!bizId) throw new Error(`users/${uid} has no bizId`)
+  return bizId
+}
+
+/**
+ * Manufacture a PRE-PHASE-12 legacy row by DELETING a bill's `dueDate`.
+ *
+ * Phase 12 makes the due date mandatory, so the UI can no longer create a bill
+ * without one — yet the `noDueDate` bucket exists precisely to surface the rows
+ * that predate that rule. This writes the state the UI cannot, using an
+ * `updateMask` with an empty `fields` body, which deletes the masked field.
+ *
+ * Reload the page afterwards so the client picks the change up deterministically.
+ */
+export async function clearBillDueDate(bizId: string, billId: string): Promise<void> {
+  // Bill doc ids sanitize `/` → `_` (see repo.billDocId).
+  const docId = billId.replace(/\//g, '_')
+  const url =
+    `${FIRESTORE_DOCS_BASE}/businesses/${bizId}/bills/${docId}` +
+    `?updateMask.fieldPaths=dueDate`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { ...ADMIN_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: {} }),
+  })
+  if (!res.ok) {
+    throw new Error(`clearBillDueDate ${billId} failed: ${res.status} ${await res.text()}`)
+  }
+}

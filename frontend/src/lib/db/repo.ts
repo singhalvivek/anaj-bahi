@@ -383,6 +383,34 @@ export async function updateBill(bill: Bill): Promise<Bill> {
 }
 
 /**
+ * Phase 12 — set ONLY a bill's `dueDate` (and bump `updatedAt`).
+ *
+ * **Deliberately NOT gated by the edit-lock.** The lock exists to freeze
+ * PURCHASE figures once money has moved, and `billBalance` never reads
+ * `dueDate` — so this can change no total, no payment and no outstanding
+ * amount. Without it, a pre-Phase-12 bill that has a payment AND no due date
+ * could never be dated (`updateBill` would throw `BillLockedError`), leaving its
+ * outstanding money permanently invisible on the Due screen — the exact failure
+ * the mandatory due date exists to prevent.
+ *
+ * Reads the STORED bill and writes only the one field, so a caller cannot smuggle
+ * purchase edits through this path. `updateBill`'s lock is untouched.
+ * Local-first: succeeds offline and syncs on reconnect. Throws
+ * `BillNotFoundError` for an unknown id.
+ */
+export async function setBillDueDate(billId: string, dueDate: string): Promise<Bill> {
+  const bizId = requireBizId()
+  const bill = await getBill(billId)
+  if (!bill) throw new BillNotFoundError(billId)
+  const updated: Bill = { ...bill, dueDate, updatedAt: now() }
+  fireWrite(setDoc(billDoc(bizId, updated.id), updated))
+  // Best-effort activity append, reusing the EXISTING 'bill-edit' type (no new
+  // ActivityType) — never blocks the write.
+  logActivity(bizId, { type: 'bill-edit', billId: updated.id, summary: updated.farmerName })
+  return updated
+}
+
+/**
  * Append a payment to a bill's embedded `payments[]` and bump `updatedAt`.
  * ALWAYS allowed — even once the bill is locked for purchase edits. Recompute
  * balance by reading the returned bill through `billBalance` in lib/calc.
