@@ -62,7 +62,11 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 6. **Live bill total** (`LiveTotals`, reused) — at the end of the form in normal flow (NOT sticky) = **Σ the entered line Amounts − paldari** (net payable). `data-testid="bill-total"` shows the **net** total; when paldari > 0 a subtle subtotal + paldari-deduction breakdown (`data-testid="paldari-line"`) renders just above the green box.
 7. **Save** (`data-testid="save-bill"`, reused) at the end of the form. **Enabled only when** farmer name + place + purchase date are set AND every line has grainType + price > 0 + total weight > 0 + amount > 0; disabled otherwise with an inline bilingual hint (same pattern as the fresh form). `sackCount`/`deductionKg`/`paldari` are never required.
 
-**On save:** assemble a `Bill` with `entryMode: 'summary'`, each line carrying `summary: { totalWeightKg, sackCount?, deductionKg?, amount }` (and `sackWeights: []`, `deductions: []`), plus `paldari` (only when > 0; omitted otherwise), call `repo.createBill`. **Phase 11 (create branch only):** capture the returned `Bill` and show the **Post-Save Share Prompt** (below) instead of navigating straight home; **Done** navigates to `/`. In edit mode (`/bills/quick?edit=<id>`) it loads the summary bill, pre-fills (incl. paldari), and `updateBill` (respecting the edit-lock), navigating to `/bill?id=…` **unchanged (no prompt)**. No network.
+**On save:** assemble a `Bill` with `entryMode: 'summary'`, each line carrying `summary: { totalWeightKg, sackCount?, deductionKg?, amount }` (and `sackWeights: []`, `deductions: []`), plus `paldari` (only when > 0; omitted otherwise), call `repo.createBill`, then navigate **straight to `/`** (the list).
+
+> **No post-save share prompt on quick entry — deliberate.** A quick-entry bill transcribes a bill the farmer *already holds on paper*, so offering to send them a receipt for it is redundant and costs a tap on the flow that has to stay fastest. The prompt belongs only to the fresh sack flow (`/bills/new`), where the bill is being written for the first time. Matches [roadmap Phase 11](roadmap.md) and the shipped code.
+
+In edit mode (`/bills/quick?edit=<id>`) it loads the summary bill, pre-fills (incl. paldari), and `updateBill` (respecting the edit-lock), navigating to `/bill?id=…`. No network.
 
 ### Screen: New Bill (`/bills/new`) — slice-b
 
@@ -87,7 +91,7 @@ Installable web app (Next.js App Router, static export). Client-rendered screens
 
 ### Screen: Post-Save Share Prompt (Phase 11) — post-save-share
 
-**Purpose:** after a **successful create** in either flow (`/bills/new` sack OR `/bills/quick` summary), offer to share the receipt right away instead of forcing a reopen. See [post-save-share](capabilities/post-save-share.md).
+**Purpose:** after a **successful create in the fresh sack flow (`/bills/new`) ONLY**, offer to share the receipt right away instead of forcing a reopen. **`/bills/quick` never shows it** — a quick-entry bill transcribes a paper bill the farmer already holds, so a save-time receipt is redundant there. See [post-save-share](capabilities/post-save-share.md).
 
 **Key elements:** a bottom-sheet `data-testid="post-save-share-sheet"` in the same visual language as the detail-page `SharePanel` sheet (positioned below the sticky top bar so the language toggle stays reachable), with:
 - A short title (`postsave.title`, e.g. "Bill saved / बही सहेज ली गई").
