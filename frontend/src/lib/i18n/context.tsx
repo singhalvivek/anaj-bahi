@@ -8,9 +8,10 @@ import {
   useCallback,
   type ReactNode,
 } from 'react'
-import { translate, type Lang } from './dictionary'
+import { translate, type Lang, type TKey } from './dictionary'
 
 export type { Lang } from './dictionary'
+export type { TKey } from './dictionary'
 
 const STORAGE_KEY = 'anajbahi.lang'
 const DEFAULT_LANG: Lang = 'hi'
@@ -18,7 +19,12 @@ const DEFAULT_LANG: Lang = 'hi'
 interface I18nValue {
   lang: Lang
   setLang: (l: Lang) => void
-  t: (key: string) => string
+  /**
+   * Narrowly typed on purpose: `TKey`, not `string`. A component that calls
+   * t('some.new.key') without adding it to the dictionary is now a BUILD error.
+   * Before, it compiled and silently rendered the raw key to the trader.
+   */
+  t: (key: TKey) => string
 }
 
 const I18nContext = createContext<I18nValue | null>(null)
@@ -53,7 +59,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const t = useCallback((key: string) => translate(lang, key), [lang])
+  const t = useCallback((key: TKey) => translate(lang, key), [lang])
 
   return <I18nContext.Provider value={{ lang, setLang, t }}>{children}</I18nContext.Provider>
 }

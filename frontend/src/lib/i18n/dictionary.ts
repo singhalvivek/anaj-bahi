@@ -977,8 +977,18 @@ export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {
   hi: HI,
 }
 
-/** Translate a key for a language; falls back to the key itself if somehow missing. */
-export function translate(lang: Lang, key: string): string {
+/**
+ * Translate a key for a language.
+ *
+ * `key` is `TKey`, not `string`, and that is load-bearing: an unknown key would
+ * otherwise fall through to the `?? key` branch and render the raw key text
+ * ("rollup.month.title") to the user, with nothing failing the build. Typing it
+ * narrowly turns that into a compile error at the CALL SITE instead.
+ *
+ * The runtime fallback is kept only as a defence against a bad cast at a dynamic
+ * call site; it should be unreachable in typed code.
+ */
+export function translate(lang: Lang, key: TKey): string {
   const dict = DICTIONARIES[lang]
   return (dict as Record<string, string>)[key] ?? key
 }

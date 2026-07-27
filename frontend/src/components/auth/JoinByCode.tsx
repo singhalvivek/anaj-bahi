@@ -1,21 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { useI18n } from '@/lib/i18n/context'
+import { useI18n, type TKey } from '@/lib/i18n/context'
 import { useAuth } from '@/lib/auth/context'
 import { PhoneField, isValidIndianPhone } from '@/components/PhoneField'
 import { checkInvite, type InviteRecord } from '@/lib/auth/membership'
 import { getInvite } from '@/lib/tenancy/invite'
 
 /** Pull a translatable i18n key off an AuthError, else a generic fallback. */
-function errorKey(err: unknown): string {
+function errorKey(err: unknown): TKey {
   if (
     err &&
     typeof err === 'object' &&
     'messageKey' in err &&
     typeof (err as { messageKey: unknown }).messageKey === 'string'
   ) {
-    return (err as { messageKey: string }).messageKey
+    // Cast is confined to this boundary: `err` is `unknown` from a catch, and the
+    // guard above has already proven `messageKey` is a string at runtime. The
+    // keys themselves originate from AuthError, which is typed TKey at source.
+    return (err as { messageKey: TKey }).messageKey
   }
   return 'auth.error.generic'
 }

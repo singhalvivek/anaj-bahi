@@ -2,11 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useI18n } from '@/lib/i18n/context'
+import { useI18n, type TKey } from '@/lib/i18n/context'
 
 interface Tab {
   href: string
-  key: string
+  key: TKey
   icon: string
   match: (path: string) => boolean
 }

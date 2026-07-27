@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { useI18n } from '@/lib/i18n/context'
+import { useI18n, type TKey } from '@/lib/i18n/context'
 import { useAuth } from '@/lib/auth/context'
 import { useBills } from '@/lib/db/hooks'
 import { subscribeUnsyncedBills } from '@/lib/db/sync-status'
@@ -50,7 +50,7 @@ function parseMetric(raw: string | null): PageMetric {
   return METRICS.includes(raw ?? '') ? (raw as PageMetric) : 'bought-month'
 }
 
-const TITLE_KEY: Record<PageMetric, string> = {
+const TITLE_KEY: Record<PageMetric, TKey> = {
   'bought-month': 'rollup.title.boughtMonth',
   'paid-month': 'rollup.title.paidMonth',
   'due-all': 'rollup.title.dueAll',
