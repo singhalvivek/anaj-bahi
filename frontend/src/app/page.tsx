@@ -42,6 +42,24 @@ export default function HomePage() {
       <MonthStrip bills={allBills} />
       <TodayLine bills={allBills} />
 
+      {/* Phase-13 Bill Check entry point. Mounted here — below the rollups, above
+          the search bar, OUTSIDE `bill-list` and nowhere near `new-bill-btn` — so
+          every shipped journey spec is untouched. The "nothing is saved" sub-line
+          is load-bearing: it is what makes a trader willing to try the screen. */}
+      <Link
+        href="/bills/check"
+        data-testid="bill-check-btn"
+        className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm active:bg-stone-50"
+      >
+        <span aria-hidden className="text-2xl">
+          📷
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="font-semibold text-stone-900">{t('check.entry.title')}</span>
+          <span className="text-xs text-stone-500">{t('check.entry.hint')}</span>
+        </span>
+      </Link>
+
       {/* Search / Filter — real Phase-2 feature (replaces the Phase-1 stub) */}
       <SearchBar onChange={setFilter} />
 

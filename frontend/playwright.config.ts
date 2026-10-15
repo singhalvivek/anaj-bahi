@@ -29,6 +29,13 @@ const EMULATOR_ENV = {
   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: 'demo-anaj-bahi.appspot.com',
   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000',
   NEXT_PUBLIC_FIREBASE_APP_ID: '1:000000000000:web:demoappid',
+  // Phase 13 — a DUMMY non-empty Gemini key so `/bills/check` renders its
+  // configured state. It never reaches anything real: `bill-check.spec.ts`
+  // intercepts every generativelanguage.googleapis.com request with `page.route`
+  // and fulfils canned responses, so NO GATE EVER SPENDS AN API CALL. The model
+  // name is pinned too, so the request URL the spec matches on is deterministic.
+  NEXT_PUBLIC_GEMINI_API_KEY: 'e2e-dummy-key-never-sent',
+  NEXT_PUBLIC_GEMINI_MODEL: 'gemini-flash-lite-latest',
 }
 
 export default defineConfig({

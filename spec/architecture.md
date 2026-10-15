@@ -1,6 +1,6 @@
 # Architecture — Anaj Bahi
 
-> Deterministic, offline-first PWA. **No AI/LLM/agent framework** anywhere in this project — see [agent.md](agent.md).
+> Deterministic, offline-first PWA. **No agent framework** anywhere in this project. Through Phase 12 there was no AI of any kind; **Phase 13 ([Bill Check](capabilities/bill-check.md)) adds exactly one stateless LLM vision call**, used only to read handwriting off a photo — never to calculate. Every ledger figure stays deterministic and every other screen stays fully offline. See [agent.md](agent.md).
 
 ---
 
@@ -8,7 +8,7 @@
 
 Anaj Bahi is an installable **Next.js PWA** that runs on the trader's phone. In Phase 1 there is **no backend and no network dependency**: the browser is the whole runtime. The UI (React 19 client components) reads and writes an **IndexedDB** database via **Dexie**; a pure TypeScript **calc module** computes all weights and money; a **service worker** caches the app shell so it launches offline; a lightweight **i18n context** swaps Hindi/English. Phases 1–5 built this single-user local ledger (with an optional FastAPI + SQLite personal-backup backend in the now-**superseded** Phase 4).
 
-> **Firebase multi-tenant redesign (Phases 6–9).** The app is evolving from single-user-single-device into a **multi-tenant, multi-user** ledger: many independent **businesses**, each with **owners**, **partners** (co-owners), and **employees** who share one ledger. The FastAPI + SQLite sync backend is **replaced entirely by Firebase** — **Firebase Auth (Google sign-in)** for identity and **Cloud Firestore (accessed directly from the client, with IndexedDB offline persistence as the store)** for the shared, business-scoped data. There is still **no server we run** (no FastAPI, no container) and — critically — **still no AI/LLM/agent** (see [agent.md](agent.md)). The full frozen contracts for this redesign are in [§ Firebase multi-tenant redesign — frozen contracts](#firebase-multi-tenant-redesign-phases-69--frozen-contracts) at the end of this file.
+> **Firebase multi-tenant redesign (Phases 6–9).** The app is evolving from single-user-single-device into a **multi-tenant, multi-user** ledger: many independent **businesses**, each with **owners**, **partners** (co-owners), and **employees** who share one ledger. The FastAPI + SQLite sync backend is **replaced entirely by Firebase** — **Firebase Auth (Google sign-in)** for identity and **Cloud Firestore (accessed directly from the client, with IndexedDB offline persistence as the store)** for the shared, business-scoped data. There is still **no server we run** (no FastAPI, no container) and — as of Phases 6–9 — still no AI/LLM/agent (that changes only in Phase 13, and only on the Bill Check screen; see [agent.md](agent.md)). The full frozen contracts for this redesign are in [§ Firebase multi-tenant redesign — frozen contracts](#firebase-multi-tenant-redesign-phases-69--frozen-contracts) at the end of this file.
 
 ## Component Map
 
@@ -70,8 +70,8 @@ No network, no server, no keys anywhere in this flow.
 
 - **Mode:** **Brownfield** for the Firebase redesign (Phases 6–9) — it **extends the already-shipped `frontend/` Next.js app in place**, adopting its stack, layout, and toolchain; it never restructures, renames, or moves existing files. (Phases 1–5 were greenfield-built by this harness.)
 - **Language:** TypeScript 5 (frontend). ~~Python 3.12 for the Phase-4 sync backend~~ — **removed** in Phase 7 (Firebase replaces it).
-- **Agent framework:** **None.** No LLM, no agent orchestration. The Firebase redesign does **not** change this. See [agent.md](agent.md).
-- **LLM provider + model:** **None** — not an AI app.
+- **Agent framework:** **None.** No LangGraph/CrewAI/AutoGen, no agent loop, no graph, no tools, no multi-turn. Phase 13 adds a single stateless `fetch` to a vision model; that is not an agent and is not modelled as one. See [agent.md](agent.md).
+- **LLM provider + model (Phase 13+):** **Google Gemini** (Generative Language API), called **directly from the client**. Model from `NEXT_PUBLIC_GEMINI_MODEL`, default **`gemini-flash-lite-latest`**. Used by **one screen only** (`/bills/check`) for **handwriting transcription only** — it never computes money. Phases 1–12 had no LLM at all.
 - **Frontend:** Next.js 15.3 (App Router) + React 19, **static export** (`output: 'export'`, `basePath: '/app'`, `trailingSlash: true`), Tailwind CSS 4. Installable PWA (manifest + hand-written service worker). Unchanged by the redesign.
 - **Local store (Phases 1–5):** **IndexedDB via Dexie 4**. No server DB on device.
 - **Auth (Phase 6+):** **Firebase Authentication — Google sign-in** via the Firebase Web JS SDK (`firebase/auth`): `GoogleAuthProvider` + `signInWithPopup`, **`browserLocalPersistence`** (stays signed in until explicit sign-out). Identity = the Firebase **`uid`** (stable per Google account, the same on every device). **No SMS/OTP, no reCAPTCHA, no Blaze plan** — Google sign-in is free on the **Spark** tier (phone/SMS-OTP was removed after it began returning `auth/billing-not-enabled`; the "10 free SMS/day" console banner is dead since Sept 2024). Google supplies `displayName` + `email`; email is stored on the user record. The **mobile number** is captured at onboarding as **profile/verification data only** — never an auth factor. Web config is 6 **public** `NEXT_PUBLIC_FIREBASE_*` values (not secrets); real security is **Firestore Security Rules**.
@@ -79,7 +79,7 @@ No network, no server, no keys anywhere in this flow.
 - **~~Backend (Phase 4)~~ — SUPERSEDED / REMOVED (Phase 7):** the FastAPI + SQLite + SQLAlchemy `backend/` tree, its `uv` toolchain, the `frontend/src/lib/sync/*` engine, and the `SyncSettings` UI are **all removed** in Phase 7 and replaced by Firestore. The Phase-4 sync contract below is retained only as historical record, marked SUPERSEDED.
 - **Key new dependency:** **`firebase`** (npm, ^11) — Auth + Firestore Web SDK (frontend `dependencies`). **`firebase-tools`** is a frontend **devDependency** (or `npx`-invoked) that runs the **Auth + Firestore emulators** for E2E (`firebase emulators:exec`); the emulator is cleared via its REST endpoint, so **no `firebase-admin` and no service-account key are required**.
 - **Dependency management:** **pnpm** (frontend). (`uv`/Python removed with the backend in Phase 7.)
-- **Observability:** N/A in the AI sense (no LLM tracing because there is no LLM). Client errors surface as visible UI messages; Firebase Auth/Firestore errors are mapped to translated messages; dev uses browser devtools + the Firebase console.
+- **Observability:** No LLM tracing stack. The one model call is a single `fetch` whose outcome is rendered to the trader directly — a failed or unparseable read is a visible bilingual message on the screen, which is the only observability surface that matters for a device-only app with no server. Client errors surface as visible UI messages; Firebase Auth/Firestore errors are mapped to translated messages; dev uses browser devtools + the Firebase console.
 
 > **Assumed:** unit tests use **Vitest** + **fake-indexeddb** (idiomatic, fast, TS-native) and E2E uses **Playwright** (already available in the repo). No heavy i18n library — a hand-rolled context + typed dictionary covers two languages.
 
@@ -981,3 +981,218 @@ export function setBillDueDate(billId: string, dueDate: string): Promise<Bill>
   - `getOwnerBizId(): Promise<string>` — `getUidByEmail(OWNER_EMAIL)` → `users/{uid}.bizId`.
   - `clearBillDueDate(bizId: string, billId: string): Promise<void>` — `PATCH .../businesses/{bizId}/bills/{billId.replace(/\//g,'_')}?updateMask.fieldPaths=dueDate` with body `{"fields":{}}`, which **deletes** the field. This is how the spec manufactures a **pre-Phase-12 legacy row**, since the UI can no longer create one. Reload the page after it so the client picks up the change deterministically. **Accepted fallback if the field-delete PATCH proves awkward:** write the field as an explicit null — body `{"fields":{"dueDate":{"nullValue":null}}}` with the same `updateMask` — because `!bill.dueDate` is true for `null` as well as for a missing key, so the bucket rule behaves identically. (`DueRow` already renders `bill.dueDate ? … : '—'`.) Either form is acceptable; do not add production code to make this testable.
 - The offline segment uses `context.setOffline(true/false)`, the same mechanism the shipped `shared-ledger.spec.ts` already relies on.
+
+---
+
+## Bill Check (Phase 13) — frozen
+
+> **Frozen so the three slices build in parallel on disjoint paths.** Everything here is
+> **additive**: no schema change, no new Firestore collection/index/query, no
+> `firestore.rules` change, no change to `lib/calc`, no change to any existing screen except
+> one new button on home. Product rationale lives in
+> [bill-check.md](capabilities/bill-check.md); the AI surface and the eyes-only rule live in
+> [agent.md](agent.md); the shapes and signatures live here.
+
+### What is new in the component map
+
+```
+  Trader ──photo──► /bills/check (client component)
+                          │
+                          ▼
+                  lib/billcheck/image.ts      downscale on-device (canvas → JPEG)
+                          │
+                          ▼
+                  lib/billcheck/reader.ts  ──HTTPS──►  Gemini :generateContent
+                          │                             (the ONLY external AI call)
+                          ▼
+                  lib/billcheck/parse.ts      strict validate — never trust the model
+                          │
+                          ▼
+                  lib/billcheck/verify.ts  ──uses──►  lib/calc (pure, unchanged)
+                          │
+                          ▼
+                   check-result + check-verdict        nothing is persisted
+```
+
+`lib/db`, `lib/auth`, `lib/tenancy`, `lib/reports` and `lib/calc` are **not touched**. Bill
+Check reads no bill and writes nothing — it is a leaf.
+
+### Module contract (frozen signatures)
+
+`frontend/src/lib/billcheck/types.ts`
+
+```ts
+/** One field the model read, with how sure it was. `value: null` ⇒ it could not read it. */
+export interface ReadField<T> { value: T | null; confidence: number } // confidence 0..1
+
+export interface ReadBillLine {
+  grainName: ReadField<string>
+  ratePerQuintal: ReadField<number>   // ₹ per 100 kg
+  weightKg: ReadField<number>         // gross, as written
+  deductionKg: ReadField<number>      // 0 when the paper shows none
+  sackCount: ReadField<number>        // informational only; never used in math
+  amount: ReadField<number>           // ₹ as WRITTEN on the paper for this line
+}
+
+export interface ReadBill {
+  farmerName: ReadField<string>
+  place: ReadField<string>
+  date: ReadField<string>             // ISO yyyy-mm-dd when legible
+  lines: ReadBillLine[]
+  paldari: ReadField<number>          // bill-level labour charge, ₹; 0 when absent
+  paperTotal: ReadField<number>       // the grand total WRITTEN at the bottom; null ⇒ none
+}
+
+/** A read that failed, as a typed cause — never a thrown string, never a silent null. */
+export type BillReadErrorKind =
+  | 'offline' | 'not-configured' | 'rate-limited' | 'network'
+  | 'bad-response' | 'no-bill-found' | 'image-too-large'
+export interface BillReadError { kind: BillReadErrorKind; detail?: string }
+
+export interface InlineImage { mimeType: string; base64: string }
+export type BillReader = (image: InlineImage) => Promise<ReadBill>
+```
+
+`frontend/src/lib/billcheck/verify.ts` — **pure, no I/O, no network**
+
+```ts
+export const CONFIDENCE_THRESHOLD = 0.75   // below this a cell renders amber
+
+export interface LineCheck {
+  grainName: string | null
+  ratePerQuintal: number | null
+  weightKg: number | null
+  deductionKg: number
+  netWeightKg: number | null
+  writtenAmount: number | null
+  computedAmount: number | null       // null when a required input was unreadable
+  lineDiff: number | null             // written − computed, 2 dp; null when either is null
+  unsureFields: string[]              // field names below CONFIDENCE_THRESHOLD
+}
+
+export type Verdict = 'ok' | 'check' | 'incomplete'
+
+export interface BillCheckResult {
+  lines: LineCheck[]
+  sumWritten: number | null           // Σ written line amounts, GROSS of paldari
+  sumComputed: number | null          // Σ computed line amounts, GROSS of paldari
+  payableWritten: number | null       // sumWritten − paldari
+  paperTotal: number | null
+  mathDiff: number | null             // sumWritten − sumComputed (paldari-FREE)
+  additionDiff: number | null         // paperTotal − payableWritten; null when no paperTotal
+  paldari: number
+  verdict: Verdict
+  unsureCount: number
+}
+
+export function verifyReadBill(read: ReadBill): BillCheckResult
+```
+
+**Rules the implementation must satisfy** (each is a named unit test):
+
+1. `computedAmount` is obtained **only** by calling `computeGrainLine` from `@/lib/calc`
+   with a sacks-style input — `{ pricePerQuintal: rate, sackWeights: [weightKg],
+   deductions: [{ basis: 'flat_kg', value: deductionKg }] }`. Bill Check does **not**
+   re-implement the formula, and deliberately does **not** take the `summary` path, whose
+   whole purpose is to return the entered amount verbatim — which would make the check
+   vacuous.
+2. **Paldari belongs to the TOTAL comparison, never to the line comparison.** `sumWritten`
+   and `sumComputed` are both **gross** of paldari, so `mathDiff` is paldari-free; paldari is
+   subtracted exactly once, on `payableWritten`, which is what `additionDiff` compares the
+   written grand total against. This mirrors the paper (grain lines gross, then one labour
+   charge, then the payable total). Getting this wrong would report *"line amounts are ₹500
+   off"* on every bill carrying a labour charge — a false accusation, and the one failure this
+   screen cannot afford.
+3. `mathDiff` and `additionDiff` are **independent**. A bill with correct lines and a
+   mis-added grand total yields `mathDiff: 0` and a non-zero `additionDiff`.
+4. A `null` anywhere propagates to `null` — **never to `0`**. `additionDiff` is `null` (not
+   `0`) when the paper has no grand total; the UI must then say "no total written on the
+   paper", not "your addition is correct".
+5. `netWeightKg` clamps at `0` and never goes negative.
+6. `verdict` is `'incomplete'` if any line's `ratePerQuintal`, `weightKg` or `amount` is
+   `null`; else `'check'` if either diff is non-zero; else `'ok'`. An `'incomplete'` read is
+   never reported as `'ok'`.
+7. Pure: identical input always yields identical output, no side effects, no clock, no
+   `Math.random`.
+
+`frontend/src/lib/billcheck/parse.ts` — **pure**
+
+```ts
+export function parseReadBill(raw: unknown): ReadBill   // throws a BillReadError on bad input
+```
+
+Coerces numeric strings, clamps confidence to `0..1`, rejects a non-array or empty `lines`,
+maps absent optionals to `{ value: 0, confidence: 1 }` for `deductionKg`/`paldari` and to
+`{ value: null, confidence: 0 }` for everything else, and ignores unknown keys. **No code
+path may produce `NaN`.** Tested entirely against fixture JSON — no key, no network.
+
+### Transport + key handling (the recorded trade-off)
+
+| | |
+|---|---|
+| Endpoint | `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}` |
+| Key env var | **`NEXT_PUBLIC_GEMINI_API_KEY`** — build-time inlined into the static export |
+| Model env var | `NEXT_PUBLIC_GEMINI_MODEL`, default `gemini-flash-lite-latest` |
+| `generationConfig` | `responseMimeType: 'application/json'`, a strict `responseSchema`, `temperature: 0` |
+| Proxy | **None.** Called directly from the browser. |
+
+**The key is public.** `NEXT_PUBLIC_*` values are inlined into the JavaScript bundle, so
+anyone who opens devtools on the deployed site can read this key and spend against it. This
+is **not** the same situation as the six `NEXT_PUBLIC_FIREBASE_*` values: those are
+*designed* to be public and are guarded by Firestore Security Rules, whereas a Gemini key is
+a **billable credential with no equivalent server-side guard**.
+
+This was chosen deliberately, with the trade-off stated: a key-holding proxy (a Cloudflare
+Worker, ~60 lines, free tier) is the correct design, but it adds a second deploy surface and
+a second account to the pilot, and the pilot is already the blocking path. The decision
+accepts a bounded, monetary, self-inflicted risk to avoid delaying it further.
+
+**Required mitigations — part of the capability, not optional hygiene:**
+
+1. Use a **dedicated** AI-Studio key used for nothing else, so revoking it affects nothing
+   but this screen.
+2. Restrict it by **HTTP referrer** to the Pages origin in the Google Cloud console. (This
+   raises the cost of casual abuse; it does not stop a determined one — referrers are
+   client-supplied.)
+3. Set a **hard quota cap** on the key so the worst case is a dead feature, never an
+   unbounded bill.
+4. **Before any release beyond the 3–5-trader pilot, move the key behind a proxy.** The
+   client already isolates the provider in `reader.ts`, so that is a one-file change plus a
+   worker deploy — no change to `parse.ts`, `verify.ts` or the UI.
+
+[`DEPLOY.md`](../DEPLOY.md) carries steps 1–3 as a checklist, and the screen degrades to a
+labelled `check-unconfigured` state when the key is absent, so a fork or a clean clone never
+crashes.
+
+### Offline + failure behaviour (frozen)
+
+Bill Check is the **only** online-only screen in the app. It must therefore fail *legibly*,
+because every other screen works in airplane mode and a trader has no reason to suspect the
+difference:
+
+| Condition | `BillReadErrorKind` | Behaviour |
+|---|---|---|
+| `navigator.onLine === false` | `offline` | checked **before** any fetch; its own message; photo kept |
+| key env var absent/empty | `not-configured` | `check-unconfigured` instead of the read button |
+| HTTP 429 / quota | `rate-limited` | its own message naming the daily cap |
+| HTTP 5xx, DNS, timeout | `network` | generic retryable message; photo kept |
+| 200 with unparseable or schema-violating JSON | `bad-response` | retryable; the raw text is **not** shown to the trader |
+| 200, well-formed, but zero usable lines | `no-bill-found` | "couldn't find a bill in this photo — try again in better light" |
+| downscaled image still over the inline cap | `image-too-large` | asks for a tighter crop |
+
+In every case the photo is **retained**, so a retry never costs a re-shoot.
+
+### E2E determinism for Phase 13 (frozen)
+
+- **No gate ever spends a real API call.** Unit tests are pure. The E2E spec intercepts
+  `**generativelanguage.googleapis.com/**` with `page.route` and fulfils canned responses.
+- **No test-only hooks in production code.** The interception is at the network layer, so
+  the shipped `reader.ts` → `parse.ts` → `verify.ts` → render path is the one under test.
+  There is no `window.__TEST_READER__`, no injected global, and no env branch in app code.
+- The dev server for E2E sets `NEXT_PUBLIC_GEMINI_API_KEY` to a **dummy non-empty value** in
+  `playwright.config.ts`'s `webServer.env` (alongside the existing emulator vars) so the
+  screen renders its configured state. The value never reaches anything real because every
+  matching request is intercepted.
+- The spec asserts **request count** to prove that correcting a cell re-verifies locally and
+  does **not** re-call the API — the observable consequence of the eyes-only rule.
+- The fixture image is generated in-test as a tiny base64 PNG; no binary is committed.

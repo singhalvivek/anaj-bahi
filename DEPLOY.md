@@ -92,6 +92,52 @@ The Playwright suite talks to **real Firebase Auth + Cloud Firestore** — no mo
 
 ---
 
+## Bill Check — Gemini API key (Phase 13, optional)
+
+Bill Check ([`spec/capabilities/bill-check.md`](spec/capabilities/bill-check.md)) is the one
+feature that calls an external AI service. It is **entirely optional**: leave the key unset and
+the screen shows a labelled "not set up yet" panel while every other part of the app behaves
+exactly as before. No gate, test or build needs the key.
+
+> ### ⚠️ This key is PUBLIC — read this before creating one
+>
+> `NEXT_PUBLIC_*` values are **inlined into the JavaScript bundle**, so anyone who opens devtools
+> on the deployed site can read `NEXT_PUBLIC_GEMINI_API_KEY` and spend against it.
+>
+> This is **not** the same as the six `NEXT_PUBLIC_FIREBASE_*` values. Those are *designed* to be
+> public and the real boundary is `firestore.rules`. A Gemini key is a **billable credential with
+> no equivalent server-side guard**.
+>
+> Shipping it client-side was a deliberate trade-off to avoid standing up a proxy before the
+> trader pilot — the reasoning and the migration path are recorded in
+> [`spec/architecture.md` § Bill Check](spec/architecture.md). The three mitigations below are
+> part of the capability, not optional hygiene.
+
+1. **Create a dedicated key** at [Google AI Studio](https://aistudio.google.com/apikey). Use it
+   for nothing else, so revoking it breaks nothing but this one screen.
+2. **Restrict it by HTTP referrer.** Google Cloud console → **APIs & Services → Credentials** →
+   the key → **Application restrictions → Websites** → add your Pages origin (e.g.
+   `https://singhalvivek.github.io/*`) and `http://localhost:3000/*` for local work. This raises
+   the cost of casual abuse; it does not stop a determined one, because referrers are supplied by
+   the client.
+3. **Cap the quota.** Google Cloud console → **APIs & Services → Generative Language API →
+   Quotas** → set a hard daily request cap. With a cap, the worst case is a dead feature for a
+   day; without one it is an unbounded bill.
+4. **Provide the key to the build.** For GitHub Pages, add `NEXT_PUBLIC_GEMINI_API_KEY` as a repo
+   **Actions secret** consumed by `.github/workflows/deploy-pages.yml` alongside the Firebase
+   values; for a local production build, set it in `frontend/.env.local`. Optionally set
+   `NEXT_PUBLIC_GEMINI_MODEL` to override the default `gemini-flash-lite-latest`.
+5. **Before going beyond the 3–5-trader pilot, move the key behind a proxy.** The client isolates
+   the provider in `frontend/src/lib/billcheck/reader.ts`, so this is a one-file change plus a
+   small Cloudflare Worker deploy — no change to the parsing, the verification or the UI.
+
+**Accuracy is not yet measured.** The default model is a starting point. Before the pilot leans on
+this screen, run the bake-off described in [`spec/roadmap.md`](spec/roadmap.md) § Phase 13: 20 real
+bills, scored on **confident-and-wrong rate** rather than raw accuracy. `NEXT_PUBLIC_GEMINI_MODEL`
+exists so that can be done without a code change.
+
+---
+
 ## Notes
 
 - The frontend is a pure static export — it needs no server and can also be hosted on any static host under any sub-path by setting `NEXT_PUBLIC_BASE_PATH` accordingly.
