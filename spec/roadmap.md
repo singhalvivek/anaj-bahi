@@ -27,9 +27,9 @@ Today the trader keeps purchases and payments in a paper ledger: slow to write, 
 
 ## What This App Does NOT Do (Out of Scope)
 
-- **No AI / LLM / agent of any kind.** This is a deterministic local-first data/ledger app. There is no model, no prompt, no `spec/agent.md` graph. **The Firebase multi-tenant redesign (Phases 6–9) does not change this** — Firebase Auth + Firestore are ordinary client SDKs, still no AI.
+- ~~**No AI / LLM / agent of any kind.**~~ **Amended in Phase 13.** Phases 1–12 shipped with no model, no prompt and no `spec/agent.md` graph, and the Firebase redesign (Phases 6–9) did not change that. **Phase 13 ([bill-check](capabilities/bill-check.md)) adds exactly one LLM call**, on one screen, to read handwriting off a photo of a paper bill. Still out of scope and still explicitly so: **no agent framework, no agent loop, no graph, no tools, no multi-turn, no LLM anywhere else in the app, and no LLM arithmetic** — every rupee is still computed by the deterministic, unit-tested `lib/calc`. See [agent.md](agent.md) for the full boundary.
 - ~~No multi-user, roles, or accounts.~~ **Multi-user is now IN scope (Phases 6–9):** many independent **businesses**, each with **owners**, **partners (co-owners)**, and **employees** sharing one ledger, via Firebase Auth (**Google sign-in**) + Cloud Firestore. (Phases 1–5 shipped single-user; the Phase-4 FastAPI+SQLite personal-backup is **superseded** by Firestore.) Still out of scope: cross-business sharing, org hierarchies beyond owner/partner/employee, **promoting or demoting an existing member between roles** (a member's role is fixed at invite time; changing it is not offered), removing an owner, and a partner editing the business profile.
-- No dashboard, charts, or analytics in early phases — only the searchable bill list. **Phase 12 adds the first cross-bill figures** (a this-month strip, a close-of-day line, an all-time outstanding total, each drillable) — but still **no charts or graphs of any kind**, ever-so-far: big numbers only. Season/period reports, farmer khata and rate trend are **Phase 13**.
+- No dashboard, charts, or analytics in early phases — only the searchable bill list. **Phase 12 adds the first cross-bill figures** (a this-month strip, a close-of-day line, an all-time outstanding total, each drillable) — but still **no charts or graphs of any kind**, ever-so-far: big numbers only. Season/period reports, farmer khata and rate trend are **Phase 14** (the analysis spine — renumbered from 13 when Bill Check took Phase 13).
 - No phone/push notifications — the "due soon / overdue" list is in-app only.
 - No selling/inventory/GST/tax invoicing — this records *purchases from farmers*, not sales.
 - No payment gateway or actual money movement — payments are ledger records only.
@@ -262,3 +262,138 @@ Today the trader keeps purchases and payments in a paper ledger: slow to write, 
   8. Turn on **airplane mode** and save a bill. Within a couple of seconds a **"1 bill not yet backed up"** badge appears at the top of home and **stays** there. Tap it to see exactly which bills. Turn signal back on — it disappears on its own.
   9. **Due screen:** every new bill now appears under **Overdue / Due soon / Upcoming** as its date falls. If you have older bills from before this update that still owe money and have no due date, they appear in a separate **"No due date — set one"** group with a date box already filled to purchase + 15 — tap **Set date** and the bill jumps into the right group. This works even on a bill that already has a payment against it (which is otherwise locked for edits).
   10. Confirm nothing else moved: bill cards, bill detail, the receipt and the post-save share prompt all still show **2-decimal** rupee amounts exactly as before; Settings → Sync still shows its online/pending state and **Sync now**.
+
+### Phase 13 — Bill Check (photo → read → verify)
+
+> **Additive, frontend-only, non-destructive.** No schema change, no new Firestore
+> collection/index, no `firestore.rules` change, no change to `lib/calc`, and **no write of
+> any kind** — this phase cannot corrupt a ledger because it never touches one. It adds the
+> project's **first external API call, first online-only screen, and first and only LLM
+> call**. Rationale: [strategy/plan.md](../strategy/plan.md) § A2 (entry speed is the
+> measured pilot blocker: 55s → ~45s practised against a <30s target, and the doc's own
+> conclusion that *"field-trimming alone will not make self-entry comfortable and the answer
+> is … a different capture mode (photo of the paper page, transcribe later)"*) and § Deferred
+> (*"Photo attach of the paper page. Cheap, and a real bridge for paper-parallel
+> operation."*). Capability: [bill-check](capabilities/bill-check.md). AI boundary:
+> [agent.md](agent.md). Frozen contracts:
+> [architecture.md § Bill Check](architecture.md#bill-check-phase-13--frozen).
+
+- **Goal:** the trader photographs a bill he has **already written on paper**; the app reads
+  it, lays it out as a table, and tells him in two separate sentences whether **his line
+  arithmetic** and **his addition** come out right — naming the exact rupee difference.
+  Numbers the model was unsure of are amber and tappable; correcting one re-checks
+  **instantly and locally, with no second API call**. Nothing is saved, no account habit is
+  required, and the paper is never silently corrected — *"the paper is right"* is a
+  first-class button. This is the lowest-switching-cost thing the product can offer: it
+  rewards writing on paper instead of punishing it.
+- **Capabilities:** [bill-check](capabilities/bill-check.md).
+- **Independent slices (parallel build units) — disjoint file paths.** Slice-a freezes the
+  types and owns **all** Phase-13 EN+HI i18n keys (the dictionary is one shared file; giving
+  it to a single slice is how every prior phase avoided conflicts), so b and c compile
+  against it in parallel.
+  - `slice-a` (**foundation — pure lib + i18n, no UI, no network**). **Deps: none.** New
+    `lib/billcheck/types.ts`, `lib/billcheck/verify.ts` (+ `verify.test.ts`),
+    `lib/billcheck/parse.ts` (+ `parse.test.ts`), `lib/billcheck/prompt.ts`; add every
+    Phase-13 EN **and** HI key to `lib/i18n/dictionary.ts`.
+  - `slice-b` (**transport — the only network code**). **Deps: slice-a types.**
+    `lib/billcheck/image.ts` (canvas downscale → base64 JPEG) and
+    `lib/billcheck/reader.ts` (the single `fetch`, error mapping to `BillReadErrorKind`);
+    `frontend/.env.example` + `DEPLOY.md` key checklist.
+  - `slice-c` (**UI + E2E**). **Deps: slice-a + slice-b.** `app/bills/check/page.tsx`,
+    `components/billcheck/*`, the one new `bill-check-btn` on `app/page.tsx`, the
+    `playwright.config.ts` dummy-key env addition, and `tests/e2e/bill-check.spec.ts`.
+- **Key surfaces / files (disjoint ownership — brownfield, extend in place):**
+  - slice-a: `frontend/src/lib/billcheck/types.ts` (**new**), `verify.ts` (**new**) +
+    `verify.test.ts` (**new**), `parse.ts` (**new**) + `parse.test.ts` (**new**),
+    `prompt.ts` (**new**), `frontend/src/lib/i18n/dictionary.ts` (**all** Phase-13 EN+HI keys).
+  - slice-b: `frontend/src/lib/billcheck/image.ts` (**new**), `reader.ts` (**new**),
+    `frontend/.env.example` (extend), `DEPLOY.md` (extend).
+  - slice-c: `frontend/src/app/bills/check/page.tsx` (**new**),
+    `frontend/src/components/billcheck/PhotoStep.tsx` (**new**), `ReadTable.tsx` (**new**),
+    `VerdictCard.tsx` (**new**), `frontend/src/app/page.tsx` (**one button only**),
+    `frontend/playwright.config.ts` (one env var), `frontend/tests/e2e/bill-check.spec.ts`
+    (**new**).
+  - spec (written first): `spec/capabilities/bill-check.md`, `spec/agent.md` (**rewritten —
+    no longer N/A**), `spec/architecture.md`, `spec/ui.md`, `spec/roadmap.md`,
+    `spec/capabilities/index.md`.
+  - **NOT touched by any slice:** `frontend/src/lib/calc/index.ts`,
+    `frontend/src/lib/db/**`, `frontend/src/lib/reports/**`, `frontend/src/components/format.ts`,
+    `firestore.rules`, `frontend/src/components/rollup/*`, `frontend/src/app/bills/quick/page.tsx`,
+    `frontend/src/app/bills/new/page.tsx`, `frontend/src/app/bills/choose/page.tsx`,
+    `frontend/src/app/bill/page.tsx`, `frontend/src/components/receipt/*`,
+    `frontend/src/components/BottomNav.tsx`.
+- **Gate command:** from `frontend/`: `pnpm install && pnpm test && pnpm build && pnpm test:e2e`
+  — with `frontend/.env.local` present (the 6 `NEXT_PUBLIC_FIREBASE_*` values; the Gemini key
+  is **not** needed for any gate). **No gate spends a real API call:** unit tests are pure and
+  the E2E spec intercepts the Gemini endpoint with `page.route`.
+  - **`pnpm test` (vitest) must newly cover** — all pure, all offline:
+    `verifyReadBill` on a clean 2-line bill → `verdict: 'ok'`, `mathDiff: 0`,
+    `additionDiff: 0`; a line written ₹13.32 above `rate × net` → that exact `lineDiff` and
+    `mathDiff`; **correct lines with a mis-added grand total → `mathDiff: 0` and a non-zero
+    `additionDiff`** (the two diffs proven independent, in both directions); a bill with no
+    written grand total → `additionDiff: null`, **never `0`**; `netWeightKg` clamping at 0 on
+    a deduction larger than the weight; `paldari` subtracted exactly once; an unreadable
+    amount-bearing field → `verdict: 'incomplete'` and never `'ok'`; and that `computedAmount`
+    equals `computeGrainLine` from `lib/calc` (so the formula is never re-implemented here).
+    `parseReadBill` against fixture JSON: well-formed; truncated; non-numeric rate; null
+    amount; missing `lines`; empty `lines`; unknown extra keys; numbers as strings — each to
+    its documented outcome, with **no path producing `NaN`**.
+  - **`pnpm build`** proves the static export compiles with the new `/bills/check` route and
+    type-checks every new i18n key in both languages (a missing HI key fails the build).
+  - **New E2E `bill-check.spec.ts`** — signed-in owner, Gemini intercepted. Upload a
+    generated fixture PNG → stubbed read → `check-result` shows one `check-line-row` per
+    grain and `check-verdict` names the exact rupee difference → tap an amber
+    `check-cell-unsure`, correct the digit, and assert the verdict recomputes **with the
+    intercepted-request count still at 1** (proving the math is local) →
+    `check-accept-paper` dismisses the verdict. Then the failure matrix: HTTP 500,
+    a malformed-JSON 200, and `context.setOffline(true)` each show their own distinct
+    `check-error` with the photo retained.
+  - **Regression-relevant shipped specs** (qa-auditor must check these, and why):
+    **`pilot-readiness.spec.ts`** — it reads the home rollup surfaces and asserts deltas; the
+    new `bill-check-btn` is mounted **below `TodayLine` and above `SearchBar`**, outside
+    `bill-list` and not touching `new-bill-btn`, and it asserts no page-level `₹` string, so
+    it stays green. **`quick-bill-journey.spec.ts`** / **`purchase-journey.spec.ts`** /
+    **`ledger-journey.spec.ts`** / **`post-save-share.spec.ts`** / **`receipt-share.spec.ts`**
+    / **`shared-ledger.spec.ts`** / **`roles*.spec.ts`** — none of them visit `/bills/check`
+    or the chooser's layout, and no entry/calc/receipt file is modified, so all pass unchanged.
+    The single largest regression risk in this phase is the one-line edit to `app/page.tsx`.
+  - **Stated gate practice for this phase:** while iterating run the **scoped** subset —
+    `pnpm test && pnpm build`, then
+    `firebase emulators:exec --only auth,firestore --project demo-anaj-bahi --config ../firebase.json "playwright test tests/e2e/bill-check.spec.ts tests/e2e/pilot-readiness.spec.ts tests/e2e/quick-bill-journey.spec.ts"`
+    — and run the **full suite once** before the PR is finalised. (A full pass is ~30–40 min.)
+- **Open risk this phase does NOT close:** **accuracy is unmeasured.** The model default
+  (`gemini-flash-lite-latest`) is a starting point, not a conclusion. Before the pilot leans
+  on this screen, run the bake-off: **20 real bills**, varied handwriting, lighting and
+  numerals, scored not on raw accuracy but on **confident-and-wrong rate** — how often it
+  reports a high-confidence number that is wrong — plus whether its confidence flags
+  correlate with being wrong at all. A model that says "not sure" is useful; one that
+  confidently misreads a 7 as a 1 is worse than no feature. `NEXT_PUBLIC_GEMINI_MODEL` exists
+  so that bake-off can be run against the shipped screen with no code change.
+- **How the user tests it (handoff seed):**
+  1. Put a Gemini API key in `frontend/.env.local` as `NEXT_PUBLIC_GEMINI_API_KEY=…` (get one
+     free from Google AI Studio). Read
+     [architecture.md § Bill Check](architecture.md#bill-check-phase-13--frozen) first — this
+     key ships **publicly** in the bundle, so use a dedicated key with a referrer restriction
+     and a quota cap. Then `pnpm dev` from `frontend/` and open
+     `http://localhost:3000/app/`, signed in.
+  2. **Before adding the key**, open **📷 Check a paper bill** on home: you get a clearly
+     labelled "not set up yet" panel, not a crash and not a blank screen. Add the key and
+     restart `pnpm dev` to continue.
+  3. Take a photo of a **real handwritten bill** (one you already know the right answer to).
+     The photo appears immediately; tap **Read bill**.
+  4. You get a table: one row per grain with rate, weight, deduction, the amount **you
+     wrote**, and the amount **the app computes** — then two separate lines: whether the line
+     arithmetic agrees, and whether your grand total matches your own column. Each
+     disagreement names the exact rupee difference.
+  5. **Try a bill you know has a mistake in it.** That is the demo. Then try one where you
+     rounded the total to ₹5 on purpose — the app should flag it and let you press **"The
+     paper is right"** without arguing further.
+  6. Any number it was unsure of is **amber**. Tap it, fix the digit, and watch every figure
+     and both verdicts update **immediately** — turn on airplane mode first to prove it is
+     recomputing on the phone and not calling the API again.
+  7. With airplane mode still on, pick a new photo and tap **Read bill**: you get a specific
+     "you are offline" message, and your photo is still there when signal returns.
+  8. Confirm nothing else moved: the bill list, the month strip, the today line, the unsynced
+     badge, **+ New Bill** → chooser → both entry forms, bill detail, the receipt and the
+     share prompt are all exactly as before. Nothing you did on this screen created, changed
+     or deleted a bill.

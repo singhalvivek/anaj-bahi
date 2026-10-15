@@ -328,3 +328,74 @@ Every deferred feature renders a shared **`ComingSoon`** component: a muted card
 ## Tech Stack
 
 Next.js 15.3 (App Router, static export) + React 19 + Tailwind CSS 4. i18n via a hand-rolled context (`lib/i18n`). Reactive reads via `dexie-react-hooks` `useLiveQuery`. See [architecture.md](architecture.md).
+
+---
+
+## Phase-13 Bill Check surface
+
+### Screen: Bill Check (`/bills/check`) — Phase 13, slice-c
+
+The only **online-only** screen in the app, and the only one that shows a model's output.
+Four states, one at a time, in one scrolling column. Mobile portrait, Hindi default, big
+targets — unchanged Phase-1 discipline.
+
+**Entry point:** `bill-check-btn` on Home, mounted **below `TodayLine` and above
+`SearchBar`** — outside the `bill-list` container and not touching `new-bill-btn`. A single
+wide tappable card: `📷` + "काग़ज़ की बही जाँचें" / "Check a paper bill", with the sub-line
+"कुछ सहेजा नहीं जाएगा" / "Nothing is saved". The sub-line matters: it is what makes the
+screen safe to try.
+
+| State | testid | What the trader sees |
+|---|---|---|
+| **Not configured** | `check-unconfigured` | A labelled panel: the feature needs an API key, which screen of which file to put it in, and that everything else in the app still works. **Never a crash, never blank.** The read button is not rendered at all. |
+| **Empty** | `check-photo-btn` | One big button — "बही की फ़ोटो लें" / "Photograph the bill" (`capture="environment"`, so Android opens the camera) and a smaller "गैलरी से चुनें" / "Choose from gallery". Plus a one-line explanation of what will happen. |
+| **Photo chosen** | `check-photo-preview`, `check-read-btn` | The photo, large, with a "बदलें" / "Change" affordance, and the primary **"बही पढ़ें" / "Read bill"** button. `check-read-btn` is **disabled until a photo exists**. |
+| **Reading** | `check-reading` | The photo dimmed, a spinner, and a bilingual "आपकी बही पढ़ रहे हैं…" / "Reading your bill…". The button is disabled for the duration (no double-send). |
+| **Result** | `check-result` | The verdict card, then the table. See below. |
+| **Error** | `check-error` | A specific bilingual message per `BillReadErrorKind` (see [architecture.md § Bill Check](architecture.md#bill-check-phase-13--frozen)) plus a **retry** button. **The photo is retained** — a retry never costs a re-shoot. |
+
+**Verdict card (`check-verdict`)** — above the table, because it is the answer:
+
+- `verdict: 'ok'` → green. "हिसाब सही है" / "The arithmetic checks out", with the total.
+- `verdict: 'check'` → amber, and it states **each** failing check as its own sentence, never
+  blended into one number:
+  - line math (`check-verdict-math`): "लाइन का हिसाब ₹13.32 ज़्यादा है" / "Line amounts are
+    ₹13.32 above rate × weight".
+  - addition (`check-verdict-addition`): "जोड़ ₹20.00 कम है" / "Your total is ₹20.00 below
+    the sum of your own lines".
+  - Only the failing ones render. `additionDiff: null` renders
+    `check-verdict-no-total` — "काग़ज़ पर कुल जोड़ नहीं लिखा" / "No grand total written on the
+    paper" — and **never** "your addition is correct".
+- `verdict: 'incomplete'` → stone/grey. "कुछ अंक पढ़े नहीं जा सके" / "Some digits could not be
+  read — fix the amber ones below". Never dressed up as a pass.
+- **`check-accept-paper`** sits in the card at the same visual weight as the verdict text:
+  "काग़ज़ सही है" / "The paper is right". Tapping it collapses the card to a quiet
+  acknowledgement and **stops flagging that photo**. No confirmation dialog, no nagging, no
+  "are you sure" — he knows his business better than the app does.
+
+**Read table (`check-line-row` per grain)** — one card per grain line, not a dense grid
+(this is a phone):
+
+| Row label | Value shown |
+|---|---|
+| grain | the name as read |
+| भाव / Rate | `₹…/क्विं.` |
+| वज़न / Weight | `… कि.ग्रा.` |
+| कटौती / Deduction | shown **only when non-zero** |
+| बोरे / Sacks | shown **only when read**; marked informational — never used in the math |
+| काग़ज़ पर / On paper | the written amount, 2 dp, via the frozen `formatRupees` |
+| हिसाब से / Computed | the computed amount, 2 dp |
+| अंतर / Difference | shown **only when non-zero**, amber, signed |
+
+**Low-confidence cells (`check-cell-unsure`)** render amber with a dotted underline and a
+`✎`. Tapping one opens an inline numeric input (`check-cell-input`) seeded with the read
+value; committing it **re-runs `verifyReadBill` locally** and every figure and both verdicts
+update immediately. **No second network call** — this is the visible payoff of the eyes-only
+rule, and the E2E spec asserts it by request count.
+
+Money on this screen uses the **frozen 2-dp `formatRupees`** from `components/format.ts`
+(not the Indian-grouped rollup formatter): these are per-bill figures being compared digit
+for digit against a paper bill, where paise are the whole point.
+
+**Footer:** one quiet line — "कुछ सहेजा नहीं गया" / "Nothing was saved" — and a back link.
+The screen must leave no doubt that it changed nothing.

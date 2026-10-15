@@ -96,7 +96,17 @@ One file per capability. Phase 1 delivers the full local purchase-capture journe
 
 **Why two capability files and not one:** they share the phase goal but nothing else. The rollups are **derived-read + display** (their failure mode is a wrong number that destroys trust in every number); the entry defaults are **write-path + validation** (their failure mode is a blocked or mis-defaulted save). Disjoint surfaces, disjoint success criteria, disjoint slices — so each generator owns exactly one capability file.
 
+## Phase 13 — Bill Check (photo → read → verify)
+
+> The first capability that works **with** the paper instead of replacing it: photograph a bill already written by hand, have an LLM **read** it, and have the app's own pure `lib/calc` **check the arithmetic**. Entry speed was the measured pilot blocker (~45s practised vs a <30s target), and this sidesteps typing entirely. **Nothing is saved** — no bill, no farmer, no write — so it cannot corrupt a ledger. Additive, frontend-only, bilingual; the project's first external API call and only LLM call.
+
+| Capability | File | Slice |
+|-----------|------|-------|
+| Bill Check (photo → read → verify) | [bill-check.md](bill-check.md) | a (pure verify + parse + prompt + i18n) + b (image downscale + the single `fetch`) + c (screen, components, home button, E2E) |
+
+**Why the LLM is confined to reading:** every rupee is computed by `lib/calc`, not by the model — see [bill-check.md § The LLM is eyes only](bill-check.md) and [../agent.md](../agent.md). This keeps the figures deterministic and hand-checkable, keeps the whole verify path unit-testable with no API key, and makes a corrected digit re-verify locally with no second network call.
+
 ## Notes
 
-- This project uses **no agent framework / no LLM** — see [../agent.md](../agent.md). The Firebase redesign does not change this.
+- This project uses **no agent framework** — no graph, no agent loop, no tools, no multi-turn. Phases 1–12 had **no LLM at all**; Phase 13 adds exactly **one stateless vision call** on **one screen**, for handwriting transcription only. See [../agent.md](../agent.md).
 - Adding a new capability: create `<name>.md` here, update this index, and touch architecture/data/roadmap only if affected.
