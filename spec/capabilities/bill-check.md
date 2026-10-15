@@ -118,16 +118,22 @@ At bill level, three figures and **two independent diffs** — because they are 
 mistakes and the trader fixes them differently:
 
 ```
-sumWritten    = roundRupees(Σ written line amounts)
-sumComputed   = roundRupees(Σ computedAmount)          ← computeBillTotal of the read lines
-paperTotal    = the grand total written at the bottom  (may be absent)
+sumWritten     = roundRupees(Σ written line amounts)   ← GROSS of paldari
+sumComputed    = computeBillTotal(read lines)          ← GROSS of paldari too
+payableWritten = roundRupees(sumWritten − paldari)     ← what his own lines imply is payable
+paperTotal     = the grand total written at the bottom (may be absent)
 
-mathDiff      = roundRupees(sumWritten − sumComputed)  ← his per-line rate × weight was off
-additionDiff  = roundRupees(paperTotal − sumWritten)   ← he added his own column wrong
+mathDiff       = roundRupees(sumWritten − sumComputed)      ← his per-line rate × weight was off
+additionDiff   = roundRupees(paperTotal − payableWritten)   ← he added his own column wrong
 ```
 
-- `paldari`, when read, is subtracted from `sumComputed` through the same `billBalance`
-  path the rest of the app uses, so the figure is net-of-paldari exactly as everywhere else.
+- **Paldari belongs to the TOTAL comparison, never to the line comparison.** A real bill
+  writes grain lines gross, then one labour charge, then the payable total — so `mathDiff`
+  is computed with both sides **gross** of paldari, and paldari is subtracted exactly once,
+  on the `payableWritten` side of `additionDiff`. Subtracting it from only the computed
+  side would report *"line amounts are ₹500 off"* on every bill that carries a labour
+  charge: a false accusation on a screen whose entire value rests on being trustworthy
+  when it accuses.
 - **No tolerance, no heuristics.** Diffs are reported exactly as computed. A trader who
   rounded to the nearest ₹5 on purpose presses `check-accept-paper`; the app does not guess
   at his intent. (Warn, never block — [plan.md](../../strategy/plan.md) § Track E.)

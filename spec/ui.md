@@ -381,7 +381,7 @@ screen safe to try.
 | grain | the name as read |
 | भाव / Rate | `₹…/क्विं.` |
 | वज़न / Weight | `… कि.ग्रा.` |
-| कटौती / Deduction | shown **only when non-zero** |
+| कटौती / Deduction | **always shown, even at 0 kg** — a deduction the model missed inflates the computed amount and yields a FALSE "line math is off" verdict, and a hidden row cannot be corrected |
 | बोरे / Sacks | shown **only when read**; marked informational — never used in the math |
 | काग़ज़ पर / On paper | the written amount, 2 dp, via the frozen `formatRupees` |
 | हिसाब से / Computed | the computed amount, 2 dp |

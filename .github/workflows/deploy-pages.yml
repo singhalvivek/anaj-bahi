@@ -64,6 +64,17 @@ jobs:
           NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
           NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
           NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          # Phase 13 — Bill Check (OPTIONAL). Unset ⇒ the Check-a-bill screen shows
+          # a labelled "not set up yet" panel and the rest of the app is unaffected,
+          # so the build never fails for want of this.
+          #
+          # WARNING: unlike the Firebase values above, this one is NOT guarded by
+          # anything server-side. Next inlines it into the bundle, so it is readable
+          # by anyone who opens devtools on the deployed site and is billable. Use a
+          # DEDICATED key with an HTTP-referrer restriction and a hard quota cap —
+          # see DEPLOY.md § Bill Check and spec/architecture.md § Bill Check.
+          NEXT_PUBLIC_GEMINI_API_KEY: ${{ secrets.NEXT_PUBLIC_GEMINI_API_KEY }}
+          NEXT_PUBLIC_GEMINI_MODEL: ${{ secrets.NEXT_PUBLIC_GEMINI_MODEL }}
         run: pnpm build:pages
 
       - name: Disable Jekyll processing

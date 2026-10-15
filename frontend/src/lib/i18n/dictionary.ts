@@ -487,6 +487,78 @@ export const EN = {
   'due.noDate.hint': 'These older bills still owe money but have no due date.',
   'due.setDate': 'Set date',
   'due.dateSet': 'Due date saved',
+
+  // ---- Phase 13 — Bill Check (photo → read → verify) ----
+  // Home entry point. The "nothing is saved" sub-line is load-bearing: it is what
+  // makes a trader willing to try the screen at all.
+  'check.entry.title': 'Check a paper bill',
+  'check.entry.hint': 'Photograph a bill you already wrote — nothing is saved',
+  'check.title': 'Check a Bill',
+
+  // Not configured (no API key) — a labelled state, never a crash.
+  'check.unconfigured.title': 'Not set up yet',
+  'check.unconfigured.body':
+    'Bill checking needs a Gemini API key. Add NEXT_PUBLIC_GEMINI_API_KEY to frontend/.env.local and restart. Everything else in the app works without it.',
+
+  // Photo step
+  'check.photo.take': 'Photograph the bill',
+  'check.photo.pick': 'Choose from gallery',
+  'check.photo.change': 'Change photo',
+  'check.photo.intro': 'Take a clear, flat photo of the whole bill in good light.',
+  'check.read': 'Read bill',
+  'check.reading': 'Reading your bill…',
+  'check.readingHint': 'This needs internet. It usually takes a few seconds.',
+
+  // Result — the table
+  'check.result.title': 'What the bill says',
+  'check.col.rate': 'Rate',
+  'check.col.weight': 'Weight',
+  'check.col.deduction': 'Deduction',
+  'check.col.sacks': 'Sacks',
+  'check.col.written': 'On paper',
+  'check.col.computed': 'Computed',
+  'check.col.difference': 'Difference',
+  'check.sacksNote': 'not used in the calculation',
+  'check.unsure.hint': 'Tap any amber number to correct it',
+  'check.unsure.edit': 'Correct this number',
+  'check.farmer': 'Farmer',
+
+  // Result — totals
+  'check.total.written': 'Sum of your lines',
+  'check.total.computed': 'Computed total',
+  'check.total.paper': 'Total written on the bill',
+  'check.total.payable': 'Payable (after paldari)',
+  'check.paldari': 'Paldari',
+
+  // Verdicts. Line math and addition are reported SEPARATELY — they are two
+  // different mistakes with two different fixes, and blending them into one
+  // number would tell the trader something untrue.
+  'check.verdict.ok': 'The arithmetic checks out',
+  'check.verdict.okHint': 'Line amounts and your total both agree.',
+  'check.verdict.check': 'Worth a second look',
+  'check.verdict.math': 'Line amounts are {amount} off from rate × weight',
+  'check.verdict.addition': 'Your total is {amount} off from the sum of your lines',
+  'check.verdict.noTotal': 'No grand total was written on the bill',
+  'check.verdict.incomplete': 'Some digits could not be read',
+  'check.verdict.incompleteHint': 'Correct the amber numbers below, then check again.',
+  'check.verdict.above': 'above',
+  'check.verdict.below': 'below',
+  'check.acceptPaper': 'The paper is right',
+  'check.accepted': 'Kept as written on the paper.',
+
+  // Errors — one message per cause. This is the only online-only screen in the
+  // app, so a vague failure would read as the app being broken.
+  'check.error.offline': 'You are offline. Reading a bill needs internet — your photo is saved here, try again when you have signal.',
+  'check.error.network': 'Could not reach the reading service. Your photo is still here — try again.',
+  'check.error.rateLimited': "Today's free reading limit is used up. Try again tomorrow.",
+  'check.error.badResponse': 'The bill could not be read properly. Try again, or take a clearer photo.',
+  'check.error.noBillFound': 'No bill could be found in this photo. Try again in better light, with the whole bill in frame.',
+  'check.error.imageTooLarge': 'That photo is too large. Take it again, closer and tighter on the bill.',
+  'check.error.notConfigured': 'The reading service is not set up or the key was rejected.',
+  'check.retry': 'Try again',
+
+  // Footer — the screen must leave no doubt that it changed nothing.
+  'check.nothingSaved': 'Nothing was saved. This screen never changes your bills.',
 } as const
 
 export type TKey = keyof typeof EN
@@ -970,6 +1042,66 @@ export const HI: Record<TKey, string> = {
   'due.noDate.hint': 'इन पुरानी बहियों का पैसा बाकी है पर देय तारीख नहीं है।',
   'due.setDate': 'तारीख तय करें',
   'due.dateSet': 'देय तारीख सहेजी गई',
+
+  // ---- Phase 13 — Bill Check (photo → read → verify) ----
+  'check.entry.title': 'काग़ज़ की बही जाँचें',
+  'check.entry.hint': 'जो बही आपने लिख ली है उसकी फ़ोटो लें — कुछ सहेजा नहीं जाएगा',
+  'check.title': 'बही जाँच',
+
+  'check.unconfigured.title': 'अभी सेट नहीं है',
+  'check.unconfigured.body':
+    'बही जाँचने के लिए Gemini API key चाहिए। frontend/.env.local में NEXT_PUBLIC_GEMINI_API_KEY डालें और ऐप फिर चालू करें। बाक़ी सब इसके बिना भी चलता है।',
+
+  'check.photo.take': 'बही की फ़ोटो लें',
+  'check.photo.pick': 'गैलरी से चुनें',
+  'check.photo.change': 'फ़ोटो बदलें',
+  'check.photo.intro': 'पूरी बही की साफ़, सीधी फ़ोटो अच्छी रोशनी में लें।',
+  'check.read': 'बही पढ़ें',
+  'check.reading': 'आपकी बही पढ़ रहे हैं…',
+  'check.readingHint': 'इसके लिए इंटरनेट चाहिए। आम तौर पर कुछ सेकंड लगते हैं।',
+
+  'check.result.title': 'बही में क्या लिखा है',
+  'check.col.rate': 'भाव',
+  'check.col.weight': 'वज़न',
+  'check.col.deduction': 'कटौती',
+  'check.col.sacks': 'बोरे',
+  'check.col.written': 'काग़ज़ पर',
+  'check.col.computed': 'हिसाब से',
+  'check.col.difference': 'अंतर',
+  'check.sacksNote': 'हिसाब में नहीं लिया गया',
+  'check.unsure.hint': 'पीले रंग का कोई भी अंक छूकर ठीक करें',
+  'check.unsure.edit': 'यह अंक ठीक करें',
+  'check.farmer': 'किसान',
+
+  'check.total.written': 'आपकी लाइनों का जोड़',
+  'check.total.computed': 'हिसाब से कुल',
+  'check.total.paper': 'बही पर लिखा कुल',
+  'check.total.payable': 'देने योग्य (पल्लेदारी के बाद)',
+  'check.paldari': 'पल्लेदारी',
+
+  'check.verdict.ok': 'हिसाब सही है',
+  'check.verdict.okHint': 'लाइनों की राशि और आपका जोड़ — दोनों मिल रहे हैं।',
+  'check.verdict.check': 'एक बार देख लें',
+  'check.verdict.math': 'लाइनों की राशि भाव × वज़न से {amount} अलग है',
+  'check.verdict.addition': 'आपका कुल जोड़ लाइनों के जोड़ से {amount} अलग है',
+  'check.verdict.noTotal': 'बही पर कुल जोड़ नहीं लिखा है',
+  'check.verdict.incomplete': 'कुछ अंक पढ़े नहीं जा सके',
+  'check.verdict.incompleteHint': 'नीचे पीले अंक ठीक करें, फिर हिसाब देखें।',
+  'check.verdict.above': 'ज़्यादा',
+  'check.verdict.below': 'कम',
+  'check.acceptPaper': 'काग़ज़ सही है',
+  'check.accepted': 'जैसा काग़ज़ पर लिखा है, वैसा ही रखा गया।',
+
+  'check.error.offline': 'आप ऑफ़लाइन हैं। बही पढ़ने के लिए इंटरनेट चाहिए — आपकी फ़ोटो यहीं है, सिग्नल आने पर फिर कोशिश करें।',
+  'check.error.network': 'पढ़ने की सेवा तक पहुँच नहीं बनी। आपकी फ़ोटो यहीं है — फिर कोशिश करें।',
+  'check.error.rateLimited': 'आज की मुफ़्त पढ़ने की सीमा पूरी हो गई। कल फिर कोशिश करें।',
+  'check.error.badResponse': 'बही ठीक से पढ़ी नहीं जा सकी। फिर कोशिश करें, या साफ़ फ़ोटो लें।',
+  'check.error.noBillFound': 'इस फ़ोटो में कोई बही नहीं मिली। बेहतर रोशनी में, पूरी बही फ़्रेम में लेकर फिर कोशिश करें।',
+  'check.error.imageTooLarge': 'यह फ़ोटो बहुत बड़ी है। थोड़ा पास से, सिर्फ़ बही की फ़ोटो लें।',
+  'check.error.notConfigured': 'पढ़ने की सेवा सेट नहीं है या key स्वीकार नहीं हुई।',
+  'check.retry': 'फिर कोशिश करें',
+
+  'check.nothingSaved': 'कुछ सहेजा नहीं गया। यह स्क्रीन आपकी बहियाँ कभी नहीं बदलती।',
 }
 
 export const DICTIONARIES: Record<Lang, Record<TKey, string>> = {

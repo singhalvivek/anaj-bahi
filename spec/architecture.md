@@ -1074,11 +1074,12 @@ export type Verdict = 'ok' | 'check' | 'incomplete'
 
 export interface BillCheckResult {
   lines: LineCheck[]
-  sumWritten: number | null
-  sumComputed: number | null
+  sumWritten: number | null           // Σ written line amounts, GROSS of paldari
+  sumComputed: number | null          // Σ computed line amounts, GROSS of paldari
+  payableWritten: number | null       // sumWritten − paldari
   paperTotal: number | null
-  mathDiff: number | null             // sumWritten − sumComputed
-  additionDiff: number | null         // paperTotal − sumWritten; null when no paperTotal
+  mathDiff: number | null             // sumWritten − sumComputed (paldari-FREE)
+  additionDiff: number | null         // paperTotal − payableWritten; null when no paperTotal
   paldari: number
   verdict: Verdict
   unsureCount: number
@@ -1095,8 +1096,13 @@ export function verifyReadBill(read: ReadBill): BillCheckResult
    re-implement the formula, and deliberately does **not** take the `summary` path, whose
    whole purpose is to return the entered amount verbatim — which would make the check
    vacuous.
-2. `sumComputed` = `computeBillTotal(inputs)` − `roundRupees(paldari)`, so paldari is
-   subtracted exactly once, through the same arithmetic the ledger uses.
+2. **Paldari belongs to the TOTAL comparison, never to the line comparison.** `sumWritten`
+   and `sumComputed` are both **gross** of paldari, so `mathDiff` is paldari-free; paldari is
+   subtracted exactly once, on `payableWritten`, which is what `additionDiff` compares the
+   written grand total against. This mirrors the paper (grain lines gross, then one labour
+   charge, then the payable total). Getting this wrong would report *"line amounts are ₹500
+   off"* on every bill carrying a labour charge — a false accusation, and the one failure this
+   screen cannot afford.
 3. `mathDiff` and `additionDiff` are **independent**. A bill with correct lines and a
    mis-added grand total yields `mathDiff: 0` and a non-zero `additionDiff`.
 4. A `null` anywhere propagates to `null` — **never to `0`**. `additionDiff` is `null` (not
